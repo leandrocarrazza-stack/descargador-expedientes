@@ -100,9 +100,17 @@ class DescargadorArchivos:
                         }
 
                         # Buscar enlaces de descarga
+                        # NOTA: Mesa Virtual muestra dos enlaces por movimiento:
+                        #   1er enlace (texto "PDF" o "RTF"): previsualización → siempre falla con EOF
+                        #   2do enlace (texto vacío): descarga directa → es el archivo real
+                        # Solo se descarga el enlace de descarga directa (texto vacío o no "PDF"/"RTF").
                         for enlace in enlaces:
                             href = enlace.get('href', '')
                             texto_enlace = enlace.get_text(strip=True)
+
+                            # Saltar enlaces de previsualización (texto exacto "PDF" o "RTF")
+                            if texto_enlace.upper() in ('PDF', 'RTF'):
+                                continue
 
                             if href:  # Si tiene href
                                 movimiento['enlaces_descarga'].append({

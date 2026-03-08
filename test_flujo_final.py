@@ -98,9 +98,16 @@ def main():
 
         # 4. Obtener movimientos (CON PAGINACIÓN AUTOMÁTICA)
         print("4️⃣  OBTENIENDO MOVIMIENTOS (con paginación automática)...")
-        # Crear carpeta temporal fuera de OneDrive (evita problemas de sincronización)
+        # Carpeta temporal fuera de OneDrive (evita problemas de sincronización)
         carpeta_temp = Path.home() / "AppData" / "Local" / "Temp" / "mesa_virtual_descarga"
+
+        # Limpiar temp al inicio para evitar mezcla con archivos de sesiones anteriores
+        if carpeta_temp.exists():
+            import shutil
+            shutil.rmtree(carpeta_temp)
+            print("   🧹 Carpeta temporal limpiada\n")
         carpeta_temp.mkdir(parents=True, exist_ok=True)
+
         descargador = crear_descargador(cliente, carpeta_temp=str(carpeta_temp))
         # obtener_movimientos() ahora detecta y procesa TODAS las páginas automáticamente
         movimientos = descargador.obtener_movimientos(expediente.get('numero'))
