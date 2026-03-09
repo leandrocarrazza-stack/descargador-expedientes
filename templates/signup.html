@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block titulo %}Crear Cuenta - Descargador de Expedientes{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2 class="mb-4 text-center">📝 Crear Cuenta</h2>
+
+        <form id="formSignup">
+            <div class="mb-3">
+                <label for="email" class="form-label">📧 Email</label>
+                <input type="email" class="form-control" id="email" name="email"
+                       placeholder="tu@ejemplo.com" required>
+                <small class="text-muted">Te enviaremos un email de confirmación</small>
+            </div>
+
+            <div class="mb-3">
+                <label for="nombre" class="form-label">👤 Nombre Completo</label>
+                <input type="text" class="form-control" id="nombre" name="nombre"
+                       placeholder="Juan Pérez López" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">🔒 Contraseña</label>
+                <input type="password" class="form-control" id="password" name="password"
+                       placeholder="Mínimo 8 caracteres" required>
+                <small class="text-muted d-block mt-2">
+                    ✓ Mínimo 8 caracteres<br>
+                    ✓ Al menos 1 mayúscula (A-Z)<br>
+                    ✓ Al menos 1 minúscula (a-z)<br>
+                    ✓ Al menos 1 número (0-9)
+                </small>
+            </div>
+
+            <div class="mb-3">
+                <label for="password2" class="form-label">✓ Confirmar Contraseña</label>
+                <input type="password" class="form-control" id="password2" name="password2"
+                       placeholder="Repite tu contraseña" required>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="terminos" name="terminos" required>
+                <label class="form-check-label" for="terminos">
+                    Acepto los <a href="#" class="text-decoration-none">términos y condiciones</a>
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3">
+                Crear Cuenta
+            </button>
+        </form>
+
+        <p class="text-center text-muted">
+            ¿Ya tienes cuenta?
+            <a href="/auth/login" class="text-decoration-none">Inicia sesión aquí</a>
+        </p>
+
+        <div id="alertaError" class="alert alert-danger d-none" role="alert"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.getElementById('formSignup').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const email = document.getElementById('email').value;
+    const nombre = document.getElementById('nombre').value;
+    const password = document.getElementById('password').value;
+    const password2 = document.getElementById('password2').value;
+    const terminos = document.getElementById('terminos').checked;
+
+    const alertaError = document.getElementById('alertaError');
+
+    // Validar que contraseñas coincidan
+    if (password !== password2) {
+        alertaError.textContent = '❌ Las contraseñas no coinciden';
+        alertaError.classList.remove('d-none');
+        return;
+    }
+
+    // Validar términos
+    if (!terminos) {
+        alertaError.textContent = '❌ Debes aceptar los términos y condiciones';
+        alertaError.classList.remove('d-none');
+        return;
+    }
+
+    const btnSubmit = e.target.querySelector('button[type="submit"]');
+    const estadoOriginal = btnSubmit.innerHTML;
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '⏳ Creando cuenta...';
+
+    try {
+        const response = await fetch('/auth/signup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email,
+                nombre,
+                password
+            })
+        });
+
+        const datos = await response.json();
+
+        if (response.ok) {
+            // Signup exitoso - redirigir a dashboard
+            alert('✅ ' + datos.mensaje);
+            window.location.href = '/dashboard';
+        } else {
+            // Error
+            alertaError.textContent = '❌ ' + datos.error;
+            alertaError.classList.remove('d-none');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alertaError.textContent = '❌ Error de conexión. Intenta nuevamente.';
+        alertaError.classList.remove('d-none');
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = estadoOriginal;
+    }
+});
+</script>
+{% endblock %}

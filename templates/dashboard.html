@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block titulo %}Dashboard - Descargador de Expedientes{% endblock %}
+
+{% block contenido %}
+<h2>📊 Mi Dashboard</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <h5 class="card-title">💳 Plan</h5>
+                <p class="card-text display-6">{{ current_user.plan }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <h5 class="card-title">⭐ Créditos</h5>
+                <p class="card-text display-6">{{ current_user.creditos_disponibles }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <h5 class="card-title">📥 Usados</h5>
+                <p class="card-text display-6">{{ current_user.creditos_usados_mes }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <h5 class="card-title">👤 Usuario</h5>
+                <p class="card-text small">{{ current_user.email }}</p>
+                <p class="card-text small text-muted">{{ current_user.nombre }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <h3 class="mb-3">📋 Historial de Descargas</h3>
+        <div class="alert alert-info">
+            <strong>ℹ️ Próxima fase:</strong> Aquí aparecerá tu historial de descargas
+        </div>
+    </div>
+    <div class="col-md-4">
+        <h3 class="mb-3">🎯 Acciones</h3>
+        <a href="/descargar" class="btn btn-primary w-100 mb-2">
+            📥 Descargar Expediente
+        </a>
+        <a href="/planes" class="btn btn-info w-100 mb-2">
+            🛒 Comprar Créditos
+        </a>
+        <a href="/configuracion" class="btn btn-secondary w-100">
+            ⚙️ Configuración
+        </a>
+    </div>
+</div>
+
+<div class="alert alert-warning mt-4">
+    <strong>📢 Nota:</strong> Fase 1 completada (Autenticación + BD). Fases 2-4 próximamente.
+</div>
+{% endblock %}

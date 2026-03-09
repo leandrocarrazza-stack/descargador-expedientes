@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block contenido %}
+<div class="row justify-content-center align-items-center" style="min-height: 400px;">
+    <div class="col-md-8 text-center">
+        <h1 class="mb-4">🏛️ Descargador de Expedientes</h1>
+        <p class="lead mb-5">
+            Automatiza la descarga de expedientes de la Mesa Virtual de Entre Ríos
+        </p>
+
+        <div class="row mb-5">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">⚡ Rápido</h5>
+                        <p class="card-text">Descarga expedientes en segundos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">🔒 Seguro</h5>
+                        <p class="card-text">Encriptado y privado</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">📦 Flexible</h5>
+                        <p class="card-text">Planes que se ajustan a ti</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <h3 class="mb-4">¿Listo para empezar?</h3>
+            <a href="/auth/signup" class="btn btn-primary btn-lg me-3">
+                📝 Crear Cuenta Gratis
+            </a>
+            <a href="/auth/login" class="btn btn-outline-primary btn-lg">
+                🔐 Ya tengo cuenta
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

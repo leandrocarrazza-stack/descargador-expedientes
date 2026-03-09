@@ -1,3 +1,8 @@
+# Credenciales y secretos (NUNCA commitear)
+.env
+.env.local
+.env.*.local
+
 # Sesiones guardadas (contienen cookies de autenticación)
 *.pkl
 *.session

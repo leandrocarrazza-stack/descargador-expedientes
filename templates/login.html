@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block titulo %}Login - Descargador de Expedientes{% endblock %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2 class="mb-4 text-center">🔐 Iniciar Sesión</h2>
+
+        <form id="formLogin">
+            <div class="mb-3">
+                <label for="email" class="form-label">📧 Email</label>
+                <input type="email" class="form-control" id="email" name="email"
+                       placeholder="tu@ejemplo.com" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">🔒 Contraseña</label>
+                <input type="password" class="form-control" id="password" name="password"
+                       placeholder="Tu contraseña" required>
+            </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="recuerdame" name="recuerdame">
+                <label class="form-check-label" for="recuerdame">
+                    Recuérdame
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mb-3">
+                Iniciar Sesión
+            </button>
+        </form>
+
+        <p class="text-center text-muted">
+            ¿No tienes cuenta?
+            <a href="/auth/signup" class="text-decoration-none">Crear cuenta aquí</a>
+        </p>
+
+        <div id="alertaError" class="alert alert-danger d-none" role="alert"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+document.getElementById('formLogin').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const recuerdame = document.getElementById('recuerdame').checked;
+
+    const btnSubmit = e.target.querySelector('button[type="submit"]');
+    const estadoOriginal = btnSubmit.innerHTML;
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '⏳ Conectando...';
+
+    try {
+        const response = await fetch('/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email,
+                password,
+                recuerdame
+            })
+        });
+
+        const datos = await response.json();
+
+        if (response.ok) {
+            // Login exitoso - redirigir a dashboard
+            alert('✅ ' + datos.mensaje);
+            window.location.href = '/dashboard';
+        } else {
+            // Error
+            document.getElementById('alertaError').textContent = datos.error;
+            document.getElementById('alertaError').classList.remove('d-none');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('alertaError').textContent = 'Error de conexión. Intenta nuevamente.';
+        document.getElementById('alertaError').classList.remove('d-none');
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = estadoOriginal;
+    }
+});
+</script>
+{% endblock %}

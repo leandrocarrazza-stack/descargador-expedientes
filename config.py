@@ -1,35 +1,76 @@
 """
-Configuración del descargador de expedientes
-============================================
+Configuración del Descargador de Expedientes
+=============================================
 
-IMPORTANTE: Este archivo NO contiene credenciales. Las cookies de sesión
-se guardan automáticamente en ~/.mesa_virtual_cookies/
+Ambiente: desarrollo, testing, producción
+Credenciales: cargadas desde .env (NUNCA hardcodeadas)
 
-No es necesario configurar nada aquí para la autenticación.
+IMPORTANTE:
+- Variables sensibles en .env: SECRET_KEY, DATABASE_URL, STRIPE_*, ANTHROPIC_API_KEY
+- Este archivo NO contiene credenciales
+- En producción: todas las variables env deben estar configuradas
 """
 
+import os
+import logging
+from pathlib import Path
+from datetime import timedelta
+
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONFIGURACIÓN DE URLS Y ENDPOINTS
+#  CONFIGURACIÓN BASE
 # ═══════════════════════════════════════════════════════════════════════════
 
-# URL base de la Mesa Virtual
-MESA_VIRTUAL_URL = "https://mesavirtual.jusentrerios.gov.ar"
+# Carpeta base del proyecto
+PROJECT_DIR = Path(__file__).parent
 
+# Ambiente: development, testing, production
+FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+DEBUG = FLASK_ENV == 'development'
 
-# Endpoint de la API GraphQL
-API_GRAPHQL = "https://mesavirtual.jusentrerios.gov.ar/api/graphql"
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE FLASK
+# ═══════════════════════════════════════════════════════════════════════════
 
-# Endpoint de descarga de archivos
-API_ARCHIVOS = "https://mesavirtual.jusentrerios.gov.ar/api/archivos"
+# Secret key para sesiones y CSRF (CRÍTICO: cambiar en producción)
+SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Configuración de sesión
+PERMANENT_SESSION_LIFETIME = timedelta(days=7)  # Sesión válida por 7 días
+SESSION_COOKIE_SECURE = FLASK_ENV == 'production'  # HTTPS solo en producción
+SESSION_COOKIE_HTTPONLY = True  # No accesible desde JavaScript
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+SESSION_REFRESH_EACH_REQUEST = True  # Refrescar expiry en cada request
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE BASE DE DATOS
+# ═══════════════════════════════════════════════════════════════════════════
+
+# URL de conexión a BD
+# Desarrollo: SQLite (local)
+# Producción: PostgreSQL (Render)
+if FLASK_ENV == 'testing':
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'  # BD en memoria para testing
+elif FLASK_ENV == 'production':
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    if not DATABASE_URL:
+        raise ValueError("❌ DATABASE_URL env var not set in production")
+    # Render usa postgres:// pero SQLAlchemy 1.4+ requiere postgresql://
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+else:
+    # Desarrollo: SQLite local
+    SQLALCHEMY_DATABASE_URI = f'sqlite:///{PROJECT_DIR / "app.db"}'
+
+# Configuración SQLAlchemy
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+SQLALCHEMY_ECHO = DEBUG  # Log de queries en modo debug
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN DE DIRECTORIOS
 # ═══════════════════════════════════════════════════════════════════════════
 
-from pathlib import Path
-
-# Carpeta base del proyecto
-PROJECT_DIR = Path(__file__).parent
+# Crear directorios si no existen
+for directorio in [PROJECT_DIR / "temp", PROJECT_DIR / "output", PROJECT_DIR / "logs"]:
+    directorio.mkdir(exist_ok=True)
 
 # Carpeta de archivos temporales
 TEMP_DIR = PROJECT_DIR / "temp"
@@ -41,8 +82,17 @@ OUTPUT_DIR = PROJECT_DIR / "output"
 LOGS_DIR = PROJECT_DIR / "logs"
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONFIGURACIÓN DE COMPORTAMIENTO
+#  CONFIGURACIÓN DE MESA VIRTUAL (web scraping)
 # ═══════════════════════════════════════════════════════════════════════════
+
+# URL base de la Mesa Virtual
+MESA_VIRTUAL_URL = "https://mesavirtual.jusentrerios.gov.ar"
+
+# Endpoint de la API GraphQL
+API_GRAPHQL = "https://mesavirtual.jusentrerios.gov.ar/api/graphql"
+
+# Endpoint de descarga de archivos
+API_ARCHIVOS = "https://mesavirtual.jusentrerios.gov.ar/api/archivos"
 
 # Timeout para requests HTTP (en segundos)
 REQUEST_TIMEOUT = 30
@@ -50,11 +100,18 @@ REQUEST_TIMEOUT = 30
 # Reintentos automáticos si falla una descarga
 MAX_REINTENTOS = 3
 
-# Verbose mode (mostrar más información durante la ejecución)
-DEBUG = False
-
 # Limpiar archivos temporales al finalizar
 LIMPIAR_TEMP = True
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE LOGGING
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Nivel de logging para archivo (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LOG_LEVEL_ARCHIVO = logging.DEBUG
+
+# Nivel de logging para consola (más restrictivo que archivo)
+LOG_LEVEL_CONSOLA = logging.INFO
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN DE LIBREOFFICE (conversión RTF → PDF)
@@ -67,8 +124,52 @@ CONVERTIR_RTF = True
 CONVERSION_TIMEOUT = 60
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE PLANES Y CRÉDITOS
+# ═══════════════════════════════════════════════════════════════════════════
+
+PLANES = {
+    'free': {
+        'nombre': 'Gratis',
+        'descargas_iniciales': 5,
+        'descripcion': '5 descargas gratis para probar',
+        'precio': 0
+    },
+    'pro': {
+        'nombre': 'Profesional',
+        'creditos': 50,
+        'precio_usd': 9.99,
+        'precio_ars': 1990,
+        'descripcion': '50 descargas por $9.99 USD'
+    },
+    'premium': {
+        'nombre': 'Premium',
+        'creditos': 500,
+        'precio_usd': 29.99,
+        'precio_ars': 5990,
+        'descripcion': '500 descargas por $29.99 USD'
+    }
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE STRIPE (pagos)
+# ═══════════════════════════════════════════════════════════════════════════
+
+STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY', '')
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE CELERY (tareas asincrónicas)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Redis URL para Celery broker
+CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  VALIDACIÓN AUTOMÁTICA
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def validar_config():
     """Valida que la configuración básica sea correcta."""

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block contenido %}
+<div class="row justify-content-center">
+    <div class="col-md-6 text-center">
+        <h1 class="display-4 mb-4">⚠️ Algo salió mal</h1>
+        <p class="lead mb-5">{{ error }}</p>
+        <a href="/" class="btn btn-primary">Volver a inicio</a>
+    </div>
+</div>
+{% endblock %}
