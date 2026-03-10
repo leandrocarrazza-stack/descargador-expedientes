@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block titulo %}Descargar Expediente{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+  <!-- Encabezado -->
+  <div class="row mb-5">
+    <div class="col-lg-8 mx-auto">
+      <h1 class="display-5 fw-bold mb-2">📥 Descargar Expediente</h1>
+      <p class="lead text-muted">
+        Ingresa el número de expediente para descargar todos sus archivos en PDF
+      </p>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div class="row mb-5">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+
+          <!-- Estado de créditos -->
+          <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <div>
+              <strong>💳 Créditos disponibles:</strong>
+              <span id="creditos-disponibles" class="badge bg-primary">{{ current_user.creditos_disponibles }}</span>
+            </div>
+            <small class="text-muted">Cada descarga cuesta 1 crédito ($3.000 ARS)</small>
+          </div>
+
+          <!-- Formulario de búsqueda -->
+          <form id="form-descarga" class="mb-3">
+            <div class="mb-3">
+              <label for="numero-expediente" class="form-label fw-semibold">
+                Número de Expediente
+              </label>
+              <input
+                type="text"
+                class="form-control form-control-lg"
+                id="numero-expediente"
+                name="numero_expediente"
+                placeholder="Ej: 21/24, 2024/12345, etc."
+                required
+              >
+              <small class="text-muted">Formato: año/número</small>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-lg w-100"
+              id="btn-descargar"
+            >
+              <i class="bi bi-download me-2"></i>Descargar Ahora
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de progreso (oculta inicialmente) -->
+  <div class="row mb-5" id="progreso-container" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+
+          <!-- Indicador de estado -->
+          <div class="mb-4">
+            <h5 class="fw-semibold">Estado de Descarga</h5>
+            <div class="spinner-border text-primary me-2" role="status" id="spinner">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+            <span id="estado-texto" class="text-muted">Iniciando descarga...</span>
+          </div>
+
+          <!-- Barra de progreso -->
+          <div class="mb-4">
+            <div class="progress" style="height: 25px;">
+              <div
+                class="progress-bar progress-bar-striped progress-bar-animated"
+                id="progreso-barra"
+                role="progressbar"
+                style="width: 0%"
+                aria-valuenow="0"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <span id="progreso-texto">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detalles -->
+          <div class="alert alert-light">
+            <small>
+              <strong>Expediente:</strong> <span id="detalles-numero">—</span> <br>
+              <strong>Estado:</strong> <span id="detalles-estado">—</span> <br>
+              <strong>Intento:</strong> <span id="detalles-intento">—</span>
+            </small>
+          </div>
+
+          <!-- Botones de acción -->
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-danger" id="btn-cancelar">
+              <i class="bi bi-x-circle me-2"></i>Cancelar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de resultado (éxito) -->
+  <div class="row mb-5" id="resultado-exito" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0 border-success border-3">
+        <div class="card-body p-4 text-center">
+
+          <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+
+          <h3 class="mt-3 mb-2">✅ ¡Descarga Exitosa!</h3>
+          <p class="text-muted mb-4">
+            Tu expediente está listo para descargar
+          </p>
+
+          <!-- Detalles del resultado -->
+          <div class="alert alert-light text-start mb-4">
+            <small>
+              <strong>Expediente:</strong> <span id="resultado-numero">—</span> <br>
+              <strong>Caratula:</strong> <span id="resultado-caratula">—</span> <br>
+              <strong>Créditos restantes:</strong>
+              <strong class="text-success" id="resultado-creditos">—</strong>
+            </small>
+          </div>
+
+          <!-- Botones -->
+          <div class="d-flex gap-2">
+            <a href="#" class="btn btn-success flex-grow-1" id="btn-descargar-pdf">
+              <i class="bi bi-download me-2"></i>Descargar PDF
+            </a>
+            <a href="{{ url_for('descargas.obtener_historial') }}" class="btn btn-outline-secondary flex-grow-1">
+              <i class="bi bi-clock-history me-2"></i>Historial
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de resultado (error) -->
+  <div class="row mb-5" id="resultado-error" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0 border-danger border-3">
+        <div class="card-body p-4 text-center">
+
+          <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+
+          <h3 class="mt-3 mb-2">❌ Error en Descarga</h3>
+
+          <div class="alert alert-danger text-start mb-4">
+            <strong>Motivo:</strong>
+            <p id="error-mensaje" class="mb-0">—</p>
+          </div>
+
+          <!-- Botones -->
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary flex-grow-1" onclick="location.reload()">
+              <i class="bi bi-arrow-clockwise me-2"></i>Reintentar
+            </button>
+            <a href="{{ url_for('descargas.obtener_historial') }}" class="btn btn-outline-secondary flex-grow-1">
+              <i class="bi bi-clock-history me-2"></i>Historial
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historial reciente -->
+  <div class="row mt-5 pt-5">
+    <div class="col-lg-8 mx-auto">
+      <h3 class="fw-bold mb-3">📋 Últimas Descargas</h3>
+      <div id="historial-container">
+        <p class="text-muted">Cargando historial...</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+// ═════════════════════════════════════════════════════════════════════════
+//  VARIABLES GLOBALES
+// ═════════════════════════════════════════════════════════════════════════
+
+let taskId = null;
+let pollingInterval = null;
+const POLLING_INTERVAL = 1000; // 1 segundo
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  DISPARAR DESCARGA
+// ═════════════════════════════════════════════════════════════════════════
+
+document.getElementById('form-descarga').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const numeroExpediente = document.getElementById('numero-expediente').value.trim();
+
+  if (!numeroExpediente) {
+    alert('Por favor ingresa un número de expediente');
+    return;
+  }
+
+  // Validar créditos
+  const creditosDisponibles = parseInt(
+    document.getElementById('creditos-disponibles').textContent
+  );
+
+  if (creditosDisponibles < 1) {
+    alert('No tienes créditos disponibles. Compra más para continuar.');
+    return;
+  }
+
+  try {
+    // Disparar descarga
+    console.log('📤 Disparando descarga:', numeroExpediente);
+
+    const response = await fetch('/descargas/expediente', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numero_expediente: numeroExpediente
+      })
+    });
+
+    const data = await response.json();
+
+    if (!data.exito) {
+      alert('Error: ' + (data.mensaje || 'Desconocido'));
+      return;
+    }
+
+    // Guardar task_id y mostrar progreso
+    taskId = data.task_id;
+    console.log('✅ Tarea creada:', taskId);
+
+    // Ocultar formulario, mostrar progreso
+    document.getElementById('form-descarga').parentElement.style.display = 'none';
+    document.getElementById('progreso-container').style.display = 'block';
+
+    // Actualizar detalles
+    document.getElementById('detalles-numero').textContent = numeroExpediente;
+
+    // Iniciar polling
+    iniciar_polling();
+
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Error al iniciar descarga: ' + error.message);
+  }
+});
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  POLLING - Obtener estado de tarea
+// ═════════════════════════════════════════════════════════════════════════
+
+async function iniciar_polling() {
+  console.log('🔄 Iniciando polling para tarea:', taskId);
+
+  if (pollingInterval) clearInterval(pollingInterval);
+
+  pollingInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`/descargas/tarea/${taskId}/estado`);
+      const data = await response.json();
+
+      actualizar_ui(data);
+
+      // Detener si completó o falló
+      if (data.estado === 'SUCCESS' || data.estado === 'FAILURE') {
+        clearInterval(pollingInterval);
+      }
+
+    } catch (error) {
+      console.error('Error en polling:', error);
+    }
+  }, POLLING_INTERVAL);
+
+  // Llamada inicial inmediata
+  const response = await fetch(`/descargas/tarea/${taskId}/estado`);
+  const data = await response.json();
+  actualizar_ui(data);
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  ACTUALIZAR UI SEGÚN ESTADO
+// ═════════════════════════════════════════════════════════════════════════
+
+function actualizar_ui(data) {
+  const estado = data.estado;
+  const progreso = data.progreso || 0;
+  const mensaje = data.mensaje || 'Procesando...';
+
+  console.log(`[${estado}] ${mensaje} (${progreso}%)`);
+
+  // Actualizar barra de progreso
+  document.getElementById('progreso-barra').style.width = progreso + '%';
+  document.getElementById('progreso-barra').setAttribute('aria-valuenow', progreso);
+  document.getElementById('progreso-texto').textContent = progreso + '%';
+
+  // Actualizar estado
+  document.getElementById('estado-texto').textContent = mensaje;
+  document.getElementById('detalles-estado').textContent = estado;
+
+  // Estados específicos
+  if (estado === 'PENDING') {
+    document.getElementById('spinner').style.display = 'inline-block';
+  }
+
+  if (estado === 'PROGRESS') {
+    document.getElementById('detalles-intento').textContent = 'En progreso...';
+  }
+
+  if (estado === 'RETRY') {
+    document.getElementById('detalles-intento').textContent = 'Reintentando...';
+  }
+
+  // ✅ ÉXITO
+  if (estado === 'SUCCESS' && data.resultado && data.resultado.exito) {
+    clearInterval(pollingInterval);
+
+    document.getElementById('progreso-container').style.display = 'none';
+    document.getElementById('resultado-exito').style.display = 'block';
+
+    // Rellenar datos del resultado
+    document.getElementById('resultado-numero').textContent = data.resultado.mensaje;
+    document.getElementById('resultado-creditos').textContent =
+      data.resultado.creditos_restantes || '—';
+
+    // Botón de descarga
+    const btnDescargar = document.getElementById('btn-descargar-pdf');
+    btnDescargar.href = data.resultado.pdf_url;
+  }
+
+  // ❌ ERROR
+  if (estado === 'FAILURE' || (estado === 'SUCCESS' && data.resultado && !data.resultado.exito)) {
+    clearInterval(pollingInterval);
+
+    document.getElementById('progreso-container').style.display = 'none';
+    document.getElementById('resultado-error').style.display = 'block';
+
+    document.getElementById('error-mensaje').textContent =
+      data.resultado?.error || data.error || 'Error desconocido';
+  }
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  CANCELAR DESCARGA
+// ═════════════════════════════════════════════════════════════════════════
+
+document.getElementById('btn-cancelar').addEventListener('click', async function() {
+  if (!taskId || !confirm('¿Cancelar la descarga?')) return;
+
+  try {
+    const response = await fetch(`/descargas/tarea/${taskId}/cancelar`, {
+      method: 'POST'
+    });
+
+    const data = await response.json();
+
+    if (data.exito) {
+      clearInterval(pollingInterval);
+      alert('Descarga cancelada');
+      location.reload();
+    } else {
+      alert('Error al cancelar: ' + data.error);
+    }
+
+  } catch (error) {
+    console.error('Error al cancelar:', error);
+    alert('Error al cancelar descarga');
+  }
+});
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  CARGAR HISTORIAL
+// ═════════════════════════════════════════════════════════════════════════
+
+async function cargar_historial() {
+  try {
+    const response = await fetch('/descargas/historial?limite=5');
+    const data = await response.json();
+
+    const container = document.getElementById('historial-container');
+
+    if (!data.exito || data.expedientes.length === 0) {
+      container.innerHTML = '<p class="text-muted">Sin descargas anteriores</p>';
+      return;
+    }
+
+    let html = '<div class="list-group">';
+
+    for (const exp of data.expedientes) {
+      const badge = exp.estado === 'completed'
+        ? '<span class="badge bg-success">✓</span>'
+        : '<span class="badge bg-danger">✗</span>';
+
+      const link = exp.estado === 'completed'
+        ? `<a href="${exp.pdf_url}" class="text-primary">Descargar</a>`
+        : '<span class="text-muted">—</span>';
+
+      html += `
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h6 class="mb-1">Expediente ${exp.numero} ${badge}</h6>
+              <small class="text-muted">${exp.caratula || '—'}</small>
+            </div>
+            <div class="text-end">
+              <small class="text-muted">
+                ${new Date(exp.descargado_en).toLocaleString('es-AR')}
+              </small> <br>
+              ${link}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+  } catch (error) {
+    console.error('Error al cargar historial:', error);
+    document.getElementById('historial-container').innerHTML =
+      '<p class="text-danger">Error al cargar historial</p>';
+  }
+}
+
+// Cargar historial al iniciar
+document.addEventListener('DOMContentLoaded', cargar_historial);
+
+</script>
+{% endblock %}

@@ -32,6 +32,7 @@ import config
 from modulos.database import db, migrate
 from modulos.models import User
 from modulos.logger import crear_logger
+from modulos.celery_app import celery_app, init_celery_with_app
 
 logger = crear_logger(__name__)
 
@@ -88,6 +89,13 @@ def crear_app(config_obj=None):
     CORS(app, supports_credentials=True)
 
     # ═════════════════════════════════════════════════════════════════════
+    #  INICIALIZAR CELERY (para tareas asincrónicas)
+    # ═════════════════════════════════════════════════════════════════════
+
+    init_celery_with_app(app)
+    logger.info("✅ Celery inicializado (broker: Redis)")
+
+    # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
     # ═════════════════════════════════════════════════════════════════════
 
@@ -101,11 +109,13 @@ def crear_app(config_obj=None):
 
     from rutas.auth import auth_bp
     from rutas.pagos import pagos_bp
+    from rutas.descargas import descargas_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
+    app.register_blueprint(descargas_bp)
 
-    logger.info("✅ Blueprints registrados")
+    logger.info("✅ Blueprints registrados (auth, pagos, descargas)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
@@ -132,6 +142,17 @@ def crear_app(config_obj=None):
             return render_template('dashboard.html', usuario=current_user)
 
         return _dashboard()
+
+    @app.route('/descargar')
+    def descargar():
+        """Página de descarga de expedientes (requiere login)."""
+        from flask_login import login_required
+
+        @login_required
+        def _descargar():
+            return render_template('descargar.html')
+
+        return _descargar()
 
     # ═════════════════════════════════════════════════════════════════════
     #  MANEJO DE ERRORES
