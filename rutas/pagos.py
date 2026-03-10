@@ -1,7 +1,9 @@
 # rutas/pagos.py
 """
 Rutas para gestión de pagos con Mercado Pago.
-Incluye planes, creación de órdenes, webhooks y confirmaciones.
+Incluye compra de créditos, creación de órdenes, webhooks y confirmaciones.
+
+Modelo: Usuario compra créditos en ARS, cada descarga cuesta $3000 ARS
 """
 
 import os
@@ -13,6 +15,7 @@ from dotenv import load_dotenv
 from modulos.mercado_pago import crear_orden_pago, procesar_webhook, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
+import config
 
 # Cargar variables de entorno
 load_dotenv()
@@ -22,21 +25,9 @@ logger = logging.getLogger(__name__)
 # Crear blueprint
 pagos_bp = Blueprint('pagos', __name__, url_prefix='/pagos')
 
-# Configuración de planes (mapeo de nombre -> (creditos, precio_usd))
-PLANES = {
-    'pro': {
-        'nombre': 'Plan Pro',
-        'creditos': 50,
-        'precio_usd': 9.99,
-        'descripcion': '50 descargas de expedientes'
-    },
-    'premium': {
-        'nombre': 'Plan Premium',
-        'creditos': 500,
-        'precio_usd': 29.99,
-        'descripcion': '500 descargas de expedientes'
-    }
-}
+# Usar planes de config.py (en ARS)
+PLANES = config.PLANES
+PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
 
 
 @pagos_bp.route('/planes', methods=['GET'])
@@ -85,22 +76,23 @@ def crear_orden():
 
         plan_info = PLANES[plan]
 
-        # Crear orden en Mercado Pago
+        # Crear orden en Mercado Pago (en ARS)
         orden = crear_orden_pago(
             user_id=current_user.id,
             plan=plan,
             descripcion=plan_info['descripcion'],
-            monto=plan_info['precio_usd'],
+            monto=plan_info['precio_ars'],
+            moneda='ARS',
             email_usuario=current_user.email
         )
 
         # Guardar referencia de la orden en BD (estado: pending)
         compra = CompraCreditos(
             user_id=current_user.id,
-            stripe_payment_id=orden['id'],  # Reutilizar campo para MP order ID
-            stripe_session_id=orden.get('external_reference'),  # Reutilizar para external_reference
+            stripe_payment_id=orden['id'],  # ID de orden de Mercado Pago
+            stripe_session_id=orden.get('external_reference'),  # External reference
             creditos_comprados=plan_info['creditos'],
-            monto_pagado=plan_info['precio_usd'],
+            monto_pagado=plan_info['precio_ars'],
             plan=plan,
             estado='pending'
         )

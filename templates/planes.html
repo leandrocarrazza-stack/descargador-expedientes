@@ -1,38 +1,42 @@
 {% extends "base.html" %}
 
 {% block titulo %}
-  Planes y Precios - Descargador de Expedientes
+  Comprar Créditos - Descargador de Expedientes
 {% endblock %}
 
 {% block contenido %}
 <div class="container py-5">
   <!-- Encabezado -->
   <div class="text-center mb-5">
-    <h1 class="display-4 fw-bold mb-2">Elige tu Plan</h1>
-    <p class="lead text-muted">Compra créditos para descargar expedientes judiciales</p>
+    <h1 class="display-4 fw-bold mb-2">Compra Créditos</h1>
+    <p class="lead text-muted">Cada crédito = 1 descarga de expediente ($3.000 ARS)</p>
+    <div class="alert alert-info mt-3 d-inline-block">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>Créditos disponibles:</strong> {{ current_user.creditos_disponibles }} descargas
+    </div>
   </div>
 
   <!-- Tarjetas de Planes -->
   <div class="row g-4 justify-content-center">
 
-    <!-- Plan Pro -->
+    <!-- Plan Básico -->
     <div class="col-md-5 col-lg-4">
-      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="pro">
+      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="basico">
         <div class="card-body p-4">
-          <h2 class="card-title h3 fw-bold mb-1">{{ planes.pro.nombre }}</h2>
-          <p class="text-muted small mb-4">{{ planes.pro.descripcion }}</p>
+          <h2 class="card-title h3 fw-bold mb-1">{{ planes.basico.nombre }}</h2>
+          <p class="text-muted small mb-4">{{ planes.basico.descripcion }}</p>
 
           <!-- Precio -->
           <div class="mb-4">
-            <span class="display-6 fw-bold text-primary">${{ "%.2f"|format(planes.pro.precio_usd) }}</span>
-            <span class="text-muted"> USD</span>
+            <span class="display-5 fw-bold text-primary">${{ "{:,.0f}".format(planes.basico.precio_ars) }}</span>
+            <span class="text-muted"> ARS</span>
           </div>
 
           <!-- Detalles -->
           <ul class="list-unstyled mb-4">
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              <strong>{{ planes.pro.creditos }}</strong> descargas
+              <strong>{{ planes.basico.creditos }}</strong> descarga
             </li>
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
@@ -40,25 +44,25 @@
             </li>
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Válido por tiempo indefinido
+              Sin vencimiento
             </li>
             <li>
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Soporte por email
+              Transferencia instantánea
             </li>
           </ul>
 
           <!-- Botón de Compra -->
-          <button class="btn btn-primary w-100 btn-comprar" data-plan="pro">
+          <button class="btn btn-primary w-100 btn-comprar" data-plan="basico">
             <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Plan Premium (Destacado) -->
+    <!-- Plan Ahorro (Destacado) -->
     <div class="col-md-5 col-lg-4">
-      <div class="card h-100 shadow border-0 plan-card plan-destacado" data-plan="premium">
+      <div class="card h-100 shadow border-0 plan-card plan-destacado" data-plan="ahorro">
         <!-- Badge de Popular -->
         <div class="position-absolute top-0 start-50 translate-middle-x">
           <span class="badge bg-warning text-dark py-2 px-3">
@@ -67,18 +71,18 @@
         </div>
 
         <div class="card-body p-4">
-          <h2 class="card-title h3 fw-bold mb-1">{{ planes.premium.nombre }}</h2>
-          <p class="text-muted small mb-4">{{ planes.premium.descripcion }}</p>
+          <h2 class="card-title h3 fw-bold mb-1">{{ planes.ahorro.nombre }}</h2>
+          <p class="text-muted small mb-4">{{ planes.ahorro.descripcion }}</p>
 
           <!-- Precio -->
           <div class="mb-4">
-            <span class="display-6 fw-bold text-success">${{ "%.2f"|format(planes.premium.precio_usd) }}</span>
-            <span class="text-muted"> USD</span>
+            <span class="display-5 fw-bold text-success">${{ "{:,.0f}".format(planes.ahorro.precio_ars) }}</span>
+            <span class="text-muted"> ARS</span>
 
-            <!-- Ahorro indicativo -->
+            <!-- Precio unitario -->
             <div class="mt-2">
               <small class="text-success fw-semibold">
-                💰 Mejor relación precio-crédito
+                💰 $2.400 c/descarga (ahorra $3.000)
               </small>
             </div>
           </div>
@@ -87,7 +91,7 @@
           <ul class="list-unstyled mb-4">
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              <strong>{{ planes.premium.creditos }}</strong> descargas
+              <strong>{{ planes.ahorro.creditos }}</strong> descargas
             </li>
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
@@ -95,20 +99,72 @@
             </li>
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Válido por tiempo indefinido
+              Sin vencimiento
             </li>
             <li class="mb-2">
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Soporte prioritario
+              Transferencia instantánea
             </li>
             <li>
               <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Actualizaciones gratis
+              Ahorro de $3.000
             </li>
           </ul>
 
           <!-- Botón de Compra (destacado) -->
-          <button class="btn btn-success w-100 btn-comprar btn-comprar-premium" data-plan="premium">
+          <button class="btn btn-success w-100 btn-comprar btn-comprar-ahorro" data-plan="ahorro">
+            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Profesional -->
+    <div class="col-md-5 col-lg-4">
+      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="profesional">
+        <div class="card-body p-4">
+          <h2 class="card-title h3 fw-bold mb-1">{{ planes.profesional.nombre }}</h2>
+          <p class="text-muted small mb-4">{{ planes.profesional.descripcion }}</p>
+
+          <!-- Precio -->
+          <div class="mb-4">
+            <span class="display-5 fw-bold text-primary">${{ "{:,.0f}".format(planes.profesional.precio_ars) }}</span>
+            <span class="text-muted"> ARS</span>
+
+            <!-- Precio unitario -->
+            <div class="mt-2">
+              <small class="text-primary fw-semibold">
+                💰 $2.100 c/descarga (ahorra $18.000)
+              </small>
+            </div>
+          </div>
+
+          <!-- Detalles -->
+          <ul class="list-unstyled mb-4">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              <strong>{{ planes.profesional.creditos }}</strong> descargas
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Acceso inmediato
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Sin vencimiento
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Transferencia instantánea
+            </li>
+            <li>
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Ahorro de $18.000
+            </li>
+          </ul>
+
+          <!-- Botón de Compra -->
+          <button class="btn btn-primary w-100 btn-comprar" data-plan="profesional">
             <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
           </button>
         </div>

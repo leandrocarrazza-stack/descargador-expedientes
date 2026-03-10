@@ -127,26 +127,28 @@ CONVERSION_TIMEOUT = 60
 #  CONFIGURACIÓN DE PLANES Y CRÉDITOS
 # ═══════════════════════════════════════════════════════════════════════════
 
+# Precio por descarga en ARS
+PRECIO_DESCARGA_ARS = 3000
+
+# Planes de compra de créditos (cada crédito = 1 descarga)
 PLANES = {
-    'free': {
-        'nombre': 'Gratis',
-        'descargas_iniciales': 5,
-        'descripcion': '5 descargas gratis para probar',
-        'precio': 0
+    'basico': {
+        'nombre': 'Pack Básico',
+        'creditos': 1,
+        'precio_ars': 3000,
+        'descripcion': '1 descarga'
     },
-    'pro': {
-        'nombre': 'Profesional',
-        'creditos': 50,
-        'precio_usd': 9.99,
-        'precio_ars': 1990,
-        'descripcion': '50 descargas por $9.99 USD'
+    'ahorro': {
+        'nombre': 'Pack Ahorro',
+        'creditos': 5,
+        'precio_ars': 12000,  # $3000 c/u, ahorra $3000
+        'descripcion': '5 descargas (ahorra $3.000)'
     },
-    'premium': {
-        'nombre': 'Premium',
-        'creditos': 500,
-        'precio_usd': 29.99,
-        'precio_ars': 5990,
-        'descripcion': '500 descargas por $29.99 USD'
+    'profesional': {
+        'nombre': 'Pack Profesional',
+        'creditos': 20,
+        'precio_ars': 42000,  # $3000 c/u, ahorra $18.000
+        'descripcion': '20 descargas (ahorra $18.000)'
     }
 }
 

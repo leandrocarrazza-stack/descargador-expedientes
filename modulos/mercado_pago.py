@@ -37,17 +37,19 @@ def crear_orden_pago(
     plan: str,
     descripcion: str,
     monto: float,
-    email_usuario: str
+    email_usuario: str,
+    moneda: str = 'ARS'
 ) -> Dict[str, Any]:
     """
     Crea una orden de pago en Mercado Pago.
 
     Args:
         user_id: ID del usuario en la BD
-        plan: Nombre del plan (free, pro, premium)
+        plan: Nombre del plan (basico, ahorro, profesional)
         descripcion: Descripción del producto
-        monto: Monto a pagar en USD
+        monto: Monto a pagar
         email_usuario: Email del usuario
+        moneda: Moneda de pago (ARS o USD) - por defecto ARS
 
     Returns:
         Dict con datos de la orden (id, link de pago, etc.)
@@ -58,26 +60,27 @@ def crear_orden_pago(
 
     # Mapeo de créditos por plan
     CREDITOS_POR_PLAN = {
-        'pro': 50,
-        'premium': 500
+        'basico': 1,
+        'ahorro': 5,
+        'profesional': 20
     }
 
     creditos = CREDITOS_POR_PLAN.get(plan, 0)
 
     # Cuerpo de la solicitud según API de Orders
     payload = {
-        "title": f"Compra de {creditos} créditos - Plan {plan.upper()}",
+        "title": f"Compra de {creditos} créditos - {descripcion}",
         "description": descripcion,
         "external_reference": f"user_{user_id}_plan_{plan}",
         "total_amount": monto,
-        "currency": "USD",
+        "currency": moneda,
         "items": [
             {
-                "title": f"{creditos} Créditos - Descargar Expedientes",
-                "description": f"Plan {plan.upper()}",
+                "title": f"{creditos} créditos para descargar expedientes",
+                "description": descripcion,
                 "quantity": 1,
                 "unit_price": monto,
-                "currency_id": "USD"
+                "currency_id": moneda
             }
         ],
         "payer": {
