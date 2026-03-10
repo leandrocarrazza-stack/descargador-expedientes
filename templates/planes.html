@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block titulo %}
+  Planes y Precios - Descargador de Expedientes
+{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+  <!-- Encabezado -->
+  <div class="text-center mb-5">
+    <h1 class="display-4 fw-bold mb-2">Elige tu Plan</h1>
+    <p class="lead text-muted">Compra créditos para descargar expedientes judiciales</p>
+  </div>
+
+  <!-- Tarjetas de Planes -->
+  <div class="row g-4 justify-content-center">
+
+    <!-- Plan Pro -->
+    <div class="col-md-5 col-lg-4">
+      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="pro">
+        <div class="card-body p-4">
+          <h2 class="card-title h3 fw-bold mb-1">{{ planes.pro.nombre }}</h2>
+          <p class="text-muted small mb-4">{{ planes.pro.descripcion }}</p>
+
+          <!-- Precio -->
+          <div class="mb-4">
+            <span class="display-6 fw-bold text-primary">${{ "%.2f"|format(planes.pro.precio_usd) }}</span>
+            <span class="text-muted"> USD</span>
+          </div>
+
+          <!-- Detalles -->
+          <ul class="list-unstyled mb-4">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              <strong>{{ planes.pro.creditos }}</strong> descargas
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Acceso inmediato
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Válido por tiempo indefinido
+            </li>
+            <li>
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Soporte por email
+            </li>
+          </ul>
+
+          <!-- Botón de Compra -->
+          <button class="btn btn-primary w-100 btn-comprar" data-plan="pro">
+            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Plan Premium (Destacado) -->
+    <div class="col-md-5 col-lg-4">
+      <div class="card h-100 shadow border-0 plan-card plan-destacado" data-plan="premium">
+        <!-- Badge de Popular -->
+        <div class="position-absolute top-0 start-50 translate-middle-x">
+          <span class="badge bg-warning text-dark py-2 px-3">
+            <i class="bi bi-star-fill me-1"></i>MÁS POPULAR
+          </span>
+        </div>
+
+        <div class="card-body p-4">
+          <h2 class="card-title h3 fw-bold mb-1">{{ planes.premium.nombre }}</h2>
+          <p class="text-muted small mb-4">{{ planes.premium.descripcion }}</p>
+
+          <!-- Precio -->
+          <div class="mb-4">
+            <span class="display-6 fw-bold text-success">${{ "%.2f"|format(planes.premium.precio_usd) }}</span>
+            <span class="text-muted"> USD</span>
+
+            <!-- Ahorro indicativo -->
+            <div class="mt-2">
+              <small class="text-success fw-semibold">
+                💰 Mejor relación precio-crédito
+              </small>
+            </div>
+          </div>
+
+          <!-- Detalles -->
+          <ul class="list-unstyled mb-4">
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              <strong>{{ planes.premium.creditos }}</strong> descargas
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Acceso inmediato
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Válido por tiempo indefinido
+            </li>
+            <li class="mb-2">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Soporte prioritario
+            </li>
+            <li>
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Actualizaciones gratis
+            </li>
+          </ul>
+
+          <!-- Botón de Compra (destacado) -->
+          <button class="btn btn-success w-100 btn-comprar btn-comprar-premium" data-plan="premium">
+            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Preguntas Frecuentes -->
+  <div class="row mt-5 pt-5">
+    <div class="col-lg-8 mx-auto">
+      <h3 class="fw-bold mb-4">Preguntas Frecuentes</h3>
+
+      <div class="accordion" id="faqAccordion">
+        <!-- FAQ 1 -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+              ¿Cuánto tiempo son válidos los créditos?
+            </button>
+          </h2>
+          <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              Los créditos son válidos de forma permanente. Una vez comprados, puedes usarlos cuando necesites sin restricción de tiempo.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+              ¿Puedo comprar más de un plan?
+            </button>
+          </h2>
+          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              Sí, puedes comprar múltiples planes. Los créditos se acumulan en tu cuenta.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+              ¿Qué métodos de pago aceptan?
+            </button>
+          </h2>
+          <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              Aceptamos todos los métodos de pago de Mercado Pago: tarjetas de crédito/débito, transferencia bancaria y billetera digital.
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+              ¿Hay reembolso si no estoy conforme?
+            </button>
+          </h2>
+          <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+            <div class="accordion-body">
+              Los créditos se acreditan inmediatamente después del pago. No ofrecemos reembolsos, pero puedes contactar a soporte si tienes problemas.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Cargando -->
+<div class="modal fade" id="modalCargando" tabindex="-1" backdrop="static" keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="fw-semibold">Redirigiendo a Mercado Pago...</p>
+        <p class="text-muted small">No cierres esta ventana</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+  // Manejar clicks en botones de compra
+  document.querySelectorAll('.btn-comprar').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const plan = this.dataset.plan;
+
+      // Mostrar modal de cargando
+      const modal = new bootstrap.Modal(document.getElementById('modalCargando'));
+      modal.show();
+
+      try {
+        // Enviar solicitud POST para crear orden
+        const response = await fetch('/pagos/crear-orden', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ plan: plan })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.checkout_url) {
+          // Redirigir a Mercado Pago
+          window.location.href = data.checkout_url;
+        } else {
+          modal.hide();
+          alert('Error: ' + (data.mensaje || 'No se pudo procesar el pago'));
+        }
+      } catch (error) {
+        modal.hide();
+        console.error('Error:', error);
+        alert('Error al procesar el pedido. Intenta de nuevo.');
+      }
+    });
+  });
+</script>
+{% endblock %}

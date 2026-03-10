@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block titulo %}Pago Pendiente - Descargador de Expedientes{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <div class="card border-0 shadow">
+        <div class="card-body p-5 text-center">
+          <!-- Icono de Espera -->
+          <div class="mb-4">
+            <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+              <i class="bi bi-clock-history text-warning" style="font-size: 3rem;"></i>
+            </div>
+          </div>
+
+          <h1 class="h2 fw-bold mb-2">Pago Pendiente</h1>
+          <p class="text-muted mb-4">Tu pago está siendo procesado</p>
+
+          <div class="alert alert-info mb-4" role="alert">
+            <i class="bi bi-info-circle me-2"></i>
+            <small>
+              El procesamiento puede tomar de <strong>1 a 3 días hábiles</strong>.
+              Te notificaremos cuando se confirme.
+            </small>
+          </div>
+
+          <div class="bg-light p-4 rounded mb-4">
+            <p class="text-muted small mb-2">Lo que puede pasar ahora:</p>
+            <ul class="text-start small text-muted">
+              <li>✅ Pago se confirma: Créditos se acreditan automáticamente</li>
+              <li>❌ Pago rechazado: Te enviaremos un email con instrucciones</li>
+              <li>❓ Dudas: Revisa tu email o contacta a soporte</li>
+            </ul>
+          </div>
+
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+              <i class="bi bi-house me-2"></i>Ir al Dashboard
+            </a>
+            <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-bag-plus me-2"></i>Ver Más Planes
+            </a>
+          </div>
+
+          <p class="text-muted small mt-4">
+            Referencia: Revisa tu email para el comprobante de la transacción
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

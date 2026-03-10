@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block titulo %}
+  Pago Confirmado - Descargador de Expedientes
+{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-6">
+      <!-- Card de Éxito -->
+      <div class="card border-0 shadow">
+        <div class="card-body p-5 text-center">
+          <!-- Icono de Éxito -->
+          <div class="mb-4">
+            <div class="rounded-circle bg-success bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
+              <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+            </div>
+          </div>
+
+          <!-- Título -->
+          <h1 class="h2 fw-bold mb-2">¡Pago Confirmado!</h1>
+          <p class="text-muted mb-4">Tu compra fue procesada exitosamente</p>
+
+          <!-- Detalles de la Compra -->
+          {% if compra %}
+          <div class="bg-light p-4 rounded mb-4 text-start">
+            <div class="row mb-3">
+              <div class="col-6">
+                <small class="text-muted">Plan Comprado</small>
+                <p class="fw-bold">{{ compra.plan.upper() }}</p>
+              </div>
+              <div class="col-6">
+                <small class="text-muted">Créditos Recibidos</small>
+                <p class="fw-bold text-success">+{{ compra.creditos_comprados }}</p>
+              </div>
+            </div>
+
+            <div class="row mb-3">
+              <div class="col-6">
+                <small class="text-muted">Monto Pagado</small>
+                <p class="fw-bold">${{ "%.2f"|format(compra.monto_pagado) }} USD</p>
+              </div>
+              <div class="col-6">
+                <small class="text-muted">Fecha</small>
+                <p class="fw-bold">{{ compra.fecha_creacion.strftime('%d/%m/%Y %H:%M') }}</p>
+              </div>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="row">
+              <div class="col-12">
+                <small class="text-muted">Créditos Disponibles Ahora</small>
+                <p class="h5 fw-bold text-primary">{{ usuario.creditos_disponibles }} créditos</p>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Información Adicional -->
+          <div class="alert alert-info mb-4" role="alert">
+            <i class="bi bi-info-circle me-2"></i>
+            <small>
+              Los créditos ya están disponibles en tu cuenta.
+              Puedes <strong>comenzar a descargar expedientes inmediatamente</strong>.
+            </small>
+          </div>
+
+          <!-- Botones de Acción -->
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
+              <i class="bi bi-arrow-right me-2"></i>Ir al Dashboard
+            </a>
+            <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-bag-plus me-2"></i>Comprar Más Créditos
+            </a>
+          </div>
+
+          <!-- Detalles Técnicos (opcional, para referencia) -->
+          <div class="mt-5 pt-4 border-top">
+            <small class="text-muted d-block mb-3">Información de Transacción</small>
+
+            {% if collection_id %}
+            <div class="text-start mb-2">
+              <code class="text-muted" style="font-size: 0.85rem;">
+                ID Transacción: {{ collection_id }}
+              </code>
+            </div>
+            {% endif %}
+
+            {% if payment_id %}
+            <div class="text-start mb-2">
+              <code class="text-muted" style="font-size: 0.85rem;">
+                ID Pago: {{ payment_id }}
+              </code>
+            </div>
+            {% endif %}
+
+            <p class="text-muted small mt-3">
+              Si tienes problemas, puedes contactar a <strong>soporte@ejemplo.com</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card de Siguiente Paso -->
+      <div class="card border-0 shadow mt-4">
+        <div class="card-body p-4">
+          <h5 class="fw-bold mb-3">¿Qué hacer ahora?</h5>
+
+          <div class="d-flex mb-3">
+            <div class="me-3">
+              <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">1</span>
+            </div>
+            <div>
+              <p class="mb-1"><strong>Descarga tu primer expediente</strong></p>
+              <small class="text-muted">Accede a tu dashboard y busca un expediente para descargar</small>
+            </div>
+          </div>
+
+          <div class="d-flex mb-3">
+            <div class="me-3">
+              <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">2</span>
+            </div>
+            <div>
+              <p class="mb-1"><strong>Revisa los documentos descargados</strong></p>
+              <small class="text-muted">Los archivos se guardan en tu computadora automáticamente</small>
+            </div>
+          </div>
+
+          <div class="d-flex">
+            <div class="me-3">
+              <span class="badge bg-primary rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 30px; height: 30px;">3</span>
+            </div>
+            <div>
+              <p class="mb-1"><strong>Compra más créditos cuando lo necesites</strong></p>
+              <small class="text-muted">Los créditos nunca vencen, úsalos cuando quieras</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Script para redirección automática (opcional) -->
+<script>
+  // Si quieres, puedes redirigir automáticamente después de 3 segundos
+  // setTimeout(() => {
+  //   window.location.href = "{{ url_for('main.dashboard') }}";
+  // }, 3000);
+</script>
+{% endblock %}

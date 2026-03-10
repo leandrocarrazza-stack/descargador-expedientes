@@ -1,0 +1,32 @@
+# FASE 2: Agregamos Sistema de Pagos con Mercado Pago
+# Instalar con: pip install -r requirements-fase2.txt
+
+# Core Flask
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.3
+Flask-Migrate==4.0.4
+Flask-Login==0.6.2
+Flask-WTF==1.1.1
+Flask-CORS==4.0.0
+
+# Utilidades
+Werkzeug==2.3.6
+SQLAlchemy==1.4.48
+python-dotenv==1.0.0
+
+# Validación y Datos
+email-validator==2.0.0
+requests==2.31.0
+
+# Web Scraping y PDF
+beautifulsoup4==4.12.2
+PyPDF2==3.0.1
+
+# ===== FASE 2: PAGOS =====
+# Mercado Pago no tiene SDK oficial estable para Python,
+# usamos la API REST directamente vía requests (ya instalado)
+# Si en el futuro Mercado Pago publica un SDK, descomentar:
+# mercadopago==2.0.0
+
+# Para generar UUIDs en webhooks (opcional)
+uuid==1.30
