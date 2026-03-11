@@ -9,6 +9,7 @@ Selenium maneja automáticamente todas las cookies del navegador.
 import requests
 import json
 import pickle
+import os
 from pathlib import Path
 from datetime import datetime
 from selenium import webdriver
@@ -18,6 +19,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+from modulos.logger import crear_logger
+
+logger = crear_logger(__name__)
 
 
 class ClienteSelenium:
@@ -35,8 +39,12 @@ class ClienteSelenium:
         self.timeout = 30
         self.archivo_sesion = Path.home() / ".mesa_virtual_sesion.pkl"
 
-    def abrir_navegador_y_loguearse(self):
-        """Abre el navegador y espera a que el usuario se loguee."""
+    def abrir_navegador_y_loguearse(self, timeout_segundos=600):
+        """Abre el navegador y espera a que el usuario se loguee.
+
+        Args:
+            timeout_segundos: Máximo tiempo a esperar (default 10 min para 2FA)
+        """
         try:
             options = webdriver.ChromeOptions()
             self.driver = webdriver.Chrome(
@@ -46,15 +54,17 @@ class ClienteSelenium:
             print("🌐 Abriendo navegador Chrome...")
             self.driver.get(self.url_mesa_virtual)
 
+            minutos_max = timeout_segundos // 60
             print("\n⏳ Esperando que completes el login en el navegador...")
-            print("   (El script esperará 5 minutos máximo)")
+            print(f"   (El script esperará {minutos_max} minutos máximo)")
             print("   Deberías ver: Mesa Virtual cargando después del login\n")
+            logger.info(f"Esperando login manual (timeout: {minutos_max} min)")
 
             tiempo_esperado = 0
             intervalo_chequeo = 1
             urls_vistas = []
 
-            while tiempo_esperado < 300:
+            while tiempo_esperado < timeout_segundos:
                 url_actual = self.driver.current_url
 
                 if url_actual not in urls_vistas:
@@ -72,7 +82,8 @@ class ClienteSelenium:
                 time.sleep(intervalo_chequeo)
                 tiempo_esperado += intervalo_chequeo
 
-            print("⏱️  Timeout: No se completó el login después de 5 minutos")
+            print(f"⏱️  Timeout: No se completó el login después de {minutos_max} minutos")
+            logger.error(f"Login timeout después de {minutos_max} minutos")
             return False
 
         except Exception as e:
@@ -114,14 +125,22 @@ class ClienteSelenium:
         """Carga las cookies guardadas en el navegador."""
         if not self.driver:
             print("⚠️  No hay navegador para cargar sesión")
+            logger.warning("No hay navegador para cargar sesión")
             return False
 
         if not self.archivo_sesion.exists():
             print(f"⚠️  Archivo de sesión no encontrado: {self.archivo_sesion}")
+            logger.warning(f"Archivo de sesión no encontrado: {self.archivo_sesion}")
             return False
 
         try:
+            # Calcular edad de la sesión guardada
+            mod_time = os.path.getmtime(self.archivo_sesion)
+            edad_segundos = time.time() - mod_time
+            edad_horas = edad_segundos / 3600
+
             print(f"📂 Cargando sesión desde: {self.archivo_sesion}")
+            logger.info(f"Cargando sesión guardada ({edad_horas:.1f}h de antigüedad)")
 
             # Navegar a la URL base primero
             self.driver.get(self.url_mesa_virtual)
@@ -160,18 +179,22 @@ class ClienteSelenium:
             # La sesión es válida solo si NO fuimos redirigidos a login/SSO
             if "ol-sso" in url_actual or "login" in url_actual or "keycloak" in url_actual.lower():
                 print("⚠️  Sesión expirada - fuimos redirigidos a login")
+                logger.error(f"Sesión expirada (redirigido a login). URL: {url_actual[:80]}")
                 return False
 
             if "mesavirtual.jusentrerios.gov.ar" in url_actual:
                 print("✅ Sesión restaurada correctamente")
+                logger.info("Sesión restaurada exitosamente")
                 return True
 
             # Si no estamos en login pero tampoco en la URL esperada, probablemente falló
             print(f"⚠️  URL inesperada después de cargar sesión: {url_actual[:80]}")
+            logger.warning(f"URL inesperada después de cargar sesión: {url_actual[:80]}")
             return False
 
         except Exception as e:
             print(f"⚠️  No se pudo cargar sesión: {e}")
+            logger.error(f"Error al cargar sesión: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -265,6 +288,29 @@ class ClienteSelenium:
             self.driver.quit()
 
 
+def limpiar_sesion_si_vieja(archivo_sesion, max_edad_horas=24):
+    """Elimina sesión guardada si es muy vieja.
+
+    Args:
+        archivo_sesion: Ruta al archivo pickle de sesión
+        max_edad_horas: Edad máxima permitida en horas
+    """
+    if not os.path.exists(archivo_sesion):
+        return
+
+    try:
+        mod_time = os.path.getmtime(archivo_sesion)
+        edad_segundos = time.time() - mod_time
+        edad_horas = edad_segundos / 3600
+
+        if edad_segundos > max_edad_horas * 3600:
+            os.remove(archivo_sesion)
+            logger.info(f"Sesión eliminada (más de {max_edad_horas}h de antigüedad)")
+            print(f"🧹 Sesión guardada eliminada (más de {max_edad_horas}h)")
+    except Exception as e:
+        logger.warning(f"Error al limpiar sesión vieja: {e}")
+
+
 def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True):
     """
     Crea un cliente Selenium para acceso autenticado.
@@ -297,42 +343,47 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
 
     # Intentar cargar sesión guardada primero
     sesion_cargada = False
-    if usar_sesion_guardada and cliente.sesion_existe():
-        print("\n✅ Sesión guardada detectada, intentando cargar...")
-        try:
-            # Crear navegador en headless mode (sin interfaz visible)
-            options = webdriver.ChromeOptions()
-            options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-blink-features=AutomationControlled')
+    if usar_sesion_guardada:
+        # Limpiar sesión si es muy vieja
+        limpiar_sesion_si_vieja(cliente.archivo_sesion, max_edad_horas=24)
 
-            cliente.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
-                options=options
-            )
-            print("🔇 Navegador en modo silencioso (headless)...")
+        if cliente.sesion_existe():
+            print("\n✅ Sesión guardada detectada, intentando cargar...")
+            try:
+                # Crear navegador en headless mode (sin interfaz visible)
+                options = webdriver.ChromeOptions()
+                options.add_argument('--headless')
+                options.add_argument('--no-sandbox')
+                options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--disable-blink-features=AutomationControlled')
 
-            sesion_cargada = cliente.cargar_sesion()
+                cliente.driver = webdriver.Chrome(
+                    service=Service(ChromeDriverManager().install()),
+                    options=options
+                )
+                print("🔇 Navegador en modo silencioso (headless)...")
 
-            if sesion_cargada:
-                print("✅ Usando sesión guardada (sin navegador visible)\n")
-            else:
-                # Cerrar navegador y hacer login manual
-                print("⚠️  Sesión expirada, se requiere nuevo login")
+                sesion_cargada = cliente.cargar_sesion()
+
+                if sesion_cargada:
+                    print("✅ Usando sesión guardada (sin navegador visible)\n")
+                else:
+                    # Cerrar navegador y hacer login manual
+                    print("⚠️  Sesión expirada, se requiere nuevo login")
+                    if cliente.driver:
+                        cliente.driver.quit()
+                    cliente.driver = None
+
+            except Exception as e:
+                print(f"⚠️  No se pudo usar sesión guardada: {e}")
+                logger.warning(f"Error al usar sesión guardada: {e}")
                 if cliente.driver:
-                    cliente.driver.quit()
+                    try:
+                        cliente.driver.quit()
+                    except:
+                        pass
                 cliente.driver = None
-
-        except Exception as e:
-            print(f"⚠️  No se pudo usar sesión guardada: {e}")
-            if cliente.driver:
-                try:
-                    cliente.driver.quit()
-                except:
-                    pass
-            cliente.driver = None
-            sesion_cargada = False
+                sesion_cargada = False
 
     # Si no se cargó sesión, hacer login manual
     if not sesion_cargada:
@@ -355,23 +406,28 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         "query": "query cantidadNotificacionesNoLeidasBusquedaAvanzada { cantidadNotificacionesNoLeidasBusquedaAvanzada { count } }"
     }
 
+    logger.info("Verificando validez de sesión con test GraphQL")
     resultado = cliente.hacer_request_graphql(test_query)
 
     # Verificar si la respuesta es válida
     if resultado and isinstance(resultado, dict):
         if "error" in resultado:
-            # Contiene error - pero el login fue exitoso, continuamos de todas formas
-            print(f"⚠️  Nota: {resultado.get('error')}")
-            print("✅ Login completado, continuando...\n")
-            return cliente
+            # Respuesta con error
+            error_msg = resultado.get('error', 'Unknown error')
+            logger.error(f"GraphQL error durante verificación: {error_msg}")
+            print(f"⚠️  Error en verificación: {error_msg}")
+            print("❌ Sesión no pudo ser verificada\n")
+            raise Exception(f"Sesión inválida: {error_msg}")
         elif "data" in resultado:
             # Respuesta válida
+            logger.info("Sesión verificada correctamente")
             print("✅ Sesión verificada correctamente\n")
             return cliente
 
-    # Si llegamos aquí, respuesta inesperada pero continuamos
-    print("✅ Login completado, continuando...\n")
-    return cliente
+    # Si llegamos aquí, respuesta inesperada
+    logger.warning(f"Respuesta inesperada del GraphQL: {resultado}")
+    print("⚠️  Respuesta inesperada del servidor\n")
+    raise Exception(f"Respuesta inesperada: {resultado}")
 
 
 if __name__ == "__main__":
