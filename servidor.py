@@ -93,7 +93,7 @@ def crear_app(config_obj=None):
     # ═════════════════════════════════════════════════════════════════════
 
     init_celery_with_app(app)
-    logger.info("✅ Celery inicializado (broker: Redis)")
+    logger.info("[OK] Celery inicializado (broker: Redis)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
@@ -101,7 +101,7 @@ def crear_app(config_obj=None):
 
     with app.app_context():
         db.create_all()
-        logger.info(f"✅ Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
+        logger.info(f"[OK] Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
 
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
@@ -115,7 +115,7 @@ def crear_app(config_obj=None):
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
 
-    logger.info("✅ Blueprints registrados (auth, pagos, descargas)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
@@ -187,7 +187,7 @@ def crear_app(config_obj=None):
     #  LOGGING
     # ═════════════════════════════════════════════════════════════════════
 
-    logger.info(f"✅ Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
+    logger.info(f"[OK] Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
 
     return app
 
@@ -200,7 +200,7 @@ app = crear_app()
 
 if __name__ == '__main__':
     """Ejecuta el servidor de desarrollo."""
-    logger.info("🚀 Iniciando servidor Flask...")
+    logger.info("[START] Iniciando servidor Flask...")
 
     app.run(
         host='0.0.0.0',

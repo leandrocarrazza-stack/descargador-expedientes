@@ -15,7 +15,7 @@ Patrón: Orchestrator / Workflow
 Uso:
     pipeline = PipelineDescargador()
     resultado = pipeline.ejecutar("21/24")
-    print(resultado)  # ✅ Expediente_21_24_UNIFICADO.pdf
+    print(resultado)  # [OK] Expediente_21_24_UNIFICADO.pdf
 """
 
 from pathlib import Path
@@ -165,7 +165,7 @@ class PipelineDescargador:
                     api_graphql_url=self.config.API_GRAPHQL,
                     url_mesa_virtual=self.config.MESA_VIRTUAL_URL,
                 )
-                logger.info("✅ Autenticación completada")
+                logger.info("[OK] Autenticación completada")
                 return  # Éxito
 
             except Exception as e:
@@ -213,7 +213,7 @@ class PipelineDescargador:
                 # Un solo resultado: convertir a Expediente y continuar
                 exp_dict = resultado.get("expediente")
                 self.estado.expediente = self.estado.buscador._dict_a_expediente(exp_dict)
-                logger.info(f"✅ Expediente encontrado: {self.estado.expediente}")
+                logger.info(f"[OK] Expediente encontrado: {self.estado.expediente}")
 
             elif resultado.get("tipo") == "multiple":
                 # Múltiples resultados: lanzar excepción especial con opciones
@@ -267,7 +267,7 @@ class PipelineDescargador:
             if not self.estado.archivos_descargados:
                 raise ErrorDescarga("No se descargó ningún archivo")
 
-            logger.info(f"✅ Descargados {len(self.estado.archivos_descargados)} archivos")
+            logger.info(f"[OK] Descargados {len(self.estado.archivos_descargados)} archivos")
         except ErrorDescarga:
             raise
         except Exception as e:
@@ -291,7 +291,7 @@ class PipelineDescargador:
             )
 
             logger.info(
-                f"✅ Conversión completada: {len(self.estado.archivos_convertidos)} archivos"
+                f"[OK] Conversión completada: {len(self.estado.archivos_convertidos)} archivos"
             )
             self.estado.archivos_finales = self.estado.archivos_convertidos
         except ErrorConversion as e:
@@ -322,7 +322,7 @@ class PipelineDescargador:
                 raise ErrorUnificacion("No se generó PDF final")
 
             self.estado.pdf_final = Path(pdf_final)
-            logger.info(f"✅ PDF generado: {self.estado.pdf_final.name}")
+            logger.info(f"[OK] PDF generado: {self.estado.pdf_final.name}")
         except ErrorUnificacion:
             raise
         except Exception as e:
@@ -336,7 +336,7 @@ class PipelineDescargador:
             logger.info("Limpieza de archivos temporales")
             if self.estado.carpeta_temporal.exists():
                 shutil.rmtree(self.estado.carpeta_temporal)
-                logger.info(f"✅ Carpeta temporal eliminada: {self.estado.carpeta_temporal}")
+                logger.info(f"[OK] Carpeta temporal eliminada: {self.estado.carpeta_temporal}")
         except Exception as e:
             logger.warning(f"No se pudo limpiar temp: {e}")
 
