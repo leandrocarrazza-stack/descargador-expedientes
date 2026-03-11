@@ -169,7 +169,8 @@ class PipelineDescargador:
                 return  # Éxito
 
             except Exception as e:
-                logger.warning(f"Intento {intento + 1}/{max_reintentos} falló: {e}")
+                error_msg = type(e).__name__
+                logger.warning(f"Intento {intento + 1}/{max_reintentos} fallo: {error_msg}")
 
                 # Si hay más reintentos, esperar antes de reintentar
                 if intento < max_reintentos - 1:
@@ -178,8 +179,8 @@ class PipelineDescargador:
                     time.sleep(espera_segundos)
                 else:
                     # Último intento falló
-                    logger.error(f"Autenticación falló después de {max_reintentos} intentos: {e}")
-                    raise ErrorAutenticacion(f"No se pudo autenticar después de {max_reintentos} intentos: {e}") from e
+                    logger.error(f"Autenticacion fallo despues de {max_reintentos} intentos")
+                    raise ErrorAutenticacion(f"No se pudo autenticar despues de {max_reintentos} intentos") from e
 
     def _paso_busqueda(self) -> None:
         """Paso 2: Buscar el expediente."""
