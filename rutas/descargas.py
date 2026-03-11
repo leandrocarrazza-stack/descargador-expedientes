@@ -246,7 +246,7 @@ def descargar_pdf(exp_id: int):
             }), 403
 
         # Validar que el archivo exista
-        if not expediente.pdf_ruta or not os.path.exists(expediente.pdf_ruta):
+        if not expediente.pdf_ruta_temporal or not os.path.exists(expediente.pdf_ruta_temporal):
             return jsonify({
                 'exito': False,
                 'error': 'El archivo ya no está disponible'
@@ -262,7 +262,7 @@ def descargar_pdf(exp_id: int):
 
         # Enviar archivo
         return send_file(
-            expediente.pdf_ruta,
+            expediente.pdf_ruta_temporal,
             as_attachment=True,
             download_name=nombre_archivo,
             mimetype='application/pdf'
@@ -318,7 +318,7 @@ def obtener_historial():
         expedientes = ExpedienteDescargado.query.filter_by(
             user_id=current_user.id
         ).order_by(
-            ExpedienteDescargado.descargado_en.desc()
+            ExpedienteDescargado.completado_en.desc()
         ).paginate(page=pagina, per_page=limite)
 
         # Construir respuesta
@@ -330,7 +330,7 @@ def obtener_historial():
                 'caratula': exp.caratula,
                 'tribunal': exp.tribunal,
                 'estado': exp.estado,
-                'descargado_en': exp.descargado_en.isoformat() if exp.descargado_en else None,
+                'completado_en': exp.completado_en.isoformat() if exp.completado_en else None,
                 'error': exp.error_msg if exp.estado == 'failed' else None,
                 'pdf_url': f'/descargas/expediente/{exp.id}/descargar' if exp.estado == 'completed' else None,
             })
