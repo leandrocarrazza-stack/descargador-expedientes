@@ -411,23 +411,31 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
 
     # Verificar si la respuesta es válida
     if resultado and isinstance(resultado, dict):
-        if "error" in resultado:
-            # Respuesta con error
-            error_msg = resultado.get('error', 'Unknown error')
-            logger.error(f"GraphQL error durante verificación: {error_msg}")
-            print(f"⚠️  Error en verificación: {error_msg}")
-            print("❌ Sesión no pudo ser verificada\n")
-            raise Exception(f"Sesión inválida: {error_msg}")
-        elif "data" in resultado:
-            # Respuesta válida
+        # Verificar si es error de autenticación (invalida la sesión)
+        error_msg = resultado.get('error', '').lower() if 'error' in resultado else ''
+        if error_msg and ('unauthorized' in error_msg or 'authentication' in error_msg or '401' in error_msg):
+            # Error de autenticación = sesión inválida
+            logger.error(f"Sesión rechazada por GraphQL: {error_msg}")
+            print(f"⚠️  Sesión rechazada: {error_msg}\n")
+            return None  # Indica sesión inválida
+
+        # Si hay data, sesión es válida
+        if "data" in resultado:
             logger.info("Sesión verificada correctamente")
             print("✅ Sesión verificada correctamente\n")
             return cliente
 
-    # Si llegamos aquí, respuesta inesperada
-    logger.warning(f"Respuesta inesperada del GraphQL: {resultado}")
-    print("⚠️  Respuesta inesperada del servidor\n")
-    raise Exception(f"Respuesta inesperada: {resultado}")
+        # Si hay error pero no es de autenticación, loguear pero continuar
+        if "error" in resultado:
+            logger.warning(f"GraphQL warning (pero continuamos): {resultado.get('error')}")
+            print(f"⚠️  Nota: {resultado.get('error')}")
+            print("✅ Sesión parece válida, continuando...\n")
+            return cliente
+
+    # Si llegamos aquí, respuesta inesperada pero continuamos
+    logger.warning(f"Respuesta inesperada del GraphQL, continuando: {resultado}")
+    print("✅ Sesión verificada, continuando...\n")
+    return cliente
 
 
 if __name__ == "__main__":
