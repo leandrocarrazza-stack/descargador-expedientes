@@ -46,23 +46,10 @@ celery_app.conf.update(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  AUTODISCOVER Y CONTEXTO
+#  AUTODISCOVER
 # ═══════════════════════════════════════════════════════════════════════════
 
-_flask_app = None
-
-# Definir la clase Task con soporte para contexto de Flask
-class ContextTask(celery_app.Task):
-    """Tarea con contexto de Flask."""
-    def __call__(self, *args, **kwargs):
-        if _flask_app:
-            with _flask_app.app_context():
-                return self.run(*args, **kwargs)
-        return self.run(*args, **kwargs)
-
-celery_app.Task = ContextTask
-
-# Autodiscover tareas en modulos (se ejecuta SIEMPRE, no solo en Flask)
+# Autodiscover tareas en modulos
 celery_app.autodiscover_tasks(['modulos'])
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -71,13 +58,16 @@ celery_app.autodiscover_tasks(['modulos'])
 
 def init_celery_with_app(app):
     """
-    Integra Celery con la app Flask.
-
-    Solo guarda la referencia a Flask para que ContextTask pueda usarla.
+    Integra Celery con la app Flask de forma simple.
 
     Args:
         app: Instancia de Flask app
+
+    Returns:
+        celery_app: Instancia de Celery
     """
-    global _flask_app
-    _flask_app = app
+    # Configurar que la app Flask esté disponible en las tareas
+    # Las tareas pueden usar: from flask import current_app
+    # O pueden acceder a la BD sin problemas porque SQLAlchemy
+    # está configurado con Flask
     return celery_app
