@@ -26,9 +26,6 @@ from modulos.logger import crear_logger
 
 import config
 
-# Importar app para contexto de Flask en tareas
-from servidor import app
-
 logger = crear_logger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -77,6 +74,9 @@ def descargar_expediente_task(
 
     logger.info(f"📥 Iniciando descarga: Usuario {user_id}, Expediente {numero_expediente}")
 
+    # Importar app localmente para evitar importación circular
+    from servidor import app
+
     # Ejecutar dentro del contexto de Flask para acceder a la BD
     with app.app_context():
         try:
@@ -84,7 +84,7 @@ def descargar_expediente_task(
             #  PASO 1: Validar usuario y créditos
             # ═════════════════════════════════════════════════════════════════
 
-                usuario = User.query.get(user_id)
+            usuario = User.query.get(user_id)
             if not usuario:
                 return {
                     'exito': False,
@@ -233,6 +233,9 @@ def limpiar_descargas_antiguas_task(dias: int = 7) -> Dict[str, Any]:
     from datetime import timedelta
 
     logger.info(f"🧹 Limpiando descargas más antiguas de {dias} días")
+
+    # Importar app localmente para evitar importación circular
+    from servidor import app
 
     with app.app_context():
         try:
