@@ -130,9 +130,9 @@ def descargar_expediente_task(
                 numero=numero_expediente,
                 caratula=resultado_pipeline.expediente.caratula if resultado_pipeline.expediente else None,
                 tribunal=resultado_pipeline.expediente.tribunal if resultado_pipeline.expediente else None,
-                pdf_ruta=str(resultado_pipeline.pdf_final),
+                pdf_ruta_temporal=str(resultado_pipeline.pdf_final),
                 estado='completed',
-                descargado_en=datetime.utcnow()
+                completado_en=datetime.utcnow()
             )
             db.session.add(expediente_db)
 
@@ -167,7 +167,7 @@ def descargar_expediente_task(
                 numero=numero_expediente,
                 estado='failed',
                 error_msg=str(resultado_pipeline.error),
-                descargado_en=datetime.utcnow()
+                completado_en=datetime.utcnow()
             )
             db.session.add(expediente_db)
             db.session.commit()
@@ -234,17 +234,17 @@ def limpiar_descargas_antiguas_task(dias: int = 7) -> Dict[str, Any]:
 
         # Buscar expedientes antiguos
         expedientes_viejos = ExpedienteDescargado.query.filter(
-            ExpedienteDescargado.descargado_en < fecha_limite
+            ExpedienteDescargado.completado_en < fecha_limite
         ).all()
 
         cantidad = len(expedientes_viejos)
 
         # Eliminar archivos y registros
         for exp in expedientes_viejos:
-            if exp.pdf_ruta:
+            if exp.pdf_ruta_temporal:
                 try:
                     from pathlib import Path
-                    Path(exp.pdf_ruta).unlink(missing_ok=True)
+                    Path(exp.pdf_ruta_temporal).unlink(missing_ok=True)
                 except Exception as e:
                     logger.warning(f"⚠️ No se pudo eliminar {exp.pdf_ruta}: {e}")
 
