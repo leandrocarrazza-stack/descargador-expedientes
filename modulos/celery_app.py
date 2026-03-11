@@ -45,12 +45,11 @@ celery_app.conf.update(
     result_expires=3600,  # Guardar resultados por 1 hora
 )
 
-# Autodiscover tareas en el módulo 'modulos'
-celery_app.autodiscover_tasks(['modulos'])
-
 # ═══════════════════════════════════════════════════════════════════════════
 #  INTEGRACIÓN CON FLASK
 # ═══════════════════════════════════════════════════════════════════════════
+
+_flask_app = None
 
 def init_celery_with_app(app):
     """
@@ -61,11 +60,21 @@ def init_celery_with_app(app):
     Args:
         app: Instancia de Flask app
     """
+    global _flask_app
+    _flask_app = app
+
+    # Definir la clase Task ANTES de autodiscover
     class ContextTask(celery_app.Task):
         """Tarea con contexto de Flask."""
         def __call__(self, *args, **kwargs):
-            with app.app_context():
-                return self.run(*args, **kwargs)
+            if _flask_app:
+                with _flask_app.app_context():
+                    return self.run(*args, **kwargs)
+            return self.run(*args, **kwargs)
 
     celery_app.Task = ContextTask
+
+    # Autodiscover tareas DESPUÉS de configurar la clase Task
+    celery_app.autodiscover_tasks(['modulos'])
+
     return celery_app
