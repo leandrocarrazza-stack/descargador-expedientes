@@ -400,41 +400,11 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         else:
             print("⚠️  No se pudo guardar sesión\n")
 
-    # Verificar que la sesión funciona con un request simple
-    test_query = {
-        "operationName": "cantidadNotificacionesNoLeidasBusquedaAvanzada",
-        "query": "query cantidadNotificacionesNoLeidasBusquedaAvanzada { cantidadNotificacionesNoLeidasBusquedaAvanzada { count } }"
-    }
-
-    logger.info("Verificando validez de sesión con test GraphQL")
-    resultado = cliente.hacer_request_graphql(test_query)
-
-    # Verificar si la respuesta es válida
-    if resultado and isinstance(resultado, dict):
-        # Verificar si es error de autenticación (invalida la sesión)
-        error_msg = resultado.get('error', '').lower() if 'error' in resultado else ''
-        if error_msg and ('unauthorized' in error_msg or 'authentication' in error_msg or '401' in error_msg):
-            # Error de autenticación = sesión inválida
-            logger.error(f"Sesión rechazada por GraphQL: {error_msg}")
-            print(f"⚠️  Sesión rechazada: {error_msg}\n")
-            return None  # Indica sesión inválida
-
-        # Si hay data, sesión es válida
-        if "data" in resultado:
-            logger.info("Sesión verificada correctamente")
-            print("✅ Sesión verificada correctamente\n")
-            return cliente
-
-        # Si hay error pero no es de autenticación, loguear pero continuar
-        if "error" in resultado:
-            logger.warning(f"GraphQL warning (pero continuamos): {resultado.get('error')}")
-            print(f"⚠️  Nota: {resultado.get('error')}")
-            print("✅ Sesión parece válida, continuando...\n")
-            return cliente
-
-    # Si llegamos aquí, respuesta inesperada pero continuamos
-    logger.warning(f"Respuesta inesperada del GraphQL, continuando: {resultado}")
-    print("✅ Sesión verificada, continuando...\n")
+    # Si llegamos aquí, el cliente está conectado a Mesa Virtual
+    # La verificación de autenticación ya se hizo en cargar_sesion()
+    # No hacemos validación GraphQL adicional para evitar loops infinitos
+    logger.info("Sesión autenticada - Cliente listo para usar")
+    print("✅ Sesión autenticada\n")
     return cliente
 
 
