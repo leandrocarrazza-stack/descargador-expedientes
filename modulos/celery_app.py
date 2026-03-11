@@ -45,6 +45,9 @@ celery_app.conf.update(
     result_expires=3600,  # Guardar resultados por 1 hora
 )
 
+# Autodiscover tareas en el módulo 'modulos'
+celery_app.autodiscover_tasks(['modulos'])
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  INTEGRACIÓN CON FLASK
 # ═══════════════════════════════════════════════════════════════════════════

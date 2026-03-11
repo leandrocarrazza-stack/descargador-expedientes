@@ -93,10 +93,6 @@ def crear_app(config_obj=None):
     # ═════════════════════════════════════════════════════════════════════
 
     init_celery_with_app(app)
-
-    # Importar tareas para que se registren en Celery
-    from modulos import tasks  # noqa: F401
-
     logger.info("✅ Celery inicializado (broker: Redis)")
 
     # ═════════════════════════════════════════════════════════════════════
