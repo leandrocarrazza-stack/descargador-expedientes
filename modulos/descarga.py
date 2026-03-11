@@ -14,6 +14,13 @@ from pathlib import Path
 import time
 import requests
 from urllib.parse import urljoin
+from typing import List, Optional
+
+from modulos.logger import crear_logger
+from modulos.excepciones import ErrorDescarga
+from modulos.modelos import Archivo, Movimiento
+
+logger = crear_logger(__name__)
 
 
 class DescargadorArchivos:
@@ -33,7 +40,7 @@ class DescargadorArchivos:
         self.timeout = timeout
         self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
-    def obtener_movimientos(self, expediente_id):
+    def obtener_movimientos(self, numero: str) -> List[Movimiento]:
         """
         Obtiene movimientos del expediente extrayendo del HTML de TODAS las páginas.
 
@@ -44,15 +51,15 @@ class DescargadorArchivos:
         4. Devuelve lista completa de movimientos de TODAS las páginas
 
         Args:
-            expediente_id: ID del expediente (puede ser el número o ID interno)
+            numero: Número del expediente (puede ser el número o ID interno)
 
         Retorna:
-            list: Lista de movimientos con sus archivos adjuntos de TODAS las páginas
+            List[Movimiento]: Lista de movimientos con sus archivos adjuntos de TODAS las páginas
 
         Lanza:
-            Exception: Si hay error en la navegación
+            ErrorDescarga: Si hay error en la navegación
         """
-        print("\n📋 Obteniendo lista de movimientos (con paginación)...")
+        logger.info("Obteniendo lista de movimientos (con paginación)...")
 
         try:
             driver = self.cliente.driver
@@ -60,27 +67,27 @@ class DescargadorArchivos:
             pagina_actual = 1
 
             while True:
-                print(f"\n   📄 Procesando página {pagina_actual}...")
+                logger.debug(f"Procesando página {pagina_actual}...")
                 time.sleep(1)
 
                 # Extraer HTML de la página
                 html = driver.page_source
-                soup = BeautifulSoup(html, 'html.parser')
+                soup = BeautifulSoup(html, "html.parser")
 
                 # Buscar la tabla de movimientos
-                tablas = soup.find_all('table')
+                tablas = soup.find_all("table")
                 if not tablas:
-                    print("   ⚠️  No se encontró tabla de movimientos")
+                    logger.warning("No se encontró tabla de movimientos")
                     break
 
                 tabla = tablas[0]  # Primera tabla es la de movimientos
-                filas = tabla.find_all('tr')
+                filas = tabla.find_all("tr")
 
                 if not filas:
-                    print("   ⚠️  No hay filas en la tabla")
+                    logger.warning("No hay filas en la tabla")
                     break
 
-                print(f"      → Encontradas {len(filas)} filas en esta página")
+                logger.debug(f"Encontradas {len(filas)} filas en esta página")
 
                 movimientos_pagina = 0
                 for fila_idx, fila in enumerate(filas, 1):
@@ -88,58 +95,81 @@ class DescargadorArchivos:
                     texto_fila = fila.get_text(strip=True)
 
                     # Buscar enlaces en la fila
-                    enlaces = fila.find_all('a')
+                    enlaces = fila.find_all("a")
 
                     if enlaces:
                         # Extraer información del movimiento
                         movimiento = {
-                            'indice': len(movimientos) + fila_idx,  # Índice global
-                            'descripcion': texto_fila[:150],  # Primeros 150 caracteres
-                            'enlaces_descarga': [],
-                            'pagina': pagina_actual,  # Registrar en qué página estaba
+                            "indice": len(movimientos) + fila_idx,  # Índice global
+                            "descripcion": texto_fila[:150],  # Primeros 150 caracteres
+                            "enlaces_descarga": [],
+                            "pagina": pagina_actual,  # Registrar en qué página estaba
                         }
 
                         # Buscar enlaces de descarga
                         # NOTA: Mesa Virtual muestra dos enlaces por movimiento:
                         #   1er enlace (texto "PDF" o "RTF"): previsualización → siempre falla con EOF
                         #   2do enlace (texto vacío): descarga directa → es el archivo real
-                        # Solo se descarga el enlace de descarga directa (texto vacío o no "PDF"/"RTF").
+                        #
+                        # ESTRATEGIA DE SELECCIÓN (en orden):
+                        #   1. Descartar enlaces con texto "PDF" o "RTF" (previsualización obvia)
+                        #   2. Si quedan múltiples enlaces, tomar solo el ÚLTIMO
+                        #      (Mesa Virtual siempre pone el enlace de descarga directa al final)
+                        #   3. Así se evita descargar el enlace de previsualización que
+                        #      genera errores "EOF marker not found"
+                        candidatos = []
                         for enlace in enlaces:
-                            href = enlace.get('href', '')
+                            href = enlace.get("href", "")
                             texto_enlace = enlace.get_text(strip=True)
 
-                            # Saltar enlaces de previsualización (texto exacto "PDF" o "RTF")
-                            if texto_enlace.upper() in ('PDF', 'RTF'):
+                            # Saltar enlaces de previsualización con texto explícito
+                            if texto_enlace.upper() in ("PDF", "RTF"):
                                 continue
 
-                            if href:  # Si tiene href
-                                movimiento['enlaces_descarga'].append({
-                                    'href': href,
-                                    'texto': texto_enlace,
-                                    'es_pdf': 'pdf' in href.lower() or texto_enlace.upper() == 'PDF',
-                                })
+                            if href:
+                                candidatos.append(
+                                    {
+                                        "href": href,
+                                        "texto": texto_enlace,
+                                        "es_pdf": "pdf" in href.lower()
+                                        or texto_enlace.upper() == "PDF",
+                                    }
+                                )
+
+                        # Si hay más de un candidato, quedarse solo con el último
+                        # (el enlace de descarga directa siempre es el último en Mesa Virtual)
+                        if len(candidatos) > 1:
+                            logger.debug(
+                                f"{len(candidatos)} enlaces candidatos → tomando solo el último (descarga directa)"
+                            )
+                            candidatos = [candidatos[-1]]
+
+                        movimiento["enlaces_descarga"] = candidatos
 
                         # Agregar si tiene enlaces
-                        if movimiento['enlaces_descarga']:
+                        if movimiento["enlaces_descarga"]:
                             movimientos.append(movimiento)
                             movimientos_pagina += 1
 
-                print(f"      ✓ {movimientos_pagina} movimiento(s) con archivos en esta página")
+                logger.debug(f"{movimientos_pagina} movimiento(s) con archivos en esta página")
 
                 # Detectar si hay siguiente página
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
 
                 if not hay_siguiente:
-                    print(f"\n   ✅ Fin de la paginación")
+                    logger.info("Fin de la paginación")
                     break
 
                 pagina_actual += 1
 
-            print(f"\n   📊 Total movimientos con archivos (todas las páginas): {len(movimientos)}")
+            logger.info(f"Total movimientos con archivos (todas las páginas): {len(movimientos)}")
             return movimientos
 
+        except ErrorDescarga:
+            raise
         except Exception as e:
-            raise Exception(f"Error obteniendo movimientos: {e}")
+            logger.error(f"Error obteniendo movimientos: {e}", exc_info=True)
+            raise ErrorDescarga(f"Error obteniendo movimientos: {e}") from e
 
     def _navegar_siguiente_pagina(self, driver):
         """
@@ -171,9 +201,9 @@ class DescargadorArchivos:
 
                 # Patrones comunes: "Página 1 de 14", "1 de 14", "page 1 of 14", etc
                 patrones = [
-                    r'[Pp]á?gina\s+(\d+)\s+de\s+(\d+)',  # Página 1 de 14
-                    r'page\s+(\d+)\s+of\s+(\d+)',          # page 1 of 14
-                    r'(\d+)\s+de\s+(\d+)',                 # 1 de 14 (solo números)
+                    r"[Pp]á?gina\s+(\d+)\s+de\s+(\d+)",  # Página 1 de 14
+                    r"page\s+(\d+)\s+of\s+(\d+)",  # page 1 of 14
+                    r"(\d+)\s+de\s+(\d+)",  # 1 de 14 (solo números)
                 ]
 
                 for patron in patrones:
@@ -183,10 +213,12 @@ class DescargadorArchivos:
                         pagina_actual = int(matches[-1][0])
                         total_paginas = int(matches[-1][1])
 
-                        print(f"      ℹ️  Página {pagina_actual} de {total_paginas}")
+                        logger.debug(f"Página {pagina_actual} de {total_paginas}")
 
                         if pagina_actual >= total_paginas:
-                            print(f"      ✓ Última página alcanzada (página {pagina_actual}/{total_paginas})")
+                            logger.debug(
+                                f"Última página alcanzada (página {pagina_actual}/{total_paginas})"
+                            )
                             return False
                         else:
                             # Hay más páginas, continuar buscando botón siguiente
@@ -214,7 +246,7 @@ class DescargadorArchivos:
                     )
                     # Verificar que esté visible y habilitado
                     if elemento.is_enabled() and elemento.is_displayed():
-                        print(f"      🔄 Navegando a siguiente página...")
+                        logger.debug("Navegando a siguiente página...")
                         # Hacer scroll hasta el botón para asegurarse de que es clickeable
                         driver.execute_script("arguments[0].scrollIntoView(true);", elemento)
                         time.sleep(0.5)
@@ -239,20 +271,20 @@ class DescargadorArchivos:
                         EC.presence_of_element_located((By.XPATH, selector))
                     )
                     # Si encontramos el botón deshabilitado, estamos en la última página
-                    print(f"      ✓ Botón siguiente deshabilitado, última página detectada")
+                    logger.debug("Botón siguiente deshabilitado, última página detectada")
                     return False
                 except:
                     continue
 
             # Si no encontró nada, asumir que no hay más páginas
-            print(f"      ✓ No se encontró botón siguiente habilitado, asumiendo última página")
+            logger.debug("No se encontró botón siguiente habilitado, asumiendo última página")
             return False
 
         except Exception as e:
-            print(f"      ⚠️  Error navegando: {str(e)[:50]}")
+            logger.warning(f"Error navegando: {str(e)[:50]}")
             return False
 
-    def descargar_archivos(self, expediente_id, movimientos):
+    def descargar_archivos(self, numero: str, movimientos: List[Movimiento]) -> List[Path]:
         """
         Descarga todos los archivos de los movimientos.
 
@@ -262,28 +294,28 @@ class DescargadorArchivos:
         3. Usar descarga directa con requests
 
         Args:
-            expediente_id: ID del expediente
+            numero: Número del expediente
             movimientos: Lista de movimientos con archivos
 
         Retorna:
-            list: Lista de dicts con {path, tipo, movimiento} de archivos descargados
+            List[Path]: Lista de rutas de archivos descargados
         """
         if not movimientos:
-            print("⚠️  No hay archivos para descargar.")
+            logger.warning("No hay archivos para descargar.")
             return []
 
-        print(f"\n📥 Descargando archivos de {len(movimientos)} movimiento(s)...\n")
+        logger.info(f"Descargando archivos de {len(movimientos)} movimiento(s)...")
 
         archivos_descargados = []
         driver = self.cliente.driver
 
         for mov_idx, movimiento in enumerate(movimientos, 1):
-            desc = movimiento['descripcion'][:60]
-            print(f"   [{mov_idx}/{len(movimientos)}] {desc}...", flush=True)
+            desc = movimiento["descripcion"][:60]
+            logger.debug(f"[{mov_idx}/{len(movimientos)}] {desc}...")
 
-            for enlace_idx, enlace in enumerate(movimiento['enlaces_descarga'], 1):
-                href = enlace['href']
-                texto = enlace['texto']
+            for enlace_idx, enlace in enumerate(movimiento["enlaces_descarga"], 1):
+                href = enlace["href"]
+                texto = enlace["texto"]
 
                 if not href:
                     continue
@@ -292,10 +324,10 @@ class DescargadorArchivos:
                 url_descarga = None
 
                 # Si es URL absoluta con token, usarla directamente
-                if href.startswith('http'):
+                if href.startswith("http"):
                     url_descarga = href
                 # Si es URL relativa, navegar con Selenium
-                elif href.startswith('/'):
+                elif href.startswith("/"):
                     # Navegar a la URL relativa (Selenium mantiene sesión autenticada)
                     try:
                         url_descarga = f"https://mesavirtual.jusentrerios.gov.ar{href}"
@@ -307,46 +339,52 @@ class DescargadorArchivos:
 
                 try:
                     # Generar nombre de archivo (extensión .pdf provisional)
-                    nombre_archivo = f"{mov_idx:03d}_{enlace_idx:02d}_{texto[:30].replace('/', '_')}.pdf"
+                    nombre_archivo = (
+                        f"{mov_idx:03d}_{enlace_idx:02d}_{texto[:30].replace('/', '_')}.pdf"
+                    )
                     ruta_archivo = self.carpeta_temp / nombre_archivo
 
                     # Descargar usando Selenium (mantiene sesión)
                     if self._descargar_archivo_selenium(url_descarga, ruta_archivo):
                         # Detectar tipo real por magic bytes (no confiar en la extensión)
                         ruta_final = ruta_archivo
-                        tipo_detectado = 'pdf'
+                        tipo_detectado = "pdf"
                         try:
-                            with open(ruta_archivo, 'rb') as f:
+                            with open(ruta_archivo, "rb") as f:
                                 magic_bytes = f.read(10)
-                            if magic_bytes.startswith(b'{\\rtf'):
+                            if magic_bytes.startswith(b"{\\rtf"):
                                 # Es un RTF disfrazado de PDF: renombrar
-                                ruta_rtf = ruta_archivo.with_suffix('.rtf')
+                                ruta_rtf = ruta_archivo.with_suffix(".rtf")
                                 ruta_archivo.rename(ruta_rtf)
                                 ruta_final = ruta_rtf
-                                tipo_detectado = 'rtf'
-                                print(f"      ✓ {nombre_archivo[:40]} → .rtf (contenido RTF detectado)")
+                                tipo_detectado = "rtf"
+                                logger.info(
+                                    f"{nombre_archivo[:40]} → .rtf (contenido RTF detectado)"
+                                )
                             else:
-                                print(f"      ✓ {nombre_archivo[:50]}")
+                                logger.info(f"{nombre_archivo[:50]}")
                         except Exception:
-                            print(f"      ✓ {nombre_archivo[:50]}")
+                            logger.info(f"{nombre_archivo[:50]}")
 
-                        archivos_descargados.append({
-                            'path': ruta_final,
-                            'tipo': tipo_detectado,
-                            # Usar mov_idx (posición en la lista descargada) como clave de orden.
-                            # mov_idx=1 es el más RECIENTE (página 1 de Mesa Virtual),
-                            # mov_idx=N es el más ANTIGUO (última página).
-                            # Con reverse=True en unificacion.py, se procesa de más antiguo a más reciente.
-                            'movimiento': mov_idx,
-                            'url': url_descarga,
-                        })
+                        archivos_descargados.append(
+                            {
+                                "path": ruta_final,
+                                "tipo": tipo_detectado,
+                                # Usar mov_idx (posición en la lista descargada) como clave de orden.
+                                # mov_idx=1 es el más RECIENTE (página 1 de Mesa Virtual),
+                                # mov_idx=N es el más ANTIGUO (última página).
+                                # Con reverse=True en unificacion.py, se procesa de más antiguo a más reciente.
+                                "movimiento": mov_idx,
+                                "url": url_descarga,
+                            }
+                        )
                     else:
-                        print(f"      ⚠️  Error descargando {nombre_archivo[:50]}")
+                        logger.warning(f"Error descargando {nombre_archivo[:50]}")
 
                 except Exception as e:
-                    print(f"      ❌ {str(e)[:50]}")
+                    logger.error(f"{str(e)[:50]}", exc_info=True)
 
-        print(f"\n   Total descargados: {len(archivos_descargados)}/{len(movimientos)}")
+        logger.info(f"Total descargados: {len(archivos_descargados)}/{len(movimientos)}")
         return archivos_descargados
 
     def _descargar_archivo_selenium(self, url, ruta_destino):
@@ -372,15 +410,15 @@ class DescargadorArchivos:
 
             # Obtener cookies de Selenium para mantener sesión autenticada
             cookies = driver.get_cookies()
-            cookie_dict = {c['name']: c['value'] for c in cookies}
+            cookie_dict = {c["name"]: c["value"] for c in cookies}
 
             # Headers para simular navegador real y evitar problemas de descarga
             # Accept amplio para no interferir con tipos RTF, DOC, etc.
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/pdf, application/rtf, application/msword, application/octet-stream, */*',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/pdf, application/rtf, application/msword, application/octet-stream, */*",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
             }
 
             # Intentar descarga con reintentos
@@ -394,7 +432,7 @@ class DescargadorArchivos:
                         headers=headers,
                         timeout=self.timeout,
                         stream=True,  # Descarga por chunks para archivos grandes
-                        allow_redirects=True
+                        allow_redirects=True,
                     )
                     response.raise_for_status()
 
@@ -407,7 +445,7 @@ class DescargadorArchivos:
                             return False
 
                     # Descargar por chunks para archivos grandes
-                    with open(ruta_destino, 'wb') as f:
+                    with open(ruta_destino, "wb") as f:
                         for chunk in response.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
@@ -416,17 +454,18 @@ class DescargadorArchivos:
                     tamaño_descargado = ruta_destino.stat().st_size
 
                     # Verificar el tipo de archivo antes de validar como PDF
-                    with open(ruta_destino, 'rb') as f:
+                    with open(ruta_destino, "rb") as f:
                         magic_bytes = f.read(10)
 
                     # Si es RTF, no validar como PDF (la validación falla correctamente)
-                    if magic_bytes.startswith(b'{\\rtf'):
+                    if magic_bytes.startswith(b"{\\rtf"):
                         return True  # RTF válido, se procesará después
 
                     # Verificar que sea un PDF válido (si es PDF)
-                    if 'pdf' in str(url).lower() or ruta_destino.name.endswith('.pdf'):
+                    if "pdf" in str(url).lower() or ruta_destino.name.endswith(".pdf"):
                         try:
                             from PyPDF2 import PdfReader
+
                             reader = PdfReader(str(ruta_destino))
                             num_pages = len(reader.pages)
                             if num_pages == 0:
@@ -456,7 +495,10 @@ class DescargadorArchivos:
         except Exception as e:
             return False
 
-def crear_descargador(cliente_selenium, api_graphql_url=None, api_archivos_url=None, carpeta_temp=None):
+
+def crear_descargador(
+    cliente_selenium, api_graphql_url=None, api_archivos_url=None, carpeta_temp=None
+):
     """
     Función auxiliar para crear un descargador preconfigurado.
 
@@ -471,6 +513,7 @@ def crear_descargador(cliente_selenium, api_graphql_url=None, api_archivos_url=N
     """
     if carpeta_temp is None:
         from pathlib import Path
+
         carpeta_temp = Path.cwd() / "temp"
 
     return DescargadorArchivos(cliente_selenium, carpeta_temp)

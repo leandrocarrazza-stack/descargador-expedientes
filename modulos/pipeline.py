@@ -203,35 +203,16 @@ class PipelineDescargador:
                 )
                 return
 
-            # Usar buscar_lista() para manejar múltiples opciones sin bloquear
-            resultado = self.estado.buscador.buscar_lista(self.estado.numero_expediente)
+            # Buscar expediente
+            resultado = self.estado.buscador.buscar(self.estado.numero_expediente)
 
-            # Procesar resultado según tipo
-            if resultado.get("tipo") == "vacio":
+            # Procesar resultado
+            if resultado is None:
                 raise ErrorBusqueda(f"Expediente {self.estado.numero_expediente} no encontrado")
 
-            elif resultado.get("tipo") == "unico":
-                # Un solo resultado: convertir a Expediente y continuar
-                exp_dict = resultado.get("expediente")
-                self.estado.expediente = self.estado.buscador._dict_a_expediente(exp_dict)
-                logger.info(f"[OK] Expediente encontrado: {self.estado.expediente}")
-
-            elif resultado.get("tipo") == "multiple":
-                # Múltiples resultados: lanzar excepción especial con opciones
-                opciones = resultado.get("opciones", [])
-                logger.warning(
-                    f"Se encontraron {len(opciones)} expediente(s) "
-                    f"que coinciden con '{self.estado.numero_expediente}'"
-                )
-                raise OpsionesMultiplesExpediente(
-                    f"Se encontraron {len(opciones)} opciones para el expediente "
-                    f"'{self.estado.numero_expediente}'",
-                    opciones=opciones,
-                    numero=self.estado.numero_expediente,
-                )
-
-            if not self.estado.expediente:
-                raise ErrorBusqueda(f"Expediente {self.estado.numero_expediente} no encontrado")
+            # buscar() devuelve un dict de expediente directamente
+            self.estado.expediente = resultado
+            logger.info(f"[OK] Expediente encontrado: {resultado.get('numero')}")
 
         except OpsionesMultiplesExpediente:
             # Re-lanzar esta excepción especial sin envolverla
