@@ -134,11 +134,13 @@ class PipelineDescargador:
 
             # Convertir archivos descargados
             # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
-            rutas_archivos = [
-                arch['path']  # path ya es la ruta completa
-                for arch in archivos_descargados
-            ]
-            archivos_convertidos = self.conversor.convertir_multiples(rutas_archivos)
+            archivos_convertidos = []
+            for arch in archivos_descargados:
+                ruta_original = arch['path']
+                pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
+                if pdf_convertido:
+                    archivos_convertidos.append(pdf_convertido)
+
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
             if not archivos_convertidos:
