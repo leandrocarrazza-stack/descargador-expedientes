@@ -92,11 +92,13 @@ class PipelineDescargador:
 
             # PASO 3: DESCARGA DE ARCHIVOS
             logger.info("[PASO 3/5] Descarga de archivos")
-            self.descargador = DescargadorArchivos(self.cliente)
 
-            # Crear carpeta temporal
+            # Crear carpeta temporal PRIMERO
             self.carpeta_temp = Path(config.TEMP_DIR) / f"exp_{numero_expediente.replace('/', '_')}"
             self.carpeta_temp.mkdir(parents=True, exist_ok=True)
+
+            # Crear descargador con carpeta temp
+            self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp)
 
             # Obtener movimientos
             movimientos = self.descargador.obtener_movimientos(numero_expediente)
