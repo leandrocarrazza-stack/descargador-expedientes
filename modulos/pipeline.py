@@ -13,6 +13,7 @@ Retorna: ResultadoPipeline con .exito, .pdf_final, .error
 """
 
 import logging
+import time
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -89,6 +90,20 @@ class PipelineDescargador:
 
             expediente = resultado_busqueda  # dict
             logger.info(f"[OK] Expediente encontrado: {expediente.get('numero', numero_expediente)}")
+
+            # NAVEGAR A LA PÁGINA DEL EXPEDIENTE (CRÍTICO)
+            # Después de buscar, estamos en la página de resultados de búsqueda
+            # Necesitamos navegar a la página del expediente para obtener los movimientos
+            url_expediente = expediente.get('url', '')
+            if url_expediente:
+                print(f"\n[NAV] Navegando a expediente...")
+                try:
+                    self.cliente.driver.get(url_expediente)
+                    time.sleep(2)  # Esperar a que cargue la página
+                    print(f"[OK] Navegado a: {url_expediente}")
+                except Exception as e:
+                    logger.warning(f"No se pudo navegar a URL del expediente: {e}")
+                    # Continuar aunque falle (puede que obtener_movimientos maneje esto)
 
             # PASO 3: DESCARGA DE ARCHIVOS
             logger.info("[PASO 3/5] Descarga de archivos")
