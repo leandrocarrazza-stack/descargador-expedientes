@@ -113,11 +113,10 @@ class PipelineDescargador:
                     expediente=expediente
                 )
 
-            # Descargar archivos
+            # Descargar archivos (carpeta_temp ya está en self.descargador)
             archivos_descargados = self.descargador.descargar_archivos(
                 numero_expediente,
-                movimientos,
-                str(self.carpeta_temp)
+                movimientos
             )
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
 
