@@ -316,7 +316,13 @@ class DescargadorArchivos:
 
                 try:
                     # Generar nombre de archivo (extensión .pdf provisional)
-                    nombre_archivo = f"{mov_idx:03d}_{enlace_idx:02d}_{texto[:30].replace('/', '_')}.pdf"
+                    # Sanitizar: reemplazar caracteres inválidos en Windows
+                    texto_sanitizado = texto[:30]
+                    for char in '<>:"|?*\\':
+                        texto_sanitizado = texto_sanitizado.replace(char, '_')
+                    texto_sanitizado = texto_sanitizado.replace('/', '_')
+
+                    nombre_archivo = f"{mov_idx:03d}_{enlace_idx:02d}_{texto_sanitizado}.pdf"
                     ruta_archivo = self.carpeta_temp / nombre_archivo
 
                     # RECICLAJE PREVENTIVO: Cada N descargas, reciclar navegador
