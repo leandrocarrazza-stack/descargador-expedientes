@@ -39,10 +39,10 @@ class UnificadorPDF:
             Path: Ruta del archivo PDF unificado, o None si falla
         """
         if not archivos_descargados:
-            print("⚠️  No hay archivos para unificar")
+            print("[WARN]  No hay archivos para unificar")
             return None
 
-        print(f"\n📑 Unificando {len(archivos_descargados)} archivo(s) en PDF único...\n")
+        print(f"\n Unificando {len(archivos_descargados)} archivo(s) en PDF único...\n")
 
         try:
             # Ordenar archivos por movimiento (índice) en orden NORMAL (ascendente)
@@ -56,7 +56,7 @@ class UnificadorPDF:
                 reverse=True  # Invertir: último movimiento primero (más antiguo)
             )
 
-            print(f"   📊 Orden de procesamiento (de más antiguo a más reciente):")
+            print(f"    Orden de procesamiento (de más antiguo a más reciente):")
             for archivo in archivos_ordenados:
                 print(f"      Movimiento {archivo.get('movimiento')}: {archivo['path'].name}")
 
@@ -64,7 +64,7 @@ class UnificadorPDF:
             conversor = crear_conversor()
 
             # Convertir archivos RTF a PDF si es necesario
-            print(f"\n   🔄 Convirtiendo archivos RTF a PDF...")
+            print(f"\n    Convirtiendo archivos RTF a PDF...")
             for archivo_info in archivos_ordenados:
                 ruta_archivo = archivo_info['path']
 
@@ -74,9 +74,9 @@ class UnificadorPDF:
                     ruta_pdf = conversor.convertir_rtf_a_pdf(ruta_archivo)
                     if ruta_pdf:
                         archivo_info['path'] = ruta_pdf
-                        print("✓")
+                        print("[OK]")
                     else:
-                        print("❌")
+                        print("[NO]")
 
             # Crear merger
             merger = PdfMerger()
@@ -91,7 +91,7 @@ class UnificadorPDF:
                 try:
                     # Verificar que el archivo exista
                     if not ruta_archivo.exists():
-                        print("❌ (no existe)")
+                        print("[NO] (no existe)")
                         continue
 
                     # Verificar que sea un PDF válido (tolerante con errores menores)
@@ -100,7 +100,7 @@ class UnificadorPDF:
                         reader = PdfReader(str(ruta_archivo))
                         num_pages = len(reader.pages)
                         if num_pages == 0:
-                            print("❌ (PDF vacío)")
+                            print("[NO] (PDF vacío)")
                             continue
                     except Exception as e:
                         # PDF está dañado pero intentamos usarlo igual si tiene contenido
@@ -109,33 +109,33 @@ class UnificadorPDF:
                             # PDF tiene daño menor (EOF incompleto) pero intentamos
                             tamaño = ruta_archivo.stat().st_size
                             if tamaño < 100:  # Muy pequeño = probablemente corrompido
-                                print(f"❌ (PDF muy pequeño: {tamaño} bytes)")
+                                print(f"[NO] (PDF muy pequeño: {tamaño} bytes)")
                                 continue
                             else:
                                 # Intentar usar de todas formas
-                                print(f"⚠️  (PDF con daño menor, intentando usar...)", end=" ", flush=True)
+                                print(f"[WARN]  (PDF con daño menor, intentando usar...)", end=" ", flush=True)
                                 num_pages = "?"
                         else:
-                            print(f"❌ (PDF inválido: {str(e)[:30]})")
+                            print(f"[NO] (PDF inválido: {str(e)[:30]})")
                             continue
 
                     # Agregar al merger
                     merger.append(str(ruta_archivo))
                     archivos_válidos += 1
-                    print(f"✓ ({num_pages} páginas)")
+                    print(f"[OK] ({num_pages} páginas)")
 
                 except Exception as e:
-                    print(f"❌ ({str(e)[:30]})")
+                    print(f"[NO] ({str(e)[:30]})")
                     continue
 
             # Guardar el PDF unificado
             if archivos_válidos == 0:
-                print("\n⚠️  Modo alternativo: PDFs dañados, copiando archivos como está...")
+                print("\n[WARN]  Modo alternativo: PDFs dañados, copiando archivos como está...")
                 merger.close()
 
                 # Si hay solo un archivo, copiarlo directamente
                 if len(archivos_ordenados) == 1:
-                    print("   📋 Un solo archivo - copiando como PDF final...")
+                    print("   [LIST] Un solo archivo - copiando como PDF final...")
                     try:
                         import shutil
                         archivo_unico = archivos_ordenados[0]['path']
@@ -152,28 +152,28 @@ class UnificadorPDF:
 
                         return ruta_salida
                     except Exception as e:
-                        print(f"   ❌ Error copiando: {e}")
+                        print(f"   [NO] Error copiando: {e}")
                         return None
                 else:
-                    print("   ❌ Múltiples archivos dañados, no se pueden unificar")
+                    print("   [NO] Múltiples archivos dañados, no se pueden unificar")
                     return None
 
             # Generar nombre del archivo de salida
             nombre_salida = f"Expediente_{numero_expediente}_UNIFICADO.pdf"
             ruta_salida = self.carpeta_salida / nombre_salida
 
-            print(f"\n   💾 Guardando archivo unificado: {nombre_salida}")
+            print(f"\n    Guardando archivo unificado: {nombre_salida}")
 
             # Escribir PDF unificado
             try:
                 with open(ruta_salida, 'wb') as f:
                     merger.write(f)
             except Exception as e:
-                print(f"   ❌ Error al escribir: {e}")
+                print(f"   [NO] Error al escribir: {e}")
                 merger.close()
                 # Intenta modo alternativo si hay un solo archivo
                 if len(archivos_ordenados) == 1:
-                    print("   📋 Intentando modo alternativo (copiar)...")
+                    print("   [LIST] Intentando modo alternativo (copiar)...")
                     try:
                         import shutil
                         archivo_unico = archivos_ordenados[0]['path']
@@ -197,7 +197,7 @@ class UnificadorPDF:
             return ruta_salida
 
         except Exception as e:
-            print(f"\n❌ Error unificando PDFs: {e}")
+            print(f"\n[NO] Error unificando PDFs: {e}")
             return None
 
     def limpiar_temporales(self, mantener_originales=False):
@@ -213,7 +213,7 @@ class UnificadorPDF:
         if mantener_originales:
             return 0
 
-        print("\n🗑️  Limpiando archivos temporales...\n")
+        print("\n️  Limpiando archivos temporales...\n")
 
         eliminados = 0
         try:
@@ -224,17 +224,17 @@ class UnificadorPDF:
                     try:
                         archivo.unlink()
                         eliminados += 1
-                        print(f"   ✓ Eliminado: {archivo.name}")
+                        print(f"   [OK] Eliminado: {archivo.name}")
                     except Exception as e:
-                        print(f"   ⚠️  Error eliminando {archivo.name}: {e}")
+                        print(f"   [WARN]  Error eliminando {archivo.name}: {e}")
 
             if eliminados > 0:
                 print(f"\n   ✅ {eliminados} archivo(s) temporal(es) eliminado(s)")
             else:
-                print(f"\n   ℹ️  No hay archivos temporales para eliminar")
+                print(f"\n   [INFO]  No hay archivos temporales para eliminar")
 
         except Exception as e:
-            print(f"   ❌ Error limpiando temporales: {e}")
+            print(f"   [NO] Error limpiando temporales: {e}")
 
         return eliminados
 

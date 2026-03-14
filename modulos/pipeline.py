@@ -6,7 +6,7 @@ Orquesta el flujo completo:
 1. Autenticación en Mesa Virtual
 2. Búsqueda de expediente
 3. Descarga de archivos
-4. Conversión RTF→PDF
+4. Conversión RTF>PDF
 5. Unificación de PDFs
 
 Retorna: ResultadoPipeline con .exito, .pdf_final, .error
@@ -128,8 +128,8 @@ class PipelineDescargador:
                     expediente=expediente
                 )
 
-            # PASO 4: CONVERSIÓN RTF→PDF
-            logger.info("[PASO 4/5] Conversión RTF→PDF")
+            # PASO 4: CONVERSIÓN RTF>PDF
+            logger.info("[PASO 4/5] Conversión RTF>PDF")
             self.conversor = ConversorRTF()
 
             # Convertir archivos descargados
@@ -146,7 +146,7 @@ class PipelineDescargador:
             if not archivos_convertidos:
                 return ResultadoPipeline(
                     exito=False,
-                    error="Falló la conversión RTF→PDF",
+                    error="Falló la conversión RTF>PDF",
                     tipo_error="conversion_failed",
                     expediente=expediente
                 )

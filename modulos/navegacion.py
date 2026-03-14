@@ -42,28 +42,28 @@ class BuscadorExpedientes:
         Lanza:
             Exception: Si hay error en la navegación
         """
-        print(f"\n🔍 Buscando expediente: {numero}")
+        print(f"\n[SEARCH] Buscando expediente: {numero}")
 
         try:
             driver = self.cliente.driver
 
             # 1. Navegar a la búsqueda
-            print("   → Abriendo buscador...")
+            print("   > Abriendo buscador...")
             driver.get("https://mesavirtual.jusentrerios.gov.ar/expedientes")
 
             # Esperar a que React termine de renderizar (máximo 10 segundos)
-            print("   → Esperando que cargue la interfaz...")
+            print("   > Esperando que cargue la interfaz...")
             WebDriverWait(driver, 10).until(
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
             time.sleep(2)  # Tiempo adicional para que React renderice
 
             # IMPORTANTE: Cerrar cartel de notificaciones PRIMERO (puede bloquear otros clicks)
-            print("   → Cerrando popup de notificaciones (si existe)...")
+            print("   > Cerrando popup de notificaciones (si existe)...")
             self._cerrar_cartel_notificaciones(driver)
 
             # IMPORTANTE: Limpiar filtros de fecha (Mesa Virtual los mantiene activos)
-            print("   → Limpiando filtros de fecha...")
+            print("   > Limpiando filtros de fecha...")
             self._limpiar_filtros_fecha(driver)
 
             # 2. Encontrar y llenar el campo de búsqueda
@@ -79,7 +79,7 @@ class BuscadorExpedientes:
                 (By.XPATH, "//input[@type='search']"),
             ]
 
-            print("   → Buscando campo de búsqueda...")
+            print("   > Buscando campo de búsqueda...")
             for selector_tipo, selector_valor in selectors_a_probar:
                 try:
                     elementos = WebDriverWait(driver, 3).until(
@@ -87,13 +87,13 @@ class BuscadorExpedientes:
                     )
                     if elementos:
                         search_input = elementos[0]
-                        print(f"      ✓ Campo encontrado con: {selector_tipo.name} = {selector_valor}")
+                        print(f"      [OK] Campo encontrado con: {selector_tipo.name} = {selector_valor}")
                         break
                 except:
                     continue
 
             if not search_input:
-                print("   ⚠️  No se encontró campo de búsqueda en ningún selector")
+                print("   [WARN]  No se encontró campo de búsqueda en ningún selector")
                 self._mostrar_debug_info(driver)
                 return None
 
@@ -110,15 +110,15 @@ class BuscadorExpedientes:
                     campo.dispatchEvent(new Event('change', { bubbles: true }));
                 """, search_input)
 
-                print(f"   → Campo limpiado completamente")
+                print(f"   > Campo limpiado completamente")
                 time.sleep(0.5)
             except Exception as e:
-                print(f"   ⚠️  Error al limpiar campo: {e}")
+                print(f"   [WARN]  Error al limpiar campo: {e}")
 
             # 4. Ingresar el número de expediente
             try:
                 search_input.send_keys(numero)
-                print(f"   → Ingresado número: {numero}")
+                print(f"   > Ingresado número: {numero}")
                 time.sleep(1)
 
                 # Buscar botón de búsqueda (lupa)
@@ -137,7 +137,7 @@ class BuscadorExpedientes:
                             EC.element_to_be_clickable((selector_tipo, selector_valor))
                         )
                         boton_buscar.click()
-                        print(f"   → Clic en botón de búsqueda")
+                        print(f"   > Clic en botón de búsqueda")
                         boton_encontrado = True
                         break
                     except:
@@ -145,17 +145,17 @@ class BuscadorExpedientes:
 
                 if not boton_encontrado:
                     # Si no encuentra botón, presionar Enter
-                    print("   → Presionando Enter (no se encontró botón de búsqueda)")
+                    print("   > Presionando Enter (no se encontró botón de búsqueda)")
                     search_input.send_keys("\n")
 
                 time.sleep(4)  # Esperar más tiempo para que carguen resultados
 
             except Exception as e:
-                print(f"   ⚠️  Error al llenar búsqueda: {e}")
+                print(f"   [WARN]  Error al llenar búsqueda: {e}")
                 return None
 
             # 5. Esperar a que se carguen los resultados
-            print("   → Esperando resultados...")
+            print("   > Esperando resultados...")
             resultados_encontrados = False
 
             # Intentar con múltiples estrategias de espera
@@ -171,7 +171,7 @@ class BuscadorExpedientes:
                     WebDriverWait(driver, 5).until(
                         EC.presence_of_any_elements_located((selector_tipo, selector_valor))
                     )
-                    print(f"      ✓ Resultados detectados")
+                    print(f"      [OK] Resultados detectados")
                     resultados_encontrados = True
                     break
                 except:
@@ -184,13 +184,13 @@ class BuscadorExpedientes:
                     WebDriverWait(driver, 5).until(
                         lambda d: len(d.find_elements(By.CSS_SELECTOR, "[class*='Mui']")) > 10
                     )
-                    print(f"      ✓ Contenido cargado (estructura diferente)")
+                    print(f"      [OK] Contenido cargado (estructura diferente)")
                     resultados_encontrados = True
                 except:
                     pass
 
             if not resultados_encontrados:
-                print(f"   ⚠️  No se detectaron resultados visibles")
+                print(f"   [WARN]  No se detectaron resultados visibles")
                 self._mostrar_debug_info(driver)
                 # Aún así continuar intentando extraer del HTML
                 time.sleep(2)
@@ -203,7 +203,7 @@ class BuscadorExpedientes:
             expedientes = self._extraer_expedientes_del_html(soup, numero)
 
             if not expedientes:
-                print(f"   ❌ No se encontró ningún expediente con el número '{numero}'")
+                print(f"   [NO] No se encontró ningún expediente con el número '{numero}'")
                 self._mostrar_debug_info(driver)
                 return None
 
@@ -221,7 +221,7 @@ class BuscadorExpedientes:
 
     def _mostrar_debug_info(self, driver):
         """Muestra información útil para debugging."""
-        print("\n   📋 INFO PARA DEBUGGING:")
+        print("\n   [LIST] INFO PARA DEBUGGING:")
         print(f"      URL actual: {driver.current_url}")
         print(f"      Título: {driver.title}")
 
@@ -242,29 +242,29 @@ class BuscadorExpedientes:
         print(f"\n      Buscando tablas/resultados:")
         tablas = soup.find_all('table')
         if tablas:
-            print(f"        ✓ Se encontraron {len(tablas)} tabla(s)")
+            print(f"        [OK] Se encontraron {len(tablas)} tabla(s)")
             for i, tabla in enumerate(tablas[:1], 1):
                 filas = tabla.find_all('tr')
                 print(f"          Tabla {i}: {len(filas)} filas")
         else:
-            print(f"        ✗ No se encontraron tablas")
+            print(f"        [NO] No se encontraron tablas")
 
         # Buscar divs con role="button" (Material-UI list items)
         items_boton = soup.find_all(attrs={'role': 'button'})
         if items_boton:
-            print(f"        ✓ Se encontraron {len(items_boton)} elementos clickeables")
+            print(f"        [OK] Se encontraron {len(items_boton)} elementos clickeables")
             for i, item in enumerate(items_boton[:3], 1):
                 texto = item.get_text(strip=True)[:50]
                 print(f"          [{i}] {texto}")
         else:
-            print(f"        ✗ No se encontraron elementos clickeables")
+            print(f"        [NO] No se encontraron elementos clickeables")
 
     def _extraer_expedientes_del_html(self, soup, numero_buscado):
         """
         Extrae expedientes del HTML usando BeautifulSoup.
 
         Mesa Virtual usa Material-UI con estructura de tabla Grid:
-        <table> → <tbody> → <tr> → <td> → <div class="MuiGrid-container"> → ...
+        <table> > <tbody> > <tr> > <td> > <div class="MuiGrid-container"> > ...
 
         Args:
             soup: Objeto BeautifulSoup del HTML
@@ -283,7 +283,7 @@ class BuscadorExpedientes:
             # Fallback: buscar cualquier <tr>
             filas = soup.find_all('tr')
 
-        print(f"      → Encontradas {len(filas)} filas en la tabla")
+        print(f"      > Encontradas {len(filas)} filas en la tabla")
 
         # Construir lista de índices de filas que corresponden a expedientes
         # (para poder referenciarlas luego con Selenium)
@@ -296,7 +296,7 @@ class BuscadorExpedientes:
             # Verificar si contiene el número buscado o partes del mismo
             # (podría estar en formato "exp1: 12881" o "75650/26")
             if numero_buscado.lower() in texto_fila.lower():
-                print(f"      ✓ Fila {fila_idx} contiene el número")
+                print(f"      [OK] Fila {fila_idx} contiene el número")
 
                 # Extraer información de la estructura de Mesa Virtual
                 # La estructura es: exp0: numero_alternativo | exp1: numero_buscado | caratula | etc
@@ -394,7 +394,7 @@ class BuscadorExpedientes:
             return expediente
 
         except Exception as e:
-            print(f"      ⚠️  Error extrayendo datos: {e}")
+            print(f"      [WARN]  Error extrayendo datos: {e}")
             return None
 
     def _cerrar_cartel_notificaciones(self, driver):
@@ -422,7 +422,7 @@ class BuscadorExpedientes:
                             if boton.is_displayed():
                                 boton.click()
                                 time.sleep(1)
-                                print("        ✓ Popup OneSignal cerrado")
+                                print("        [OK] Popup OneSignal cerrado")
                                 return
                         except:
                             pass
@@ -442,7 +442,7 @@ class BuscadorExpedientes:
                         if boton.is_displayed():
                             boton.click()
                             time.sleep(0.5)
-                            print("        ✓ Cartel cerrado (botón X)")
+                            print("        [OK] Cartel cerrado (botón X)")
                             return
             except:
                 pass
@@ -459,7 +459,7 @@ class BuscadorExpedientes:
                         if boton.is_displayed():
                             boton.click()
                             time.sleep(0.5)
-                            print("        ✓ Cartel cerrado (botón Denegar)")
+                            print("        [OK] Cartel cerrado (botón Denegar)")
                             return
             except:
                 pass
@@ -470,7 +470,7 @@ class BuscadorExpedientes:
                 from selenium.webdriver.common.keys import Keys
                 driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
                 time.sleep(0.5)
-                print("        ✓ Cartel cerrado (ESC)")
+                print("        [OK] Cartel cerrado (ESC)")
                 return
             except:
                 pass
@@ -502,16 +502,16 @@ class BuscadorExpedientes:
 
                     return true;
                 """)
-                print("        ✓ Cartel cerrado (JavaScript)")
+                print("        [OK] Cartel cerrado (JavaScript)")
                 return
             except:
                 pass
 
-            print("        ℹ️ No se encontró cartel de notificaciones (ya está cerrado o no existe)")
+            print("        [INFO] No se encontró cartel de notificaciones (ya está cerrado o no existe)")
 
         except Exception as e:
-            print(f"        ⚠️ Error al intentar cerrar cartel: {e}")
-            print("        ℹ️ Continuando de todas formas...")
+            print(f"        [WARN] Error al intentar cerrar cartel: {e}")
+            print("        [INFO] Continuando de todas formas...")
 
     def _limpiar_filtros_fecha(self, driver):
         """
@@ -524,7 +524,7 @@ class BuscadorExpedientes:
             driver: Driver de Selenium
         """
         try:
-            print("      → Buscando botón 'Limpiar filtros'...")
+            print("      > Buscando botón 'Limpiar filtros'...")
             time.sleep(1)
 
             # ESTRATEGIA 1: Buscar botón por texto exacto (con diferentes variantes)
@@ -546,28 +546,28 @@ class BuscadorExpedientes:
                             for boton in botones:
                                 try:
                                     if boton.is_displayed():
-                                        print(f"           ✓ Botón encontrado: '{boton.text[:30]}'")
+                                        print(f"           [OK] Botón encontrado: '{boton.text[:30]}'")
 
                                         # Intentar click directo primero
                                         try:
                                             boton.click()
-                                            print("           ✓ Click directo realizado")
+                                            print("           [OK] Click directo realizado")
                                             time.sleep(2)
                                             return
                                         except Exception as e:
                                             # Si falla, usar JavaScript
-                                            print(f"           ⚠️  Click directo falló, usando JavaScript: {str(e)[:30]}")
+                                            print(f"           [WARN]  Click directo falló, usando JavaScript: {str(e)[:30]}")
                                             driver.execute_script("arguments[0].click();", boton)
-                                            print("           ✓ Click JavaScript realizado")
+                                            print("           [OK] Click JavaScript realizado")
                                             time.sleep(2)
                                             return
 
                                 except Exception as e:
-                                    print(f"           ✗ Error al clickear: {str(e)[:20]}")
+                                    print(f"           [NO] Error al clickear: {str(e)[:20]}")
                     except:
                         pass
             except Exception as e:
-                print(f"        ✗ Error en búsqueda de texto: {str(e)[:30]}")
+                print(f"        [NO] Error en búsqueda de texto: {str(e)[:30]}")
 
             # ESTRATEGIA 2: Buscar por atributos y aria-labels comunes
             print("        (2) Buscando por aria-label...")
@@ -586,15 +586,15 @@ class BuscadorExpedientes:
                             for boton in botones:
                                 try:
                                     if boton.is_displayed():
-                                        print(f"           ✓ Botón encontrado")
+                                        print(f"           [OK] Botón encontrado")
                                         try:
                                             boton.click()
-                                            print("           ✓ Click realizado")
+                                            print("           [OK] Click realizado")
                                             time.sleep(2)
                                             return
                                         except:
                                             driver.execute_script("arguments[0].click();", boton)
-                                            print("           ✓ Click JavaScript realizado")
+                                            print("           [OK] Click JavaScript realizado")
                                             time.sleep(2)
                                             return
                                 except:
@@ -602,7 +602,7 @@ class BuscadorExpedientes:
                     except:
                         pass
             except Exception as e:
-                print(f"        ✗ Error en búsqueda por aria-label: {str(e)[:30]}")
+                print(f"        [NO] Error en búsqueda por aria-label: {str(e)[:30]}")
 
             # ESTRATEGIA 3: Buscar todos los botones y usar JavaScript para clickear
             print("        (3) Buscando botones con JavaScript...")
@@ -619,58 +619,74 @@ class BuscadorExpedientes:
                 """)
 
                 if resultado == 'clickeado':
-                    print("           ✓ Botón encontrado y clickeado con JavaScript")
+                    print("           [OK] Botón encontrado y clickeado con JavaScript")
                     time.sleep(2)
                     return
                 else:
-                    print(f"           ℹ️  Botón no encontrado con JavaScript")
+                    print(f"           [INFO]  Botón no encontrado con JavaScript")
             except Exception as e:
-                print(f"        ✗ Error: {str(e)[:30]}")
+                print(f"        [NO] Error: {str(e)[:30]}")
 
             # ESTRATEGIA 4: Si no encuentra botón, hacer reload limpio
             print("        (4) Botón no encontrado, haciendo reload de página...")
             try:
                 driver.get("https://mesavirtual.jusentrerios.gov.ar/expedientes/")
                 time.sleep(2)
-                print("        ✓ Página recargada")
+                print("        [OK] Página recargada")
             except Exception as e:
-                print(f"        ✗ Error: {str(e)[:30]}")
+                print(f"        [NO] Error: {str(e)[:30]}")
 
-            print("      ℹ️  Continuando con la búsqueda...")
+            print("      [INFO]  Continuando con la búsqueda...")
 
         except Exception as e:
-            print(f"      ⚠️ Error general al limpiar filtros: {e}")
-            print("      ℹ️  Continuando la búsqueda...")
+            print(f"      [WARN] Error general al limpiar filtros: {e}")
+            print("      [INFO]  Continuando la búsqueda...")
 
     def _elegir_expediente(self, expedientes, driver):
         """
-        Muestra opciones si hay múltiples expedientes y pide al usuario que elija.
+        Selecciona un expediente de la lista.
+
+        Si hay solo 1, lo devuelve automáticamente.
+        Si hay múltiples, devuelve el primero por defecto (en modo automático).
+        En modo interactivo, el usuario puede elegir.
 
         Args:
             expedientes: Lista de expedientes encontrados
             driver: Driver de Selenium
 
         Retorna:
-            dict: El expediente elegido, o None si el usuario cancela
+            dict: El expediente elegido, o None si hay error
         """
-        print(f"\n   Se encontraron {len(expedientes)} expediente(s). Elige uno:\n")
+        if not expedientes:
+            return None
+
+        if len(expedientes) == 1:
+            print(f"\n   [OK] Un expediente encontrado, usando automáticamente")
+            return expedientes[0]
+
+        print(f"\n   Se encontraron {len(expedientes)} expediente(s):\n")
 
         for i, exp in enumerate(expedientes, 1):
             caratula = exp.get('caratula', 'Sin descripción')[:60]
             numero = exp.get('numero', 'N/A')
             tribunal = exp.get('tribunal', 'Tribunal no especificado')[:40]
             print(f"   [{i}] {caratula}")
-            print(f"       Número: {numero} | Tribunal: {tribunal}\n")
+            print(f"       Numero: {numero} | Tribunal: {tribunal}\n")
 
-        while True:
-            try:
-                opcion = input(f"   Ingresa el número (1-{len(expedientes)}): ").strip()
-                numero = int(opcion)
-                if 1 <= numero <= len(expedientes):
-                    return expedientes[numero - 1]
-                print(f"   ❌ Número inválido. Intenta entre 1 y {len(expedientes)}.")
-            except ValueError:
-                print("   ❌ Debes ingresar un número válido.")
+        # Intentar leer input del usuario, si no hay (EOF), usar el primero
+        try:
+            opcion = input(f"   Ingresa el numero (1-{len(expedientes)}, default=1): ").strip()
+            if not opcion:
+                opcion = "1"
+            numero = int(opcion)
+            if 1 <= numero <= len(expedientes):
+                return expedientes[numero - 1]
+            print(f"   [WARN] Numero invalido, usando el primero")
+            return expedientes[0]
+        except (EOFError, ValueError):
+            # En modo automático (sin input), usar el primero
+            print(f"   [AUTO] Usando primer expediente automáticamente")
+            return expedientes[0]
 
 
 def crear_buscador(cliente_selenium, api_graphql_url=None):
@@ -703,5 +719,5 @@ if __name__ == "__main__":
         if expediente:
             print(f"\n✅ Expediente obtenido: {expediente['numero']}")
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[NO] Error: {e}")
         sys.exit(1)

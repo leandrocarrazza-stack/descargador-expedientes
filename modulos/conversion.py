@@ -90,7 +90,7 @@ class ConversorRTF:
 
         # Validar que existe el archivo RTF
         if not ruta_rtf.exists():
-            print(f"      ⚠️  Archivo no existe: {ruta_rtf}")
+            print(f"      [WARN]  Archivo no existe: {ruta_rtf}")
             return None
 
         # Validar que es RTF: primero por extensión, luego por magic bytes
@@ -107,12 +107,12 @@ class ConversorRTF:
                     ruta_renombrada = ruta_rtf.with_suffix('.rtf')
                     ruta_rtf.rename(ruta_renombrada)
                     ruta_rtf = ruta_renombrada
-                    print(f"      ℹ️  Renombrado a .rtf por contenido RTF detectado")
+                    print(f"      [INFO]  Renombrado a .rtf por contenido RTF detectado")
             except Exception:
                 pass
 
         if not es_rtf_por_extension and not es_rtf_por_contenido:
-            print(f"      ⚠️  No es archivo RTF: {ruta_rtf.name}")
+            print(f"      [WARN]  No es archivo RTF: {ruta_rtf.name}")
             return None
 
         # Generar nombre de salida si no se proporciona
@@ -123,21 +123,21 @@ class ConversorRTF:
 
         # Verificar si LibreOffice está disponible
         if not self.disponible:
-            print(f"      ⚠️  LibreOffice no está instalado")
+            print(f"      [WARN]  LibreOffice no está instalado")
             print(f"         Descarga desde: https://www.libreoffice.org/download/")
             return None
 
         try:
             # Convertir con LibreOffice
             if self._convertir_con_libreoffice(ruta_rtf, ruta_pdf):
-                print(f"      ✓ {ruta_rtf.name} → {ruta_pdf.name}")
+                print(f"      [OK] {ruta_rtf.name} > {ruta_pdf.name}")
                 return ruta_pdf
             else:
-                print(f"      ⚠️  No se pudo convertir: {ruta_rtf.name}")
+                print(f"      [WARN]  No se pudo convertir: {ruta_rtf.name}")
                 return None
 
         except Exception as e:
-            print(f"      ❌ Error: {str(e)[:40]}")
+            print(f"      [NO] Error: {str(e)[:40]}")
             return None
 
     def _convertir_con_libreoffice(self, ruta_rtf, ruta_pdf):
@@ -195,7 +195,7 @@ class ConversorRTF:
             # Validar que el PDF tiene contenido
             tamaño = ruta_pdf.stat().st_size
             if tamaño < 500:  # Mínimo 500 bytes para un PDF válido
-                print(f"         ⚠️  PDF muy pequeño ({tamaño} bytes)")
+                print(f"         [WARN]  PDF muy pequeño ({tamaño} bytes)")
                 return False
 
             # Validar que es un PDF válido
@@ -203,7 +203,7 @@ class ConversorRTF:
                 with open(ruta_pdf, 'rb') as f:
                     header = f.read(4)
                     if header != b'%PDF':
-                        print(f"         ⚠️  Archivo no es PDF válido")
+                        print(f"         [WARN]  Archivo no es PDF válido")
                         return False
             except:
                 return False
@@ -214,7 +214,7 @@ class ConversorRTF:
             print(f"         ⏱️  Timeout (>60 segundos)")
             return False
         except Exception as e:
-            print(f"         ❌ {str(e)[:40]}")
+            print(f"         [NO] {str(e)[:40]}")
             return False
 
     def verificar_disponibilidad(self):

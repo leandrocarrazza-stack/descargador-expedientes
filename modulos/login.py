@@ -43,10 +43,10 @@ class ClienteSelenium:
                 service=Service(ChromeDriverManager().install()),
                 options=options
             )
-            print("🌐 Abriendo navegador Chrome...")
+            print("[NET] Abriendo navegador Chrome...")
             self.driver.get(self.url_mesa_virtual)
 
-            print("\n⏳ Esperando que completes el login en el navegador...")
+            print("\n[WAIT] Esperando que completes el login en el navegador...")
             print("   (El script esperará 5 minutos máximo)")
             print("   Deberías ver: Mesa Virtual cargando después del login\n")
 
@@ -59,12 +59,12 @@ class ClienteSelenium:
 
                 if url_actual not in urls_vistas:
                     urls_vistas.append(url_actual)
-                    print(f"  → {url_actual[:70]}...")
+                    print(f"  > {url_actual[:70]}...")
 
                 # Detectar cuando estamos en Mesa Virtual (no en Keycloak)
                 if "mesavirtual.jusentrerios.gov.ar" in url_actual and \
                    "ol-sso" not in url_actual:
-                    print(f"\n✅ Login completado (en Mesa Virtual)\n")
+                    print(f"\n[OK] Login completado (en Mesa Virtual)\n")
                     # Esperar a que cargue completamente
                     time.sleep(3)
                     return True
@@ -72,22 +72,22 @@ class ClienteSelenium:
                 time.sleep(intervalo_chequeo)
                 tiempo_esperado += intervalo_chequeo
 
-            print("⏱️  Timeout: No se completó el login después de 5 minutos")
+            print("[TIMEOUT] Timeout: No se completó el login después de 5 minutos")
             return False
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"[ERROR] Error: {e}")
             return False
 
     def guardar_sesion(self):
         """Guarda las cookies de la sesión actual en un archivo."""
         if not self.driver:
-            print("⚠️  No hay navegador para guardar sesión")
+            print("[WARN] No hay navegador para guardar sesión")
             return False
         try:
             cookies = self.driver.get_cookies()
             if not cookies:
-                print("⚠️  No hay cookies para guardar")
+                print("[WARN] No hay cookies para guardar")
                 return False
 
             # Crear directorio si no existe
@@ -99,13 +99,13 @@ class ClienteSelenium:
             # Verificar que se guardó correctamente
             if self.archivo_sesion.exists():
                 tamaño = self.archivo_sesion.stat().st_size
-                print(f"✅ Sesión guardada: {self.archivo_sesion} ({tamaño} bytes)")
+                print(f"[OK] Sesión guardada: {self.archivo_sesion} ({tamaño} bytes)")
                 return True
             else:
-                print("⚠️  No se pudo verificar que se guardó la sesión")
+                print("[WARN] No se pudo verificar que se guardó la sesión")
                 return False
         except Exception as e:
-            print(f"⚠️  No se pudo guardar sesión: {e}")
+            print(f"[WARN] No se pudo guardar sesión: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -113,15 +113,15 @@ class ClienteSelenium:
     def cargar_sesion(self):
         """Carga las cookies guardadas en el navegador."""
         if not self.driver:
-            print("⚠️  No hay navegador para cargar sesión")
+            print("[WARN] No hay navegador para cargar sesión")
             return False
 
         if not self.archivo_sesion.exists():
-            print(f"⚠️  Archivo de sesión no encontrado: {self.archivo_sesion}")
+            print(f"[WARN] Archivo de sesión no encontrado: {self.archivo_sesion}")
             return False
 
         try:
-            print(f"📂 Cargando sesión desde: {self.archivo_sesion}")
+            print(f"[DIR] Cargando sesión desde: {self.archivo_sesion}")
 
             # Navegar a la URL base primero
             self.driver.get(self.url_mesa_virtual)
@@ -131,7 +131,7 @@ class ClienteSelenium:
             with open(self.archivo_sesion, 'rb') as f:
                 cookies = pickle.load(f)
 
-            print(f"🍪 Cargando {len(cookies)} cookie(s)...")
+            print(f"[COOKIES] Cargando {len(cookies)} cookie(s)...")
 
             cookies_cargadas = 0
             for cookie in cookies:
@@ -146,7 +146,7 @@ class ClienteSelenium:
                     # Algunas cookies pueden no ser compatibles, continuar
                     pass
 
-            print(f"✅ {cookies_cargadas} cookie(s) cargada(s)")
+            print(f"[OK] {cookies_cargadas} cookie(s) cargada(s)")
 
             # Navegar de nuevo para aplicar las cookies
             self.driver.get(self.url_mesa_virtual)
@@ -154,24 +154,24 @@ class ClienteSelenium:
 
             # Verificar que se cargó algo
             url_actual = self.driver.current_url
-            print(f"✅ URL actual: {url_actual[:80]}...")
+            print(f"[OK] URL actual: {url_actual[:80]}...")
 
             # Verificar que la sesión es válida
             # La sesión es válida solo si NO fuimos redirigidos a login/SSO
             if "ol-sso" in url_actual or "login" in url_actual or "keycloak" in url_actual.lower():
-                print("⚠️  Sesión expirada - fuimos redirigidos a login")
+                print("[WARN] Sesión expirada - fuimos redirigidos a login")
                 return False
 
             if "mesavirtual.jusentrerios.gov.ar" in url_actual:
-                print("✅ Sesión restaurada correctamente")
+                print("[OK] Sesión restaurada correctamente")
                 return True
 
             # Si no estamos en login pero tampoco en la URL esperada, probablemente falló
-            print(f"⚠️  URL inesperada después de cargar sesión: {url_actual[:80]}")
+            print(f"[WARN] URL inesperada después de cargar sesión: {url_actual[:80]}")
             return False
 
         except Exception as e:
-            print(f"⚠️  No se pudo cargar sesión: {e}")
+            print(f"[WARN] No se pudo cargar sesión: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -289,16 +289,16 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
     if url_mesa_virtual is None:
         url_mesa_virtual = "https://mesavirtual.jusentrerios.gov.ar/"
 
-    print("\n" + "═" * 70)
-    print("  ⚠️  SESIÓN REQUERIDA")
-    print("═" * 70)
+    print("\n" + "=" * 70)
+    print("  [WARN] SESION REQUERIDA")
+    print("=" * 70)
 
     cliente = ClienteSelenium(url_mesa_virtual)
 
     # Intentar cargar sesión guardada primero
     sesion_cargada = False
     if usar_sesion_guardada and cliente.sesion_existe():
-        print("\n✅ Sesión guardada detectada, intentando cargar...")
+        print("\n[OK] Sesión guardada detectada, intentando cargar...")
         try:
             # Crear navegador en headless mode (sin interfaz visible)
             options = webdriver.ChromeOptions()
@@ -311,21 +311,21 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
                 service=Service(ChromeDriverManager().install()),
                 options=options
             )
-            print("🔇 Navegador en modo silencioso (headless)...")
+            print("[SILENT] Navegador en modo silencioso (headless)...")
 
             sesion_cargada = cliente.cargar_sesion()
 
             if sesion_cargada:
-                print("✅ Usando sesión guardada (sin navegador visible)\n")
+                print("[OK] Usando sesión guardada (sin navegador visible)\n")
             else:
                 # Cerrar navegador y hacer login manual
-                print("⚠️  Sesión expirada, se requiere nuevo login")
+                print("[WARN] Sesión expirada, se requiere nuevo login")
                 if cliente.driver:
                     cliente.driver.quit()
                 cliente.driver = None
 
         except Exception as e:
-            print(f"⚠️  No se pudo usar sesión guardada: {e}")
+            print(f"[WARN] No se pudo usar sesión guardada: {e}")
             if cliente.driver:
                 try:
                     cliente.driver.quit()
@@ -336,18 +336,18 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
 
     # Si no se cargó sesión, hacer login manual
     if not sesion_cargada:
-        print("\n🌐 Requiere login manual...")
-        print("🌐 Abriendo navegador Chrome (visible para 2FA)...\n")
+        print("\n[NET] Requiere login manual...")
+        print("[NET] Abriendo navegador Chrome (visible para 2FA)...\n")
 
         if not cliente.abrir_navegador_y_loguearse():
-            raise Exception("❌ No se completó el login a tiempo")
+            raise Exception("[ERROR] No se completó el login a tiempo")
 
         # Guardar la sesión para próximas veces
-        print("\n💾 Guardando sesión para próximas descargas...")
+        print("\n[SAVE] Guardando sesión para próximas descargas...")
         if cliente.guardar_sesion():
-            print("✅ Sesión guardada - próximas descargas serán silenciosas\n")
+            print("[OK] Sesión guardada - próximas descargas serán silenciosas\n")
         else:
-            print("⚠️  No se pudo guardar sesión\n")
+            print("[WARN] No se pudo guardar sesión\n")
 
     # Verificar que la sesión funciona con un request simple
     test_query = {
@@ -361,16 +361,16 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
     if resultado and isinstance(resultado, dict):
         if "error" in resultado:
             # Contiene error - pero el login fue exitoso, continuamos de todas formas
-            print(f"⚠️  Nota: {resultado.get('error')}")
-            print("✅ Login completado, continuando...\n")
+            print(f"[WARN] Nota: {resultado.get('error')}")
+            print("[OK] Login completado, continuando...\n")
             return cliente
         elif "data" in resultado:
             # Respuesta válida
-            print("✅ Sesión verificada correctamente\n")
+            print("[OK] Sesión verificada correctamente\n")
             return cliente
 
     # Si llegamos aquí, respuesta inesperada pero continuamos
-    print("✅ Login completado, continuando...\n")
+    print("[OK] Login completado, continuando...\n")
     return cliente
 
 

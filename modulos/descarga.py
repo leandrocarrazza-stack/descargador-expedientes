@@ -52,7 +52,7 @@ class DescargadorArchivos:
         Lanza:
             Exception: Si hay error en la navegación
         """
-        print("\n📋 Obteniendo lista de movimientos (con paginación)...")
+        print("\n[LIST] Obteniendo lista de movimientos (con paginación)...")
 
         try:
             driver = self.cliente.driver
@@ -60,7 +60,7 @@ class DescargadorArchivos:
             pagina_actual = 1
 
             while True:
-                print(f"\n   📄 Procesando página {pagina_actual}...")
+                print(f"\n    Procesando página {pagina_actual}...")
                 time.sleep(1)
 
                 # Extraer HTML de la página
@@ -70,17 +70,17 @@ class DescargadorArchivos:
                 # Buscar la tabla de movimientos
                 tablas = soup.find_all('table')
                 if not tablas:
-                    print("   ⚠️  No se encontró tabla de movimientos")
+                    print("   [WARN]  No se encontró tabla de movimientos")
                     break
 
                 tabla = tablas[0]  # Primera tabla es la de movimientos
                 filas = tabla.find_all('tr')
 
                 if not filas:
-                    print("   ⚠️  No hay filas en la tabla")
+                    print("   [WARN]  No hay filas en la tabla")
                     break
 
-                print(f"      → Encontradas {len(filas)} filas en esta página")
+                print(f"      > Encontradas {len(filas)} filas en esta página")
 
                 movimientos_pagina = 0
                 for fila_idx, fila in enumerate(filas, 1):
@@ -101,8 +101,8 @@ class DescargadorArchivos:
 
                         # Buscar enlaces de descarga
                         # NOTA: Mesa Virtual muestra dos enlaces por movimiento:
-                        #   1er enlace (texto "PDF" o "RTF"): previsualización → siempre falla con EOF
-                        #   2do enlace (texto vacío): descarga directa → es el archivo real
+                        #   1er enlace (texto "PDF" o "RTF"): previsualización > siempre falla con EOF
+                        #   2do enlace (texto vacío): descarga directa > es el archivo real
                         # Solo se descarga el enlace de descarga directa (texto vacío o no "PDF"/"RTF").
                         for enlace in enlaces:
                             href = enlace.get('href', '')
@@ -124,7 +124,7 @@ class DescargadorArchivos:
                             movimientos.append(movimiento)
                             movimientos_pagina += 1
 
-                print(f"      ✓ {movimientos_pagina} movimiento(s) con archivos en esta página")
+                print(f"      [OK] {movimientos_pagina} movimiento(s) con archivos en esta página")
 
                 # Detectar si hay siguiente página
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
@@ -135,7 +135,7 @@ class DescargadorArchivos:
 
                 pagina_actual += 1
 
-            print(f"\n   📊 Total movimientos con archivos (todas las páginas): {len(movimientos)}")
+            print(f"\n    Total movimientos con archivos (todas las páginas): {len(movimientos)}")
             return movimientos
 
         except Exception as e:
@@ -183,10 +183,10 @@ class DescargadorArchivos:
                         pagina_actual = int(matches[-1][0])
                         total_paginas = int(matches[-1][1])
 
-                        print(f"      ℹ️  Página {pagina_actual} de {total_paginas}")
+                        print(f"      [INFO]  Página {pagina_actual} de {total_paginas}")
 
                         if pagina_actual >= total_paginas:
-                            print(f"      ✓ Última página alcanzada (página {pagina_actual}/{total_paginas})")
+                            print(f"      [OK] Última página alcanzada (página {pagina_actual}/{total_paginas})")
                             return False
                         else:
                             # Hay más páginas, continuar buscando botón siguiente
@@ -214,7 +214,7 @@ class DescargadorArchivos:
                     )
                     # Verificar que esté visible y habilitado
                     if elemento.is_enabled() and elemento.is_displayed():
-                        print(f"      🔄 Navegando a siguiente página...")
+                        print(f"       Navegando a siguiente página...")
                         # Hacer scroll hasta el botón para asegurarse de que es clickeable
                         driver.execute_script("arguments[0].scrollIntoView(true);", elemento)
                         time.sleep(0.5)
@@ -239,17 +239,17 @@ class DescargadorArchivos:
                         EC.presence_of_element_located((By.XPATH, selector))
                     )
                     # Si encontramos el botón deshabilitado, estamos en la última página
-                    print(f"      ✓ Botón siguiente deshabilitado, última página detectada")
+                    print(f"      [OK] Botón siguiente deshabilitado, última página detectada")
                     return False
                 except:
                     continue
 
             # Si no encontró nada, asumir que no hay más páginas
-            print(f"      ✓ No se encontró botón siguiente habilitado, asumiendo última página")
+            print(f"      [OK] No se encontró botón siguiente habilitado, asumiendo última página")
             return False
 
         except Exception as e:
-            print(f"      ⚠️  Error navegando: {str(e)[:50]}")
+            print(f"      [WARN]  Error navegando: {str(e)[:50]}")
             return False
 
     def descargar_archivos(self, expediente_id, movimientos):
@@ -269,10 +269,10 @@ class DescargadorArchivos:
             list: Lista de dicts con {path, tipo, movimiento} de archivos descargados
         """
         if not movimientos:
-            print("⚠️  No hay archivos para descargar.")
+            print("[WARN]  No hay archivos para descargar.")
             return []
 
-        print(f"\n📥 Descargando archivos de {len(movimientos)} movimiento(s)...\n")
+        print(f"\n Descargando archivos de {len(movimientos)} movimiento(s)...\n")
 
         archivos_descargados = []
         driver = self.cliente.driver
@@ -324,11 +324,11 @@ class DescargadorArchivos:
                                 ruta_archivo.rename(ruta_rtf)
                                 ruta_final = ruta_rtf
                                 tipo_detectado = 'rtf'
-                                print(f"      ✓ {nombre_archivo[:40]} → .rtf (contenido RTF detectado)")
+                                print(f"      [OK] {nombre_archivo[:40]} > .rtf (contenido RTF detectado)")
                             else:
-                                print(f"      ✓ {nombre_archivo[:50]}")
+                                print(f"      [OK] {nombre_archivo[:50]}")
                         except Exception:
-                            print(f"      ✓ {nombre_archivo[:50]}")
+                            print(f"      [OK] {nombre_archivo[:50]}")
 
                         archivos_descargados.append({
                             'path': ruta_final,
@@ -341,10 +341,10 @@ class DescargadorArchivos:
                             'url': url_descarga,
                         })
                     else:
-                        print(f"      ⚠️  Error descargando {nombre_archivo[:50]}")
+                        print(f"      [WARN]  Error descargando {nombre_archivo[:50]}")
 
                 except Exception as e:
-                    print(f"      ❌ {str(e)[:50]}")
+                    print(f"      [NO] {str(e)[:50]}")
 
         print(f"\n   Total descargados: {len(archivos_descargados)}/{len(movimientos)}")
         return archivos_descargados
