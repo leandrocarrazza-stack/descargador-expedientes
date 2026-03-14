@@ -147,12 +147,16 @@ class PipelineDescargador:
 
             # Convertir archivos descargados
             # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
+            # IMPORTANTE: Mantener la estructura de dict, solo actualizar 'path'
             archivos_convertidos = []
             for arch in archivos_descargados:
                 ruta_original = arch['path']
                 pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
                 if pdf_convertido:
-                    archivos_convertidos.append(pdf_convertido)
+                    # Crear nuevo dict con ruta convertida pero manteniendo info de movimiento
+                    arch_actualizado = arch.copy()
+                    arch_actualizado['path'] = Path(pdf_convertido)
+                    archivos_convertidos.append(arch_actualizado)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
@@ -168,15 +172,11 @@ class PipelineDescargador:
             logger.info("[PASO 5/5] Unificación de PDFs")
             self.unificador = UnificadorPDF(config.OUTPUT_DIR)
 
-            # Obtener rutas de archivos convertidos
-            rutas_para_unificar = [
-                str(arch)
-                for arch in archivos_convertidos
-            ]
+            # Nombre sanitizado (será el expediente)
+            nombre_expediente = numero_expediente.replace('/', '_')
 
-            # Nombre sanitizado
-            nombre_carpeta = numero_expediente.replace('/', '_')
-            pdf_final = self.unificador.unificar(rutas_para_unificar, nombre_carpeta)
+            # Pasar lista completa de dicts con información de movimiento
+            pdf_final = self.unificador.unificar(nombre_expediente, archivos_convertidos)
 
             if not pdf_final or not pdf_final.exists():
                 logger.error(f"PDF final no generado o inexistente: {pdf_final}")
