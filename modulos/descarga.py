@@ -38,7 +38,7 @@ class DescargadorArchivos:
         self.contador_descargas = 0  # Contador de descargas para reciclaje preventivo
         self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
-    def obtener_movimientos(self, expediente_id):
+    def obtener_movimientos(self, expediente_id, max_movimientos=30):
         """
         Obtiene movimientos del expediente extrayendo del HTML de TODAS las páginas.
 
@@ -46,25 +46,28 @@ class DescargadorArchivos:
         1. Extrae movimientos de la página actual
         2. Detecta si hay más páginas (botón "Siguiente" o indicador de página)
         3. Navega a la siguiente página y repite
-        4. Devuelve lista completa de movimientos de TODAS las páginas
+        4. Detiene cuando alcanza max_movimientos (evita memory crash)
+        5. Devuelve lista completa de movimientos encontrados
 
         Args:
             expediente_id: ID del expediente (puede ser el número o ID interno)
+            max_movimientos: Máximo de movimientos a obtener (default 30, evita crashes)
 
         Retorna:
-            list: Lista de movimientos con sus archivos adjuntos de TODAS las páginas
+            list: Lista de movimientos con sus archivos adjuntos
 
         Lanza:
             Exception: Si hay error en la navegación
         """
         print("\n[LIST] Obteniendo lista de movimientos (con paginación)...")
+        print(f"     [LIMIT] Máximo {max_movimientos} movimientos (previene crashes)")
 
         try:
             driver = self.cliente.driver
             movimientos = []
             pagina_actual = 1
 
-            while True:
+            while len(movimientos) < max_movimientos:
                 print(f"\n    Procesando página {pagina_actual}...")
                 time.sleep(1)
 
@@ -143,6 +146,11 @@ class DescargadorArchivos:
                             movimientos_pagina += 1
 
                 print(f"      [OK] {movimientos_pagina} movimiento(s) con archivos en esta página")
+
+                # Verificar si alcanzamos el límite de movimientos
+                if len(movimientos) >= max_movimientos:
+                    print(f"\n    [LIMIT] Límite de {max_movimientos} movimientos alcanzado")
+                    break
 
                 # Detectar si hay siguiente página
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
