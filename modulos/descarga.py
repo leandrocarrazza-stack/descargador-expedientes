@@ -87,7 +87,17 @@ class DescargadorArchivos:
 
                 print(f"      > Encontradas {len(filas)} filas en esta página")
 
+                # ESTRATEGIA ROBUSTA: Obtener TODOS los enlaces de la tabla con Selenium
+                # Luego asociar a cada fila en orden
+                try:
+                    todos_enlaces_elem = driver.find_elements(By.XPATH, "//table//tbody//tr//a")
+                    print(f"      > Total enlaces encontrados en tabla: {len(todos_enlaces_elem)}")
+                except:
+                    todos_enlaces_elem = []
+
                 movimientos_pagina = 0
+                enlace_idx_global = 0  # Contador global para recorrer los enlaces en orden
+
                 for fila_idx, fila in enumerate(filas, 1):
                     # Obtener descripción de la fila
                     texto_fila = fila.get_text(strip=True)
@@ -100,50 +110,32 @@ class DescargadorArchivos:
                         'pagina': pagina_actual,  # Registrar en qué página estaba
                     }
 
-                    # CRÍTICO: Obtener enlaces usando Selenium (no BeautifulSoup)
-                    # Mesa Virtual es React y renderiza dinámicamente los enlaces
-                    # Los enlaces de API directa (.../api/archivos/...) solo existen en el DOM
-                    try:
-                        # XPath relativo: buscar todos los <a> en esta fila
-                        # Nota: filas incluyen header, así que fila_idx=1 es header, fila_idx=2 es primer movimiento
-                        xpath_fila = f"//table//tbody//tr[{fila_idx - 1}]//a"  # -1 porque BeautifulSoup no cuenta header
-                        enlaces_elem = driver.find_elements(By.XPATH, xpath_fila)
+                    # Obtener enlaces de esta fila usando BeautifulSoup (para contar cuantos hay)
+                    enlaces_fila_bs = fila.find_all('a')
+                    num_enlaces = len(enlaces_fila_bs)
 
-                        if enlaces_elem:
-                            print(f"         [FOUND] {len(enlaces_elem)} enlace(s) en movimiento {fila_idx}:")
+                    # Extraer los enlaces correspondientes a esta fila del listado global de Selenium
+                    if enlace_idx_global < len(todos_enlaces_elem):
+                        print(f"         [FILA {fila_idx}] Tiene {num_enlaces} enlace(s)")
 
-                            # ESTRATEGIA: Los enlauces van en pares:
-                            # [0] = Previsualización (/expedientes/.../movi/...)
-                            # [1] = Descarga directa (https://.../api/archivos/...?token=...)
-                            # SOLO descargamos el segundo
-                            for idx, elem in enumerate(enlaces_elem):
+                        # Procesar los siguientes N enlaces para esta fila
+                        for i in range(num_enlaces):
+                            if enlace_idx_global < len(todos_enlaces_elem):
+                                elem = todos_enlaces_elem[enlace_idx_global]
                                 href = elem.get_attribute('href') or ''
-                                es_api_directo = '/api/archivos/' in href
-                                print(f"            [{idx}] {'[API]' if es_api_directo else '[PREV]'} {href[:60]}...")
+                                es_api = '/api/archivos/' in href
+                                print(f"            [{i}] {'[API]' if es_api else '[PREV]'} {href[:50]}...")
 
-                                # SOLO agregar si es enlace API directo (descarga válida)
-                                if es_api_directo and href:
+                                # SOLO agregar enlaces API (descarga válida)
+                                if es_api and href:
                                     movimiento['enlaces_descarga'].append({
                                         'href': href,
-                                        'texto': f'api_archivos_{idx}',
-                                        'es_pdf': True,  # Siempre son PDFs de la API
-                                    })
-
-                        # Si no encontró con Selenium, fallback a BeautifulSoup
-                        if not movimiento['enlaces_descarga']:
-                            print(f"         [FALLBACK] Usando BeautifulSoup para fila {fila_idx}")
-                            enlaces = fila.find_all('a')
-                            for enlace in enlaces:
-                                href = enlace.get('href', '')
-                                if href and '/api/archivos/' in href:
-                                    movimiento['enlaces_descarga'].append({
-                                        'href': href,
-                                        'texto': 'api_fallback',
+                                        'texto': f'api_archivos',
                                         'es_pdf': True,
                                     })
+                                    print(f"                [OK] Agregado para descargar")
 
-                    except Exception as e:
-                        print(f"         [ERROR] Extrayendo enlaces: {str(e)[:50]}")
+                                enlace_idx_global += 1
 
                         # Agregar si tiene enlaces
                         if movimiento['enlaces_descarga']:
