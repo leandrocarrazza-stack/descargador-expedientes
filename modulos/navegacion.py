@@ -644,11 +644,13 @@ class BuscadorExpedientes:
 
     def _elegir_expediente(self, expedientes, driver):
         """
-        Selecciona un expediente de la lista.
+        Selecciona un expediente de la lista con INTERACCIÓN DEL USUARIO.
 
         Si hay solo 1, lo devuelve automáticamente.
-        Si hay múltiples, devuelve el primero por defecto (en modo automático).
-        En modo interactivo, el usuario puede elegir.
+        Si hay múltiples, SIEMPRE pide selección al usuario (entrada interactiva).
+
+        OPCIÓN A: Permite que el usuario ingrese el número para seleccionar.
+        Si no puede leer input (EOFError), fuerza error para que el usuario reintente.
 
         Args:
             expedientes: Lista de expedientes encontrados
@@ -673,20 +675,38 @@ class BuscadorExpedientes:
             print(f"   [{i}] {caratula}")
             print(f"       Numero: {numero} | Tribunal: {tribunal}\n")
 
-        # Intentar leer input del usuario, si no hay (EOF), usar el primero
+        # OPCIÓN A: Pedir selección al usuario (input interactivo)
+        # Si hay múltiples, el usuario DEBE seleccionar explícitamente
         try:
             opcion = input(f"   Ingresa el numero (1-{len(expedientes)}, default=1): ").strip()
             if not opcion:
                 opcion = "1"
             numero = int(opcion)
             if 1 <= numero <= len(expedientes):
-                return expedientes[numero - 1]
-            print(f"   [WARN] Numero invalido, usando el primero")
-            return expedientes[0]
-        except (EOFError, ValueError):
-            # En modo automático (sin input), usar el primero
-            print(f"   [AUTO] Usando primer expediente automáticamente")
-            return expedientes[0]
+                exp_seleccionado = expedientes[numero - 1]
+                numero_selec = exp_seleccionado.get('numero', 'N/A')
+                print(f"   [OK] Expediente {numero_selec} seleccionado\n")
+                return exp_seleccionado
+            else:
+                print(f"   [ERROR] Numero fuera de rango. Intenta de nuevo.")
+                # Reintentar recursivamente
+                return self._elegir_expediente(expedientes, driver)
+        except ValueError:
+            print(f"   [ERROR] Entrada no válida. Debes ingresar un número.")
+            # Reintentar recursivamente
+            return self._elegir_expediente(expedientes, driver)
+        except EOFError:
+            # Si no hay input disponible (modo headless sin sesión interactiva),
+            # lanzar error claro pidiendo intervención del usuario
+            print(f"\n   [ERROR] Múltiples expedientes encontrados pero no hay entrada interactiva")
+            print(f"   [ERROR] Por favor, ejecuta nuevamente el comando con interacción manual")
+            print(f"   [HELP] Disponibles:")
+            for i, exp in enumerate(expedientes, 1):
+                print(f"        [{i}] {exp.get('numero', 'N/A')} - {exp.get('caratula', '')[:50]}")
+            raise Exception(
+                f"Selección de expediente requerida: hay {len(expedientes)} resultados. "
+                f"Ejecuta nuevamente e ingresa el número del expediente deseado."
+            )
 
 
 def crear_buscador(cliente_selenium, api_graphql_url=None):

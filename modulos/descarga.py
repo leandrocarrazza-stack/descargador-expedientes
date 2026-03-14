@@ -108,7 +108,10 @@ class DescargadorArchivos:
                         # NOTA: Mesa Virtual muestra dos enlaces por movimiento:
                         #   1er enlace (texto "PDF" o "RTF"): previsualización > siempre falla con EOF
                         #   2do enlace (texto vacío): descarga directa > es el archivo real
-                        # Solo se descarga el enlace de descarga directa (texto vacío o no "PDF"/"RTF").
+                        # ESTRATEGIA: Tomar SOLO el ÚLTIMO enlace (que es la descarga directa válida)
+
+                        # Primero, filtrar enlace de previsualización
+                        enlaces_validos = []
                         for enlace in enlaces:
                             href = enlace.get('href', '')
                             texto_enlace = enlace.get_text(strip=True)
@@ -118,11 +121,15 @@ class DescargadorArchivos:
                                 continue
 
                             if href:  # Si tiene href
-                                movimiento['enlaces_descarga'].append({
+                                enlaces_validos.append({
                                     'href': href,
                                     'texto': texto_enlace,
                                     'es_pdf': 'pdf' in href.lower() or texto_enlace.upper() == 'PDF',
                                 })
+
+                        # Agregar SOLO el ÚLTIMO enlace válido (la descarga directa)
+                        if enlaces_validos:
+                            movimiento['enlaces_descarga'].append(enlaces_validos[-1])
 
                         # Agregar si tiene enlaces
                         if movimiento['enlaces_descarga']:
