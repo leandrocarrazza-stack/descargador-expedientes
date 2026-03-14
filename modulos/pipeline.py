@@ -133,8 +133,9 @@ class PipelineDescargador:
             self.conversor = ConversorRTF()
 
             # Convertir archivos descargados
+            # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
             rutas_archivos = [
-                str(self.carpeta_temp / arch['nombre'])
+                arch['path']  # path ya es la ruta completa
                 for arch in archivos_descargados
             ]
             archivos_convertidos = self.conversor.convertir_multiples(rutas_archivos)
