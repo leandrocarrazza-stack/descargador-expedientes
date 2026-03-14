@@ -128,7 +128,7 @@ def crear_usuario(email, nombre, password, plan='free'):
         db.session.add(usuario)
         db.session.commit()
 
-        logger.info(f"✅ Usuario creado: {email_normalizado} (plan: {plan})")
+        logger.info(f" Usuario creado: {email_normalizado} (plan: {plan})")
         return usuario, None
 
     except Exception as e:
@@ -177,5 +177,5 @@ def verificar_credenciales(email, password):
         logger.warning(f"Intento de login con contraseña incorrecta: {email_normalizado}")
         return None, "Email o contraseña incorrectos"
 
-    logger.info(f"✅ Login exitoso: {email_normalizado}")
+    logger.info(f" Login exitoso: {email_normalizado}")
     return usuario, None

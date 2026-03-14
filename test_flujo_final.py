@@ -63,7 +63,7 @@ def main():
                 print(f"   ✅ Expediente abierto (URL directa)\n")
                 abierto = True
             except Exception as e:
-                print(f"   ⚠️  Fallo URL directa ({str(e)[:40]}), intentando por índice...")
+                print(f"     Fallo URL directa ({str(e)[:40]}), intentando por índice...")
 
         # OPCIÓN B: Usar el índice de resultado para clickear el Nth link
         if not abierto:
@@ -78,7 +78,7 @@ def main():
                     abierto = True
                 elif enlaces:
                     # Si el índice está fuera de rango, intentar con el primero
-                    print(f"   ⚠️  Índice {indice} fuera de rango ({len(enlaces)} links), usando primero disponible")
+                    print(f"     Índice {indice} fuera de rango ({len(enlaces)} links), usando primero disponible")
                     enlaces[0].click()
                     time.sleep(4)
                     abierto = True
@@ -91,10 +91,10 @@ def main():
                         print(f"   ✅ Expediente abierto (div índice {indice})\n")
                         abierto = True
             except Exception as e:
-                print(f"   ⚠️  Error al abrir por índice: {str(e)[:60]}\n")
+                print(f"     Error al abrir por índice: {str(e)[:60]}\n")
 
         if not abierto:
-            print("   ⚠️  No se pudo abrir automáticamente — verificar manualmente\n")
+            print("     No se pudo abrir automáticamente — verificar manualmente\n")
 
         # 4. Obtener movimientos (CON PAGINACIÓN AUTOMÁTICA)
         print("4️⃣  OBTENIENDO MOVIMIENTOS (con paginación automática)...")
@@ -105,7 +105,7 @@ def main():
         if carpeta_temp.exists():
             import shutil
             shutil.rmtree(carpeta_temp)
-            print("   🧹 Carpeta temporal limpiada\n")
+            print("    Carpeta temporal limpiada\n")
         carpeta_temp.mkdir(parents=True, exist_ok=True)
 
         descargador = crear_descargador(cliente, carpeta_temp=str(carpeta_temp))
@@ -155,7 +155,7 @@ def main():
         if limpiar:
             unificador.limpiar_temporales(mantener_originales=False)
         else:
-            print("   ℹ️  Archivos temporales conservados")
+            print("     Archivos temporales conservados")
 
         # Referencia a la carpeta temporal correcta
         carpeta_temp_ref = carpeta_temp
@@ -165,24 +165,24 @@ def main():
         print("  ✅ PROCESO COMPLETADO EXITOSAMENTE")
         print("═" * 70)
         print(f"""
-📋 EXPEDIENTE: {expediente.get('numero')}
+ EXPEDIENTE: {expediente.get('numero')}
    Carátula: {expediente.get('caratula')}
 
-📊 ESTADÍSTICAS:
+ ESTADÍSTICAS:
    - Movimientos procesados: {len(movimientos)}
    - Archivos descargados: {len(archivos_descargados)}
    - PDF unificado: ✅
 
-📁 ARCHIVO FINAL:
+ ARCHIVO FINAL:
    {pdf_unificado.name}
    Ubicación: {pdf_unificado.parent.resolve()}
    Tamaño: {pdf_unificado.stat().st_size / (1024*1024):.2f} MB
 
-🎉 ¡Descargador completado!
+ ¡Descargador completado!
         """)
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  Cancelado por el usuario")
+        print("\n\n  Cancelado por el usuario")
         sys.exit(0)
     except Exception as e:
         print(f"\n❌ Error: {e}")

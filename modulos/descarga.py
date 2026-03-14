@@ -130,7 +130,7 @@ class DescargadorArchivos:
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
 
                 if not hay_siguiente:
-                    print(f"\n   ✅ Fin de la paginación")
+                    print(f"\n    Fin de la paginación")
                     break
 
                 pagina_actual += 1

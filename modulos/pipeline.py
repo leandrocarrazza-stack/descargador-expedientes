@@ -66,7 +66,7 @@ class PipelineDescargador:
 
             # PASO 1: AUTENTICACIÓN
             logger.info("[PASO 1/5] Autenticación en Mesa Virtual")
-            self.cliente = crear_cliente_sesion(usar_sesion_guardada=True)
+            self.cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
             if not self.cliente:
                 return ResultadoPipeline(
                     exito=False,

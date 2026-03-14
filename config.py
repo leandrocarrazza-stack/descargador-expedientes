@@ -114,7 +114,7 @@ LOG_LEVEL_ARCHIVO = logging.DEBUG
 LOG_LEVEL_CONSOLA = logging.INFO
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONFIGURACIÓN DE LIBREOFFICE (conversión RTF → PDF)
+#  CONFIGURACIÓN DE LIBREOFFICE (conversión RTF  PDF)
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Intentar convertir RTF a PDF (requiere LibreOffice instalado)

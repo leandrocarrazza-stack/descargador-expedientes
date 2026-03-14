@@ -146,7 +146,7 @@ class UnificadorPDF:
                         tamaño = ruta_salida.stat().st_size
                         tamaño_mb = tamaño / (1024 * 1024)
 
-                        print(f"   ✅ PDF creado (modo copia)")
+                        print(f"    PDF creado (modo copia)")
                         print(f"      Tamaño: {tamaño_mb:.2f} MB")
                         print(f"      Ubicación: {ruta_salida}\n")
 
@@ -189,7 +189,7 @@ class UnificadorPDF:
             tamaño = ruta_salida.stat().st_size
             tamaño_mb = tamaño / (1024 * 1024)
 
-            print(f"   ✅ PDF unificado creado exitosamente")
+            print(f"    PDF unificado creado exitosamente")
             print(f"      Archivos unidos: {archivos_válidos}/{len(archivos_descargados)}")
             print(f"      Tamaño: {tamaño_mb:.2f} MB")
             print(f"      Ubicación: {ruta_salida}\n")
@@ -229,7 +229,7 @@ class UnificadorPDF:
                         print(f"   [WARN]  Error eliminando {archivo.name}: {e}")
 
             if eliminados > 0:
-                print(f"\n   ✅ {eliminados} archivo(s) temporal(es) eliminado(s)")
+                print(f"\n    {eliminados} archivo(s) temporal(es) eliminado(s)")
             else:
                 print(f"\n   [INFO]  No hay archivos temporales para eliminar")
 

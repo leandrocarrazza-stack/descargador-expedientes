@@ -17,7 +17,7 @@ import time
 
 def main():
     print("\n" + "="*70)
-    print("🔍 TEST: Búsqueda del Expediente 14141")
+    print(" TEST: Búsqueda del Expediente 14141")
     print("="*70 + "\n")
 
     cliente = None
@@ -43,17 +43,17 @@ def main():
 
         # Paso 4: Resultado
         print("\n" + "="*70)
-        print("📊 RESULTADO")
+        print(" RESULTADO")
         print("="*70 + "\n")
 
         if expediente:
             print("✅ ¡ÉXITO! Expediente encontrado:\n")
-            print(f"   📋 Número: {expediente.get('numero')}")
-            print(f"   📄 Carátula: {expediente.get('caratula', 'N/A')}")
-            print(f"   🏛️  Tribunal: {expediente.get('tribunal', 'N/A')}")
-            print(f"   📅 Fecha: {expediente.get('fecha', 'N/A')}")
+            print(f"    Número: {expediente.get('numero')}")
+            print(f"    Carátula: {expediente.get('caratula', 'N/A')}")
+            print(f"   ️  Tribunal: {expediente.get('tribunal', 'N/A')}")
+            print(f"    Fecha: {expediente.get('fecha', 'N/A')}")
             print("\n" + "="*70)
-            print("🎉 VALIDACIÓN EXITOSA")
+            print(" VALIDACIÓN EXITOSA")
             print("="*70)
             print("\n✅ La limpieza de filtros FUNCIONA correctamente.")
             print("✅ Puedes proceder a descargar este expediente.\n")

@@ -77,10 +77,10 @@ class ConversorRTF:
 
     def convertir_rtf_a_pdf(self, ruta_rtf, ruta_pdf=None):
         """
-        Convierte un archivo RTF a PDF.
+        Convierte un archivo RTF a PDF, o copia si ya es PDF.
 
         Args:
-            ruta_rtf: Path del archivo RTF
+            ruta_rtf: Path del archivo RTF o PDF
             ruta_pdf: Path del archivo PDF de salida (opcional)
 
         Retorna:
@@ -88,10 +88,45 @@ class ConversorRTF:
         """
         ruta_rtf = Path(ruta_rtf)
 
-        # Validar que existe el archivo RTF
+        # Validar que existe el archivo
         if not ruta_rtf.exists():
             print(f"      [WARN]  Archivo no existe: {ruta_rtf}")
             return None
+
+        # Generar nombre de salida si no se proporciona
+        if ruta_pdf is None:
+            ruta_pdf = ruta_rtf.with_suffix('.pdf')
+        else:
+            ruta_pdf = Path(ruta_pdf)
+
+        # Detectar si ya es PDF
+        es_pdf = ruta_rtf.suffix.lower() == '.pdf'
+        if not es_pdf:
+            try:
+                with open(ruta_rtf, 'rb') as f:
+                    magic = f.read(4)
+                es_pdf = magic.startswith(b'%PDF')
+            except:
+                pass
+
+        if es_pdf:
+            # Ya es PDF, simplemente copiarlo
+            try:
+                ruta_pdf.parent.mkdir(parents=True, exist_ok=True)
+                time.sleep(0.5)  # Esperar a que el archivo se libere
+                shutil.copy(ruta_rtf, ruta_pdf)
+                print(f"      [OK] {ruta_rtf.name} (ya es PDF)")
+                return ruta_pdf
+            except Exception as e:
+                # Si falla el copy, intentar mover
+                try:
+                    ruta_pdf.parent.mkdir(parents=True, exist_ok=True)
+                    ruta_rtf.rename(ruta_pdf)
+                    print(f"      [OK] {ruta_rtf.name} (ya es PDF, movido)")
+                    return ruta_pdf
+                except:
+                    print(f"      [WARN]  Error procesando PDF: {str(e)[:30]}")
+                    return None
 
         # Validar que es RTF: primero por extensión, luego por magic bytes
         es_rtf_por_extension = ruta_rtf.suffix.lower() == '.rtf'
@@ -114,12 +149,6 @@ class ConversorRTF:
         if not es_rtf_por_extension and not es_rtf_por_contenido:
             print(f"      [WARN]  No es archivo RTF: {ruta_rtf.name}")
             return None
-
-        # Generar nombre de salida si no se proporciona
-        if ruta_pdf is None:
-            ruta_pdf = ruta_rtf.with_suffix('.pdf')
-        else:
-            ruta_pdf = Path(ruta_pdf)
 
         # Verificar si LibreOffice está disponible
         if not self.disponible:

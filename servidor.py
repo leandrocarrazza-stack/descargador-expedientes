@@ -69,7 +69,7 @@ def crear_app(config_obj=None):
     login_manager = LoginManager()
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'  # Redirige a login si no autenticado
-    login_manager.login_message = '🔐 Por favor inicia sesión'
+    login_manager.login_message = ' Por favor inicia sesión'
     login_manager.login_message_category = 'info'
 
     @login_manager.user_loader
@@ -183,7 +183,7 @@ app = crear_app()
 
 if __name__ == '__main__':
     """Ejecuta el servidor de desarrollo."""
-    logger.info("🚀 Iniciando servidor Flask...")
+    logger.info(" Iniciando servidor Flask...")
 
     app.run(
         host='0.0.0.0',

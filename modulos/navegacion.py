@@ -209,7 +209,7 @@ class BuscadorExpedientes:
 
             if len(expedientes) == 1:
                 exp = expedientes[0]
-                print(f"   ✅ Encontrado: {exp.get('caratula', 'Sin descripción')}")
+                print(f"    Encontrado: {exp.get('caratula', 'Sin descripción')}")
                 print(f"      Número: {exp.get('numero')}")
                 return exp
 
@@ -717,7 +717,7 @@ if __name__ == "__main__":
         buscador = crear_buscador(cliente)
         expediente = buscador.buscar("22066")
         if expediente:
-            print(f"\n✅ Expediente obtenido: {expediente['numero']}")
+            print(f"\n Expediente obtenido: {expediente['numero']}")
     except Exception as e:
         print(f"\n[NO] Error: {e}")
         sys.exit(1)

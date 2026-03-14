@@ -265,7 +265,7 @@ class ClienteSelenium:
             self.driver.quit()
 
 
-def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True):
+def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True, headless=True):
     """
     Crea un cliente Selenium para acceso autenticado.
 
@@ -279,6 +279,7 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         api_graphql_url: (no se usa ahora, para compatibilidad)
         url_mesa_virtual: URL de Mesa Virtual
         usar_sesion_guardada: Si True, intenta cargar sesión anterior
+        headless: Si True, usa modo headless (sin interfaz visible)
 
     Retorna:
         ClienteSelenium: Cliente listo para usar
@@ -302,7 +303,8 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         try:
             # Crear navegador en headless mode (sin interfaz visible)
             options = webdriver.ChromeOptions()
-            options.add_argument('--headless')
+            if headless:
+                options.add_argument('--headless')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-blink-features=AutomationControlled')
@@ -383,6 +385,6 @@ if __name__ == "__main__":
 
     try:
         cliente = crear_cliente_sesion(api_graphql_url=API_GRAPHQL)
-        print("✅ Sesión válida")
+        print(" Sesión válida")
     except Exception as e:
         print(f"Información:\n{e}")
