@@ -19,7 +19,7 @@ from urllib.parse import urljoin
 class DescargadorArchivos:
     """Cliente para descargar archivos de un expediente (Web Scraping)."""
 
-    def __init__(self, cliente_selenium, carpeta_temp, timeout=60):
+    def __init__(self, cliente_selenium, carpeta_temp, timeout=60, tamanio_lote=3, crear_cliente_fn=None):
         """
         Inicializa el descargador de archivos.
 
@@ -27,10 +27,15 @@ class DescargadorArchivos:
             cliente_selenium: Instancia de ClienteSelenium con navegador abierto
             carpeta_temp: Path de la carpeta temporal
             timeout: Timeout para esperados (segundos)
+            tamanio_lote: Cantidad de archivos a descargar antes de reciclar navegador
+            crear_cliente_fn: Función lambda para recrear cliente (para reciclaje de navegador)
         """
         self.cliente = cliente_selenium
         self.carpeta_temp = Path(carpeta_temp)
         self.timeout = timeout
+        self.tamanio_lote = tamanio_lote  # Descargar N archivos, luego reciclar
+        self.crear_cliente_fn = crear_cliente_fn  # Función para reciclar navegador
+        self.contador_descargas = 0  # Contador de descargas para reciclaje preventivo
         self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
     def obtener_movimientos(self, expediente_id):
@@ -254,12 +259,16 @@ class DescargadorArchivos:
 
     def descargar_archivos(self, expediente_id, movimientos):
         """
-        Descarga todos los archivos de los movimientos.
+        Descarga todos los archivos de los movimientos CON RECICLAJE DE NAVEGADOR.
 
         Estrategia:
         1. Preferir URLs absolutas con token JWT
         2. Fallback a URLs relativas navegando con Selenium
         3. Usar descarga directa con requests
+
+        RECICLAJE:
+        - Cada N descargas, recicla el navegador para evitar memory leaks
+        - Si el driver muere, lo detecta y recrea automáticamente
 
         Args:
             expediente_id: ID del expediente
@@ -272,10 +281,10 @@ class DescargadorArchivos:
             print("[WARN]  No hay archivos para descargar.")
             return []
 
-        print(f"\n Descargando archivos de {len(movimientos)} movimiento(s)...\n")
+        print(f"\n Descargando archivos de {len(movimientos)} movimiento(s)...")
+        print(f"   [INFO] Reciclaje automático cada {self.tamanio_lote} descargas\n")
 
         archivos_descargados = []
-        driver = self.cliente.driver
 
         for mov_idx, movimiento in enumerate(movimientos, 1):
             desc = movimiento['descripcion'][:60]
@@ -309,6 +318,11 @@ class DescargadorArchivos:
                     # Generar nombre de archivo (extensión .pdf provisional)
                     nombre_archivo = f"{mov_idx:03d}_{enlace_idx:02d}_{texto[:30].replace('/', '_')}.pdf"
                     ruta_archivo = self.carpeta_temp / nombre_archivo
+
+                    # RECICLAJE PREVENTIVO: Cada N descargas, reciclar navegador
+                    self.contador_descargas += 1
+                    if self.contador_descargas > 0 and self.contador_descargas % self.tamanio_lote == 0:
+                        self._reciclar_navegador()
 
                     # Descargar usando Selenium (mantiene sesión)
                     if self._descargar_archivo_selenium(url_descarga, ruta_archivo):
@@ -344,10 +358,48 @@ class DescargadorArchivos:
                         print(f"      [WARN]  Error descargando {nombre_archivo[:50]}")
 
                 except Exception as e:
-                    print(f"      [NO] {str(e)[:50]}")
+                    print(f"      [ERROR] {str(e)[:50]}")
 
         print(f"\n   Total descargados: {len(archivos_descargados)}/{len(movimientos)}")
         return archivos_descargados
+
+    def _reciclar_navegador(self):
+        """
+        Recicla el navegador para evitar memory leaks.
+
+        Estrategia:
+        1. Cierra el navegador actual (libera memoria)
+        2. Crea uno nuevo con la sesión guardada
+        3. Actualiza self.cliente para que siguientes descargas usen el nuevo navegador
+
+        Esta función se llama automáticamente cada N descargas.
+        """
+        print(f"\n      [RECYCLE] Reciclando navegador después de {self.contador_descargas} descargas...")
+
+        try:
+            # Cerrar navegador actual
+            if self.cliente and self.cliente.driver:
+                try:
+                    self.cliente.cerrar()
+                except Exception as e:
+                    print(f"         [WARN] Error cerrando navegador anterior: {str(e)[:50]}")
+
+            # Crear nuevo cliente con sesión guardada (sin necesidad de login manual)
+            if self.crear_cliente_fn:
+                print("      [NET] Creando nuevo navegador con sesión guardada...")
+                nuevo_cliente = self.crear_cliente_fn()
+                self.cliente = nuevo_cliente
+
+                # Verificar que el nuevo cliente está funcional
+                if self.cliente and self.cliente.driver:
+                    print(f"      [OK] Navegador reciclado correctamente")
+                else:
+                    print(f"      [ERROR] Fallo creando nuevo navegador")
+            else:
+                print(f"      [WARN] No hay función para crear cliente, continuando sin reciclaje")
+
+        except Exception as e:
+            print(f"      [ERROR] Error reciclando navegador: {str(e)[:80]}")
 
     def _descargar_archivo_selenium(self, url, ruta_destino):
         """
@@ -358,6 +410,7 @@ class DescargadorArchivos:
         - Usa requests directamente con cookies autenticadas
         - Verifica completitud del descarga y validez del PDF
         - Reintentos automáticos para descargas incompletas
+        - NUEVO: Detecta driver muerto y recicla automáticamente
 
         Args:
             url: URL del archivo
@@ -367,12 +420,38 @@ class DescargadorArchivos:
             bool: True si se descargó exitosamente, False si falló
         """
         try:
-            driver = self.cliente.driver
+            # DETECCIÓN REACTIVA: Verificar que el driver está vivo
+            try:
+                driver = self.cliente.driver
+                if not driver:
+                    print(f"         [DRIVER-DEAD] Detectado driver muerto, reciclando...")
+                    self._reciclar_navegador()
+                    driver = self.cliente.driver
+
+                # Intentar verificar que el driver responde (si no, está muerto)
+                try:
+                    _ = driver.current_url
+                except:
+                    print(f"         [DRIVER-CRASH] Detectado driver no responde, reciclando...")
+                    self._reciclar_navegador()
+                    driver = self.cliente.driver
+
+            except Exception as e:
+                print(f"         [DRIVER-ERROR] Error verificando driver: {str(e)[:50]}")
+                self._reciclar_navegador()
+                driver = self.cliente.driver
+
             ruta_destino.parent.mkdir(parents=True, exist_ok=True)
 
             # Obtener cookies de Selenium para mantener sesión autenticada
-            cookies = driver.get_cookies()
-            cookie_dict = {c['name']: c['value'] for c in cookies}
+            try:
+                cookies = driver.get_cookies()
+                cookie_dict = {c['name']: c['value'] for c in cookies}
+            except Exception as e:
+                print(f"         [COOKIES-ERROR] Error obteniendo cookies: {str(e)[:50]}")
+                # Si no podemos obtener cookies, reciclar y reintentar
+                self._reciclar_navegador()
+                return False
 
             # Headers para simular navegador real y evitar problemas de descarga
             # Accept amplio para no interferir con tipos RTF, DOC, etc.
@@ -454,6 +533,7 @@ class DescargadorArchivos:
             return False
 
         except Exception as e:
+            print(f"         [DOWNLOAD-FATAL] Error fatal descargando: {str(e)[:80]}")
             return False
 
 def crear_descargador(cliente_selenium, api_graphql_url=None, api_archivos_url=None, carpeta_temp=None):

@@ -97,8 +97,14 @@ class PipelineDescargador:
             self.carpeta_temp = Path(config.TEMP_DIR) / f"exp_{numero_expediente.replace('/', '_')}"
             self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
-            # Crear descargador con carpeta temp
-            self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp)
+            # Crear descargador con carpeta temp Y función para reciclar navegador
+            # La función lambda crea un nuevo cliente con sesión guardada sin necesidad de login manual
+            self.descargador = DescargadorArchivos(
+                self.cliente,
+                self.carpeta_temp,
+                tamanio_lote=3,
+                crear_cliente_fn=lambda: crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+            )
 
             # Obtener movimientos
             movimientos = self.descargador.obtener_movimientos(numero_expediente)
@@ -119,6 +125,13 @@ class PipelineDescargador:
                 movimientos
             )
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
+
+            # IMPORTANTE: Reciclar navegador después de descarga para evitar memory leaks
+            try:
+                self.cliente.cerrar()
+                logger.debug("Navegador cerrado después de descarga (reciclaje preventivo)")
+            except:
+                pass
 
             if not archivos_descargados:
                 return ResultadoPipeline(
