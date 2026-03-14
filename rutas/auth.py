@@ -23,14 +23,14 @@ Uso:
     }
 """
 
+import logging
 from flask import Blueprint, request, jsonify, session, render_template
 from flask_login import login_user, logout_user, login_required, current_user
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email
 from modulos.models import User
 from modulos.database import db
-from modulos.logger import crear_logger
 
-logger = crear_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # Crear blueprint
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')

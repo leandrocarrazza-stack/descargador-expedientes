@@ -31,9 +31,11 @@ from flask_cors import CORS
 import config
 from modulos.database import db, migrate
 from modulos.models import User
-from modulos.logger import crear_logger
 
-logger = crear_logger(__name__)
+# Logger simple sin módulo externo
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CREAR APLICACIÓN FLASK

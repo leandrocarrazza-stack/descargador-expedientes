@@ -22,12 +22,12 @@ Uso:
 """
 
 import re
+import logging
 from email_validator import validate_email, EmailNotValidError
 from modulos.database import db
 from modulos.models import User
-from modulos.logger import crear_logger
 
-logger = crear_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def validar_email(email):
