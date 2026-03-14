@@ -92,44 +92,58 @@ class DescargadorArchivos:
                     # Obtener descripción de la fila
                     texto_fila = fila.get_text(strip=True)
 
-                    # Buscar enlaces en la fila
-                    enlaces = fila.find_all('a')
+                    # Extraer información del movimiento
+                    movimiento = {
+                        'indice': len(movimientos) + fila_idx,  # Índice global
+                        'descripcion': texto_fila[:150],  # Primeros 150 caracteres
+                        'enlaces_descarga': [],
+                        'pagina': pagina_actual,  # Registrar en qué página estaba
+                    }
 
-                    if enlaces:
-                        # Extraer información del movimiento
-                        movimiento = {
-                            'indice': len(movimientos) + fila_idx,  # Índice global
-                            'descripcion': texto_fila[:150],  # Primeros 150 caracteres
-                            'enlaces_descarga': [],
-                            'pagina': pagina_actual,  # Registrar en qué página estaba
-                        }
+                    # CRÍTICO: Obtener enlaces usando Selenium (no BeautifulSoup)
+                    # Mesa Virtual es React y renderiza dinámicamente los enlaces
+                    # Los enlaces de API directa (.../api/archivos/...) solo existen en el DOM
+                    try:
+                        # XPath relativo: buscar todos los <a> en esta fila
+                        # Nota: filas incluyen header, así que fila_idx=1 es header, fila_idx=2 es primer movimiento
+                        xpath_fila = f"//table//tbody//tr[{fila_idx - 1}]//a"  # -1 porque BeautifulSoup no cuenta header
+                        enlaces_elem = driver.find_elements(By.XPATH, xpath_fila)
 
-                        # Buscar enlaces de descarga
-                        # NOTA: Mesa Virtual muestra dos enlaces por movimiento:
-                        #   1er enlace (texto "PDF" o "RTF"): previsualización > siempre falla con EOF
-                        #   2do enlace (texto vacío): descarga directa > es el archivo real
-                        # ESTRATEGIA: Tomar SOLO el ÚLTIMO enlace (que es la descarga directa válida)
+                        if enlaces_elem:
+                            print(f"         [FOUND] {len(enlaces_elem)} enlace(s) en movimiento {fila_idx}:")
 
-                        # Primero, filtrar enlace de previsualización
-                        enlaces_validos = []
-                        for enlace in enlaces:
-                            href = enlace.get('href', '')
-                            texto_enlace = enlace.get_text(strip=True)
+                            # ESTRATEGIA: Los enlauces van en pares:
+                            # [0] = Previsualización (/expedientes/.../movi/...)
+                            # [1] = Descarga directa (https://.../api/archivos/...?token=...)
+                            # SOLO descargamos el segundo
+                            for idx, elem in enumerate(enlaces_elem):
+                                href = elem.get_attribute('href') or ''
+                                es_api_directo = '/api/archivos/' in href
+                                print(f"            [{idx}] {'[API]' if es_api_directo else '[PREV]'} {href[:60]}...")
 
-                            # Saltar enlaces de previsualización (texto exacto "PDF" o "RTF")
-                            if texto_enlace.upper() in ('PDF', 'RTF'):
-                                continue
+                                # SOLO agregar si es enlace API directo (descarga válida)
+                                if es_api_directo and href:
+                                    movimiento['enlaces_descarga'].append({
+                                        'href': href,
+                                        'texto': f'api_archivos_{idx}',
+                                        'es_pdf': True,  # Siempre son PDFs de la API
+                                    })
 
-                            if href:  # Si tiene href
-                                enlaces_validos.append({
-                                    'href': href,
-                                    'texto': texto_enlace,
-                                    'es_pdf': 'pdf' in href.lower() or texto_enlace.upper() == 'PDF',
-                                })
+                        # Si no encontró con Selenium, fallback a BeautifulSoup
+                        if not movimiento['enlaces_descarga']:
+                            print(f"         [FALLBACK] Usando BeautifulSoup para fila {fila_idx}")
+                            enlaces = fila.find_all('a')
+                            for enlace in enlaces:
+                                href = enlace.get('href', '')
+                                if href and '/api/archivos/' in href:
+                                    movimiento['enlaces_descarga'].append({
+                                        'href': href,
+                                        'texto': 'api_fallback',
+                                        'es_pdf': True,
+                                    })
 
-                        # Agregar SOLO el ÚLTIMO enlace válido (la descarga directa)
-                        if enlaces_validos:
-                            movimiento['enlaces_descarga'].append(enlaces_validos[-1])
+                    except Exception as e:
+                        print(f"         [ERROR] Extrayendo enlaces: {str(e)[:50]}")
 
                         # Agregar si tiene enlaces
                         if movimiento['enlaces_descarga']:
