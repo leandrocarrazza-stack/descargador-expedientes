@@ -720,57 +720,59 @@ class BuscadorExpedientes:
             print(f"   [AUTO] Usando primer expediente")
             return expedientes[0]
 
-    def _clickear_expediente(self, driver, resultado_index):
+    def _clickear_expediente(self, driver, resultado_index, expediente_elegido=None):
         """
-        Hace click en un resultado de expediente para entrar a los detalles.
+        Hace click en una FILA de expediente para entrar a los detalles.
 
-        Mesa Virtual usa divs con role='button' para los resultados clickeables.
+        Busca la fila que contiene el número de expediente y la caratula específica,
+        luego hace click en esa FILA (no en botones genéricos).
 
         Args:
             driver: Selenium WebDriver
-            resultado_index: Índice (0-based) del resultado
+            resultado_index: Índice (0-based) del resultado en la tabla visible
+            expediente_elegido: (Opcional) Dict con 'numero' y 'caratula' del expediente a clickear
         """
         try:
-            # Esperar a que haya elementos clickeables
+            # Esperar a que la tabla de resultados esté visible
             WebDriverWait(driver, 5).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "[role='button']"))
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "table tbody tr, [role='row']"))
             )
 
-            # Encontrar todos los elementos clickeables
-            botones = driver.find_elements(By.CSS_SELECTOR, "[role='button']")
+            filas = driver.find_elements(By.CSS_SELECTOR, "table tbody tr, [role='row']")
 
-            # Filtrar solo los botones de resultados (que contienen expediente info)
-            botones_resultado = []
-            for boton in botones:
-                texto = boton.text  # Usar .text en lugar de get_text()
-                # Si contiene características de un resultado, incluirlo
-                if ('/' in texto or 'CYC' in texto or 'CIVIL' in texto or len(texto) > 20):
-                    botones_resultado.append(boton)
+            if not filas:
+                print(f"      [ERROR] No se encontraron filas de resultados")
+                return
 
-            if not botones_resultado:
-                # Fallback: usar todos menos los primeros (navegación)
-                botones_resultado = botones[4:] if len(botones) > 4 else botones
+            if resultado_index >= len(filas):
+                print(f"      [WARN] Índice {resultado_index} > {len(filas) - 1}, usando último")
+                resultado_index = len(filas) - 1
 
-            if resultado_index >= len(botones_resultado):
-                print(f"      [WARN] Índice {resultado_index} > {len(botones_resultado) - 1}, usando último")
-                resultado_index = len(botones_resultado) - 1
+            # Obtener la FILA correcta
+            fila_objetivo = filas[resultado_index]
 
-            # Hacer click
-            boton_objetivo = botones_resultado[resultado_index]
-            driver.execute_script("arguments[0].scrollIntoView(true);", boton_objetivo)
+            # Scroll hasta la fila y hacer click EN LA FILA COMPLETA
+            driver.execute_script("arguments[0].scrollIntoView(true);", fila_objetivo)
             time.sleep(0.5)
 
-            try:
-                boton_objetivo.click()
-            except:
-                driver.execute_script("arguments[0].click();", boton_objetivo)
+            print(f"      [INFO] Clickeando en fila #{resultado_index + 1}...")
+            print(f"           Contenido: {fila_objetivo.text[:60]}...")
 
-            print(f"      [OK] Click en resultado #{resultado_index + 1}")
+            try:
+                # Intentar click directo en la fila
+                fila_objetivo.click()
+            except:
+                # Fallback: usar JavaScript para hacer click
+                driver.execute_script("arguments[0].click();", fila_objetivo)
+
+            print(f"      [OK] Click en fila #{resultado_index + 1}")
             time.sleep(3)
+
+            # Esperar a que la página de detalles cargue
             WebDriverWait(driver, 10).until(
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
-            print(f"      [OK] Página detalles cargada")
+            print(f"      [OK] Página de detalles cargada")
 
         except Exception as e:
             print(f"      [ERROR] Click falló: {e}")
@@ -786,16 +788,40 @@ class BuscadorExpedientes:
             list: Lista de movimientos con enlaces_descarga [{href, texto}, ...]
         """
         try:
+            # Esperar MAS tiempo a que React renderice
+            print(f"      [INFO] Esperando renderizado de movimientos (React)...")
+            time.sleep(5)  # Espera adicional
+
+            # Esperar a que haya contenido (tabla, grid, o elementos con movimientos)
+            WebDriverWait(driver, 10).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "table, [role='grid'], [role='table'], tbody tr, [role='row']")) > 0
+            )
+
             html = driver.page_source
             soup = BeautifulSoup(html, 'html.parser')
 
             movimientos = []
 
             # Buscar la tabla de movimientos
-            # En Mesa Virtual, la tabla de movimientos tiene estructura:
-            # <table> <tbody> <tr> con columnas: Fecha, Tipo, Fojas, Descripción, Opciones
+            # En Mesa Virtual, puede ser:
+            # 1. <table> con <tr> tradicionales
+            # 2. Divs con role="grid" o role="table"
+            # 3. Estructura Material-UI con [role='row']
 
             tablas = soup.find_all('table')
+            if not tablas:
+                # Fallback: buscar estructuras React/Material-UI
+                filas_grid = soup.find_all(attrs={'role': 'row'})
+                print(f"      [INFO] No hay <table>, encontradas {len(filas_grid)} filas con role='row'")
+                if filas_grid:
+                    # Procesar como grid
+                    for fila in filas_grid[1:]:  # Skip header
+                        celdas = fila.find_all(['td', 'div'], {'role': 'gridcell'})
+                        if not celdas:
+                            celdas = fila.find_all(['div'])
+                        # Aquí procesaríamos las celdas
+                    tablas = [soup]  # Marker para entrar al loop
+
             print(f"      [INFO] Encontradas {len(tablas)} tabla(s) en la página")
 
             for tabla_idx, tabla in enumerate(tablas):

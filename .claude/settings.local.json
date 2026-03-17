@@ -3,7 +3,8 @@
     "allow": [
       "Bash(timeout 300 python test_descarga_completa.py)",
       "Bash(timeout 180 python -c \":*)",
-      "Bash(ls -1 modulos/*.py)"
+      "Bash(ls -1 modulos/*.py)",
+      "Bash(timeout 300 python test_e2e_flujo_completo.py)"
     ]
   }
 }
