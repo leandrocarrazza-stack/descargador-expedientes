@@ -27,7 +27,7 @@ class BuscadorExpedientes:
         self.cliente = cliente_selenium
         self.timeout = timeout
 
-    def buscar(self, numero):
+    def buscar(self, numero, indice_expediente=None):
         """
         Busca un expediente navegando en Mesa Virtual y extrayendo del HTML.
 
@@ -35,6 +35,8 @@ class BuscadorExpedientes:
 
         Args:
             numero: Número del expediente (ej: "22066/14" o "5289")
+            indice_expediente: (Opcional) Si hay múltiples resultados, cuál elegir (1-indexed)
+                              Si es None, intenta inteligentemente (segundo si hay múltiples)
 
         Retorna:
             dict o None: El expediente encontrado, o None si no existe
@@ -214,7 +216,19 @@ class BuscadorExpedientes:
                 return exp
 
             # Si hay múltiples resultados, pedir que el usuario elija
-            return self._elegir_expediente(expedientes, driver)
+            expediente_elegido = self._elegir_expediente(expedientes, driver, indice_expediente)
+
+            if expediente_elegido:
+                # AHORA: Hacer click en el expediente para entrar a los detalles
+                print(f"\n   > Entrando a página de detalles del expediente...")
+                resultado_index = expediente_elegido.get('_resultado_index', 0)
+                self._clickear_expediente(driver, resultado_index)
+
+                # Extraer los movimientos desde la página de detalles
+                print(f"   > Extrayendo movimientos...")
+                expediente_elegido['movimientos'] = self._extraer_movimientos_detalle(driver)
+
+            return expediente_elegido
 
         except Exception as e:
             raise Exception(f"Error en búsqueda: {e}")
@@ -642,17 +656,21 @@ class BuscadorExpedientes:
             print(f"      [WARN] Error general al limpiar filtros: {e}")
             print("      [INFO]  Continuando la búsqueda...")
 
-    def _elegir_expediente(self, expedientes, driver):
+    def _elegir_expediente(self, expedientes, driver, indice_expediente=None):
         """
         Selecciona un expediente de la lista.
 
         Si hay solo 1, lo devuelve automáticamente.
-        Si hay múltiples, devuelve el primero por defecto (en modo automático).
+        Si hay múltiples y se especifica indice_expediente, usa ese.
+        Si hay múltiples y NO se especifica, intenta inteligentemente:
+          - Intenta segundo (índice 1) primero
+          - Si falla, intenta el primero
         En modo interactivo, el usuario puede elegir.
 
         Args:
             expedientes: Lista de expedientes encontrados
             driver: Driver de Selenium
+            indice_expediente: (Opcional) Índice 1-based a usar si hay múltiples
 
         Retorna:
             dict: El expediente elegido, o None si hay error
@@ -673,7 +691,16 @@ class BuscadorExpedientes:
             print(f"   [{i}] {caratula}")
             print(f"       Numero: {numero} | Tribunal: {tribunal}\n")
 
-        # Intentar leer input del usuario, si no hay (EOF), usar el primero
+        # Si se especifica índice, usar ese
+        if indice_expediente is not None:
+            if 1 <= indice_expediente <= len(expedientes):
+                exp_elegido = expedientes[indice_expediente - 1]
+                print(f"   [SELEC] Usando expediente #{indice_expediente}")
+                return exp_elegido
+            else:
+                print(f"   [WARN] Índice {indice_expediente} inválido, usando el segundo si existe")
+
+        # Intentar leer input del usuario, si no hay (EOF), usar estrategia automática
         try:
             opcion = input(f"   Ingresa el numero (1-{len(expedientes)}, default=1): ").strip()
             if not opcion:
@@ -681,12 +708,136 @@ class BuscadorExpedientes:
             numero = int(opcion)
             if 1 <= numero <= len(expedientes):
                 return expedientes[numero - 1]
-            print(f"   [WARN] Numero invalido, usando el primero")
-            return expedientes[0]
+            print(f"   [WARN] Numero invalido, usando estrategia automática")
         except (EOFError, ValueError):
-            # En modo automático (sin input), usar el primero
-            print(f"   [AUTO] Usando primer expediente automáticamente")
+            print(f"   [AUTO] Modo automático - eligiendo inteligentemente")
+
+        # Estrategia automática: probar segundo si existe, luego primero
+        if len(expedientes) > 1:
+            print(f"   [AUTO] Intentando con expediente #2 primero (más probable que tenga archivos)")
+            return expedientes[1]
+        else:
+            print(f"   [AUTO] Usando primer expediente")
             return expedientes[0]
+
+    def _clickear_expediente(self, driver, resultado_index):
+        """
+        Hace click en un resultado de expediente para entrar a los detalles.
+
+        Mesa Virtual usa divs con role='button' para los resultados clickeables.
+
+        Args:
+            driver: Selenium WebDriver
+            resultado_index: Índice (0-based) del resultado
+        """
+        try:
+            # Esperar a que haya elementos clickeables
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "[role='button']"))
+            )
+
+            # Encontrar todos los elementos clickeables
+            botones = driver.find_elements(By.CSS_SELECTOR, "[role='button']")
+
+            # Filtrar solo los botones de resultados (que contienen expediente info)
+            botones_resultado = []
+            for boton in botones:
+                texto = boton.get_text()
+                # Si contiene características de un resultado, incluirlo
+                if ('/' in texto or 'CYC' in texto or 'CIVIL' in texto or len(texto) > 20):
+                    botones_resultado.append(boton)
+
+            if not botones_resultado:
+                # Fallback: usar todos menos los primeros (navegación)
+                botones_resultado = botones[4:] if len(botones) > 4 else botones
+
+            if resultado_index >= len(botones_resultado):
+                print(f"      [WARN] Índice {resultado_index} > {len(botones_resultado) - 1}, usando último")
+                resultado_index = len(botones_resultado) - 1
+
+            # Hacer click
+            boton_objetivo = botones_resultado[resultado_index]
+            driver.execute_script("arguments[0].scrollIntoView(true);", boton_objetivo)
+            time.sleep(0.5)
+
+            try:
+                boton_objetivo.click()
+            except:
+                driver.execute_script("arguments[0].click();", boton_objetivo)
+
+            print(f"      [OK] Click en resultado #{resultado_index + 1}")
+            time.sleep(3)
+            WebDriverWait(driver, 10).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            print(f"      [OK] Página detalles cargada")
+
+        except Exception as e:
+            print(f"      [ERROR] Click falló: {e}")
+
+    def _extraer_movimientos_detalle(self, driver):
+        """
+        Extrae los movimientos desde la página de detalles del expediente.
+
+        La pestaña Movimientos debería estar activa por defecto.
+
+        Returns:
+            list: Lista de movimientos con archivos
+        """
+        try:
+            html = driver.page_source
+            soup = BeautifulSoup(html, 'html.parser')
+
+            movimientos = []
+
+            # Buscar la tabla de movimientos
+            # En Mesa Virtual, la tabla de movimientos tiene estructura:
+            # <table> <tbody> <tr> con columnas: Fecha, Tipo, Fojas, Descripción, Opciones
+
+            tablas = soup.find_all('table')
+            print(f"      [INFO] Encontradas {len(tablas)} tabla(s) en la página")
+
+            for tabla_idx, tabla in enumerate(tablas):
+                filas = tabla.find_all('tr')[1:]  # Skip header
+
+                if not filas:
+                    continue
+
+                print(f"      [INFO] Tabla {tabla_idx}: {len(filas)} fila(s)")
+
+                for fila_idx, fila in enumerate(filas):
+                    # Extraer células
+                    celdas = fila.find_all('td')
+
+                    if len(celdas) < 4:
+                        continue
+
+                    # Estructura: Fecha | Tipo | Fojas | Descripción | Opciones (botones)
+                    fecha = celdas[0].get_text(strip=True) if len(celdas) > 0 else ""
+                    tipo = celdas[1].get_text(strip=True) if len(celdas) > 1 else ""
+                    fojas = celdas[2].get_text(strip=True) if len(celdas) > 2 else ""
+                    descripcion = celdas[3].get_text(strip=True) if len(celdas) > 3 else ""
+                    # Opciones/botones en celdas[4] si existe
+
+                    movimiento = {
+                        'fecha': fecha,
+                        'tipo': tipo,
+                        'fojas': fojas,
+                        'descripcion': descripcion,
+                        'archivos': []  # Los archivos se descargarán después
+                    }
+
+                    movimientos.append(movimiento)
+
+                    if movimiento['descripcion']:
+                        print(f"        [{fila_idx + 1}] {fecha} - {descripcion[:50]}")
+
+            print(f"      [OK] Total movimientos extraídos: {len(movimientos)}")
+            return movimientos
+
+        except Exception as e:
+            print(f"      [ERROR] Error extrayendo movimientos: {e}")
+            return []
 
 
 def crear_buscador(cliente_selenium, api_graphql_url=None):

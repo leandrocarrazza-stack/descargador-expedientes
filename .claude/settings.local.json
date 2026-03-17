@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 300 python test_descarga_completa.py)"
+    ]
+  }
+}
