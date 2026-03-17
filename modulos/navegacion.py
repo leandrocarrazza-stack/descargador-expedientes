@@ -779,10 +779,11 @@ class BuscadorExpedientes:
         """
         Extrae los movimientos desde la página de detalles del expediente.
 
+        Extrae movimientos Y sus enlaces de descarga (como hace el módulo descarga).
         La pestaña Movimientos debería estar activa por defecto.
 
         Returns:
-            list: Lista de movimientos con archivos
+            list: Lista de movimientos con enlaces_descarga [{href, texto}, ...]
         """
         try:
             html = driver.page_source
@@ -812,31 +813,54 @@ class BuscadorExpedientes:
                     if len(celdas) < 4:
                         continue
 
-                    # Estructura: Fecha | Tipo | Fojas | Descripción | Opciones (botones)
+                    # Estructura: Fecha | Tipo | Fojas | Descripción | Opciones (botones/enlaces)
                     fecha = celdas[0].get_text(strip=True) if len(celdas) > 0 else ""
                     tipo = celdas[1].get_text(strip=True) if len(celdas) > 1 else ""
                     fojas = celdas[2].get_text(strip=True) if len(celdas) > 2 else ""
                     descripcion = celdas[3].get_text(strip=True) if len(celdas) > 3 else ""
-                    # Opciones/botones en celdas[4] si existe
 
-                    movimiento = {
-                        'fecha': fecha,
-                        'tipo': tipo,
-                        'fojas': fojas,
-                        'descripcion': descripcion,
-                        'archivos': []  # Los archivos se descargarán después
-                    }
+                    # Buscar enlaces de descarga en toda la fila
+                    enlaces = fila.find_all('a')
+                    enlaces_descarga = []
 
-                    movimientos.append(movimiento)
+                    for enlace in enlaces:
+                        href = enlace.get('href', '')
+                        texto_enlace = enlace.get_text(strip=True)
 
-                    if movimiento['descripcion']:
-                        print(f"        [{fila_idx + 1}] {fecha} - {descripcion[:50]}")
+                        # Saltar enlaces de previsualización (texto exacto "PDF" o "RTF")
+                        if texto_enlace.upper() in ('PDF', 'RTF'):
+                            continue
 
-            print(f"      [OK] Total movimientos extraídos: {len(movimientos)}")
+                        if href:  # Si tiene href
+                            enlaces_descarga.append({
+                                'href': href,
+                                'texto': texto_enlace,
+                                'es_pdf': 'pdf' in href.lower() or texto_enlace.upper() == 'PDF',
+                            })
+
+                    # Crear movimiento solo si tiene enlaces de descarga
+                    if enlaces_descarga:
+                        movimiento = {
+                            'fecha': fecha,
+                            'tipo': tipo,
+                            'fojas': fojas,
+                            'descripcion': descripcion,
+                            'enlaces_descarga': enlaces_descarga,
+                            'indice': fila_idx + 1
+                        }
+
+                        movimientos.append(movimiento)
+
+                        if movimiento['descripcion']:
+                            print(f"        [{fila_idx + 1}] {fecha} - {descripcion[:40]} ({len(enlaces_descarga)} archivo(s))")
+
+            print(f"      [OK] Total movimientos con archivos: {len(movimientos)}")
             return movimientos
 
         except Exception as e:
             print(f"      [ERROR] Error extrayendo movimientos: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
 
