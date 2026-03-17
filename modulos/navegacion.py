@@ -793,13 +793,29 @@ class BuscadorExpedientes:
             time.sleep(10)  # Espera más larga para React
 
             # Esperar a que haya FILAS en la tabla (no solo el header)
-            WebDriverWait(driver, 15).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, "table tbody tr[data-*], table tbody tr:nth-child(n+2), [role='row'][data-*]")) > 0
-                or d.execute_script("""
-                    const tablas = document.querySelectorAll('table tbody tr, [role="row"]');
-                    return Array.from(tablas).filter(t => t.textContent.trim().length > 20).length > 0;
-                """)
-            )
+            # Usar JavaScript para validar que haya contenido real
+            def hay_movimientos(driver):
+                try:
+                    # Intentar encontrar filas en tabla
+                    filas = driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
+                    if len(filas) > 1:  # Más de 1 = más que header
+                        return True
+
+                    # Fallback: buscar [role='row']
+                    filas_role = driver.find_elements(By.CSS_SELECTOR, "[role='row']")
+                    if len(filas_role) > 1:
+                        return True
+
+                    # Último fallback: usar JavaScript
+                    tiene_contenido = driver.execute_script("""
+                        const filas = document.querySelectorAll('table tbody tr, [role="row"]');
+                        return filas.length > 1;
+                    """)
+                    return tiene_contenido
+                except:
+                    return False
+
+            WebDriverWait(driver, 15).until(hay_movimientos)
 
             html = driver.page_source
             soup = BeautifulSoup(html, 'html.parser')
