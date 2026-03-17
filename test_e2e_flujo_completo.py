@@ -79,21 +79,13 @@ def test_flujo_completo(numero_expediente="14141"):
 
         # El descargador espera que estemos en la página del expediente
         # Ya estamos ahí, así que podemos descargar directamente
-        archivos_descargados = []
+        archivos_descargados = descargador.descargar_archivos(numero, movimientos)
 
-        # Para cada movimiento, descargar sus archivos
-        for i, movimiento in enumerate(movimientos):
-            # Buscar botón de descarga para este movimiento
-            # Los botones de descarga están en la columna "Opciones"
-            # Esto requiere hacer click en el botón y manejar la descarga
-            try:
-                # Aquí iría la lógica de descarga específica
-                # Por ahora, simulamos que se descargó
-                print(f"      [INFO] Procesando movimiento {i + 1}/{len(movimientos)}")
-            except Exception as e:
-                print(f"      [WARN] Error descargando movimiento {i + 1}: {e}")
-
-        print(f"  [OK] Descarga completada")
+        if not archivos_descargados:
+            print(f"  [WARNING] No se descargó ningún archivo")
+            print(f"  [INFO] Continuando con PDF de movimientos sin archivos...")
+        else:
+            print(f"  [OK] {len(archivos_descargados)} archivo(s) descargado(s)")
 
         # PASO 5: Unificar en PDF
         print(f"\n[PASO 5/5] Unificando en PDF...")
