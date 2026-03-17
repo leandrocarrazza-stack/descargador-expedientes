@@ -722,53 +722,58 @@ class BuscadorExpedientes:
 
     def _clickear_expediente(self, driver, resultado_index, expediente_elegido=None):
         """
-        Hace click en una FILA de expediente para entrar a los detalles.
+        Hace click en un link de expediente para entrar a los detalles.
 
-        Busca la fila que contiene el número de expediente y la caratula específica,
-        luego hace click en esa FILA (no en botones genéricos).
+        Busca los links reales del expediente usando XPath y hace click en el correcto.
 
         Args:
             driver: Selenium WebDriver
-            resultado_index: Índice (0-based) del resultado en la tabla visible
-            expediente_elegido: (Opcional) Dict con 'numero' y 'caratula' del expediente a clickear
+            resultado_index: Índice (0-based) del resultado
+            expediente_elegido: (Opcional) Dict con datos del expediente
         """
         try:
-            # Esperar a que la tabla de resultados esté visible
-            WebDriverWait(driver, 5).until(
-                EC.presence_of_all_elements_located((By.CSS_SELECTOR, "table tbody tr, [role='row']"))
-            )
-
-            filas = driver.find_elements(By.CSS_SELECTOR, "table tbody tr, [role='row']")
-
-            if not filas:
-                print(f"      [ERROR] No se encontraron filas de resultados")
+            # METODO 1: Si el expediente tiene URL directa, usarla
+            url_directa = expediente_elegido.get('url', '') if expediente_elegido else ""
+            if url_directa:
+                print(f"      [INFO] Usando URL directa del expediente...")
+                driver.get(url_directa)
+                time.sleep(4)
+                print(f"      [OK] Página de detalles cargada (URL directa)")
                 return
 
-            if resultado_index >= len(filas):
-                print(f"      [WARN] Índice {resultado_index} > {len(filas) - 1}, usando último")
-                resultado_index = len(filas) - 1
+            # METODO 2: Buscar links reales del expediente usando XPath
+            print(f"      [INFO] Buscando links de expedientes...")
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_all_elements_located((By.XPATH, "//a[contains(@href, '/expedientes/') and string-length(@href) > 20]"))
+            )
 
-            # Obtener la FILA correcta
-            fila_objetivo = filas[resultado_index]
+            enlaces = driver.find_elements(By.XPATH, "//a[contains(@href, '/expedientes/') and string-length(@href) > 20]")
 
-            # Scroll hasta la fila y hacer click EN LA FILA COMPLETA
-            driver.execute_script("arguments[0].scrollIntoView(true);", fila_objetivo)
+            if not enlaces:
+                print(f"      [ERROR] No se encontraron links de expedientes")
+                return
+
+            if resultado_index >= len(enlaces):
+                print(f"      [WARN] Indice {resultado_index} > {len(enlaces) - 1}, usando ultimo")
+                resultado_index = len(enlaces) - 1
+
+            # Hacer click en el link correcto
+            enlace_objetivo = enlaces[resultado_index]
+            driver.execute_script("arguments[0].scrollIntoView(true);", enlace_objetivo)
             time.sleep(0.5)
 
-            print(f"      [INFO] Clickeando en fila #{resultado_index + 1}...")
-            print(f"           Contenido: {fila_objetivo.text[:60]}...")
+            print(f"      [INFO] Clickeando en link #{resultado_index + 1}...")
+            print(f"           Texto: {enlace_objetivo.text[:60]}...")
 
             try:
-                # Intentar click directo en la fila
-                fila_objetivo.click()
+                enlace_objetivo.click()
             except:
-                # Fallback: usar JavaScript para hacer click
-                driver.execute_script("arguments[0].click();", fila_objetivo)
+                driver.execute_script("arguments[0].click();", enlace_objetivo)
 
-            print(f"      [OK] Click en fila #{resultado_index + 1}")
-            time.sleep(3)
+            print(f"      [OK] Click en link #{resultado_index + 1}")
+            time.sleep(4)
 
-            # Esperar a que la página de detalles cargue
+            # Esperar a que la página cargue
             WebDriverWait(driver, 10).until(
                 lambda d: d.execute_script("return document.readyState") == "complete"
             )
