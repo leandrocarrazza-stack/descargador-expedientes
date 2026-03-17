@@ -742,7 +742,7 @@ class BuscadorExpedientes:
             # Filtrar solo los botones de resultados (que contienen expediente info)
             botones_resultado = []
             for boton in botones:
-                texto = boton.get_text()
+                texto = boton.text  # Usar .text en lugar de get_text()
                 # Si contiene características de un resultado, incluirlo
                 if ('/' in texto or 'CYC' in texto or 'CIVIL' in texto or len(texto) > 20):
                     botones_resultado.append(boton)
