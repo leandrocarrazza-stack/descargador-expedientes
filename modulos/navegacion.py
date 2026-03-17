@@ -788,13 +788,17 @@ class BuscadorExpedientes:
             list: Lista de movimientos con enlaces_descarga [{href, texto}, ...]
         """
         try:
-            # Esperar MAS tiempo a que React renderice
+            # Esperar MUCHO MAS tiempo a que React renderice (pueden ser segundos)
             print(f"      [INFO] Esperando renderizado de movimientos (React)...")
-            time.sleep(5)  # Espera adicional
+            time.sleep(10)  # Espera más larga para React
 
-            # Esperar a que haya contenido (tabla, grid, o elementos con movimientos)
-            WebDriverWait(driver, 10).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, "table, [role='grid'], [role='table'], tbody tr, [role='row']")) > 0
+            # Esperar a que haya FILAS en la tabla (no solo el header)
+            WebDriverWait(driver, 15).until(
+                lambda d: len(d.find_elements(By.CSS_SELECTOR, "table tbody tr[data-*], table tbody tr:nth-child(n+2), [role='row'][data-*]")) > 0
+                or d.execute_script("""
+                    const tablas = document.querySelectorAll('table tbody tr, [role="row"]');
+                    return Array.from(tablas).filter(t => t.textContent.trim().length > 20).length > 0;
+                """)
             )
 
             html = driver.page_source
