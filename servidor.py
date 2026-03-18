@@ -90,12 +90,19 @@ def crear_app(config_obj=None):
     CORS(app, supports_credentials=True)
 
     # ═════════════════════════════════════════════════════════════════════
+    #  INICIALIZAR CELERY (para tareas asincrónicas)
+    # ═════════════════════════════════════════════════════════════════════
+
+    init_celery_with_app(app)
+    logger.info("[OK] Celery inicializado (broker: Redis)")
+
+    # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
     # ═════════════════════════════════════════════════════════════════════
 
     with app.app_context():
         db.create_all()
-        logger.info(f"✅ Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
+        logger.info(f"[OK] Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
 
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
@@ -109,7 +116,7 @@ def crear_app(config_obj=None):
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
 
-    logger.info("✅ Blueprints registrados")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
@@ -136,6 +143,17 @@ def crear_app(config_obj=None):
             return render_template('dashboard.html', usuario=current_user)
 
         return _dashboard()
+
+    @app.route('/descargar')
+    def descargar():
+        """Página de descarga de expedientes (requiere login)."""
+        from flask_login import login_required
+
+        @login_required
+        def _descargar():
+            return render_template('descargar.html')
+
+        return _descargar()
 
     # ═════════════════════════════════════════════════════════════════════
     #  MANEJO DE ERRORES
@@ -170,7 +188,7 @@ def crear_app(config_obj=None):
     #  LOGGING
     # ═════════════════════════════════════════════════════════════════════
 
-    logger.info(f"✅ Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
+    logger.info(f"[OK] Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
 
     return app
 

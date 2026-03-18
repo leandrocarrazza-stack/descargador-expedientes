@@ -9,6 +9,7 @@ Selenium maneja automáticamente todas las cookies del navegador.
 import requests
 import json
 import pickle
+import os
 from pathlib import Path
 from datetime import datetime
 from selenium import webdriver
@@ -18,6 +19,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+from modulos.logger import crear_logger
+
+logger = crear_logger(__name__)
 
 
 class ClienteSelenium:
@@ -35,8 +39,12 @@ class ClienteSelenium:
         self.timeout = 30
         self.archivo_sesion = Path.home() / ".mesa_virtual_sesion.pkl"
 
-    def abrir_navegador_y_loguearse(self):
-        """Abre el navegador y espera a que el usuario se loguee."""
+    def abrir_navegador_y_loguearse(self, timeout_segundos=600):
+        """Abre el navegador y espera a que el usuario se loguee.
+
+        Args:
+            timeout_segundos: Máximo tiempo a esperar (default 10 min para 2FA)
+        """
         try:
             options = webdriver.ChromeOptions()
             self.driver = webdriver.Chrome(
@@ -54,7 +62,7 @@ class ClienteSelenium:
             intervalo_chequeo = 1
             urls_vistas = []
 
-            while tiempo_esperado < 300:
+            while tiempo_esperado < timeout_segundos:
                 url_actual = self.driver.current_url
 
                 if url_actual not in urls_vistas:
@@ -315,7 +323,11 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
             )
             print("[SILENT] Navegador en modo silencioso (headless)...")
 
-            sesion_cargada = cliente.cargar_sesion()
+                cliente.driver = webdriver.Chrome(
+                    service=Service(ChromeDriverManager().install()),
+                    options=options
+                )
+                print("[SILENT] Navegador en modo silencioso (headless)...")
 
             if sesion_cargada:
                 print("[OK] Usando sesión guardada (sin navegador visible)\n")
@@ -323,7 +335,10 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
                 # Cerrar navegador y hacer login manual
                 print("[WARN] Sesión expirada, se requiere nuevo login")
                 if cliente.driver:
-                    cliente.driver.quit()
+                    try:
+                        cliente.driver.quit()
+                    except:
+                        pass
                 cliente.driver = None
 
         except Exception as e:

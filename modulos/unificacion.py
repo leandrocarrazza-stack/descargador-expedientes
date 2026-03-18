@@ -8,8 +8,13 @@ Convierte RTF a PDF antes de unificar.
 
 from pathlib import Path
 from PyPDF2 import PdfMerger, PdfReader
+from typing import List, Optional
 import os
 from .conversion import crear_conversor
+from .logger import crear_logger
+from .excepciones import ErrorUnificacion
+
+logger = crear_logger(__name__)
 
 
 class UnificadorPDF:
@@ -27,7 +32,7 @@ class UnificadorPDF:
         self.carpeta_salida = Path(carpeta_salida) if carpeta_salida else self.carpeta_temp
         self.carpeta_salida.mkdir(parents=True, exist_ok=True)
 
-    def unificar(self, numero_expediente, archivos_descargados):
+    def unificar(self, numero_expediente: str, archivos_descargados: List[dict]) -> Optional[Path]:
         """
         Unifica múltiples PDFs en un solo archivo.
 
@@ -37,6 +42,9 @@ class UnificadorPDF:
 
         Retorna:
             Path: Ruta del archivo PDF unificado, o None si falla
+
+        Raises:
+            ErrorUnificacion: Si ocurre un error durante la unificación
         """
         if not archivos_descargados:
             print("[WARN]  No hay archivos para unificar")
@@ -52,13 +60,13 @@ class UnificadorPDF:
             # Por eso ordenamos en REVERSO (de mayor a menor índice)
             archivos_ordenados = sorted(
                 archivos_descargados,
-                key=lambda x: x.get('movimiento', 0),
-                reverse=True  # Invertir: último movimiento primero (más antiguo)
+                key=lambda x: x.get("movimiento", 0),
+                reverse=True,  # Invertir: último movimiento primero (más antiguo)
             )
 
             print(f"    Orden de procesamiento (de más antiguo a más reciente):")
             for archivo in archivos_ordenados:
-                print(f"      Movimiento {archivo.get('movimiento')}: {archivo['path'].name}")
+                logger.debug(f"Movimiento {archivo.get('movimiento')}: {archivo['path'].name}")
 
             # Crear conversor para RTF
             conversor = crear_conversor()
@@ -66,11 +74,11 @@ class UnificadorPDF:
             # Convertir archivos RTF a PDF si es necesario
             print(f"\n    Convirtiendo archivos RTF a PDF...")
             for archivo_info in archivos_ordenados:
-                ruta_archivo = archivo_info['path']
+                ruta_archivo = archivo_info["path"]
 
                 # Si es RTF, convertir a PDF
-                if ruta_archivo.suffix.lower() == '.rtf' or 'RTF' in ruta_archivo.name:
-                    print(f"      Convirtiendo {ruta_archivo.name}...", end=" ", flush=True)
+                if ruta_archivo.suffix.lower() == ".rtf" or "RTF" in ruta_archivo.name:
+                    logger.debug(f"Convirtiendo {ruta_archivo.name}...")
                     ruta_pdf = conversor.convertir_rtf_a_pdf(ruta_archivo)
                     if ruta_pdf:
                         archivo_info['path'] = ruta_pdf
@@ -84,9 +92,9 @@ class UnificadorPDF:
             archivos_válidos = 0
 
             for i, archivo_info in enumerate(archivos_ordenados, 1):
-                ruta_archivo = archivo_info['path']
+                ruta_archivo = archivo_info["path"]
 
-                print(f"   [{i}/{len(archivos_ordenados)}] Procesando {ruta_archivo.name}...", end=" ", flush=True)
+                logger.debug(f"[{i}/{len(archivos_ordenados)}] Procesando {ruta_archivo.name}...")
 
                 try:
                     # Verificar que el archivo exista
@@ -105,7 +113,7 @@ class UnificadorPDF:
                     except Exception as e:
                         # PDF está dañado pero intentamos usarlo igual si tiene contenido
                         error_msg = str(e).lower()
-                        if 'eof' in error_msg or 'broken' in error_msg or 'damaged' in error_msg:
+                        if "eof" in error_msg or "broken" in error_msg or "damaged" in error_msg:
                             # PDF tiene daño menor (EOF incompleto) pero intentamos
                             tamaño = ruta_archivo.stat().st_size
                             if tamaño < 100:  # Muy pequeño = probablemente corrompido
@@ -138,8 +146,15 @@ class UnificadorPDF:
                     print("   [LIST] Un solo archivo - copiando como PDF final...")
                     try:
                         import shutil
-                        archivo_unico = archivos_ordenados[0]['path']
-                        nombre_salida = f"Expediente_{numero_expediente}_UNIFICADO.pdf"
+
+                        archivo_unico = archivos_ordenados[0]["path"]
+                        numero_sanitizado = (
+                            str(numero_expediente)
+                            .replace("/", "_")
+                            .replace("\\", "_")
+                            .replace(":", "_")
+                        )
+                        nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO.pdf"
                         ruta_salida = self.carpeta_salida / nombre_salida
 
                         shutil.copy2(str(archivo_unico), str(ruta_salida))
@@ -159,14 +174,17 @@ class UnificadorPDF:
                     return None
 
             # Generar nombre del archivo de salida
-            nombre_salida = f"Expediente_{numero_expediente}_UNIFICADO.pdf"
+            numero_sanitizado = (
+                str(numero_expediente).replace("/", "_").replace("\\", "_").replace(":", "_")
+            )
+            nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO.pdf"
             ruta_salida = self.carpeta_salida / nombre_salida
 
             print(f"\n    Guardando archivo unificado: {nombre_salida}")
 
             # Escribir PDF unificado
             try:
-                with open(ruta_salida, 'wb') as f:
+                with open(ruta_salida, "wb") as f:
                     merger.write(f)
             except Exception as e:
                 print(f"   [NO] Error al escribir: {e}")
@@ -176,16 +194,22 @@ class UnificadorPDF:
                     print("   [LIST] Intentando modo alternativo (copiar)...")
                     try:
                         import shutil
-                        archivo_unico = archivos_ordenados[0]['path']
+
+                        archivo_unico = archivos_ordenados[0]["path"]
                         shutil.copy2(str(archivo_unico), str(ruta_salida))
+                        tamaño = ruta_salida.stat().st_size
+                        logger.info(
+                            f"Archivo alternativo guardado - Tamaño: {tamaño / (1024 * 1024):.2f} MB"
+                        )
                         return ruta_salida
-                    except:
-                        return None
-                return None
+                    except Exception as fallback_error:
+                        logger.error(f"Modo alternativo también falló: {str(fallback_error)[:50]}")
+                        raise ErrorUnificacion(f"Error al guardar PDF unificado: {e}") from e
+                raise ErrorUnificacion(f"Error al guardar PDF unificado: {e}") from e
 
             merger.close()
 
-            # Obtener tamaño del archivo
+            # Obtener metadatos del PDF final
             tamaño = ruta_salida.stat().st_size
             tamaño_mb = tamaño / (1024 * 1024)
 
@@ -196,11 +220,13 @@ class UnificadorPDF:
 
             return ruta_salida
 
+        except ErrorUnificacion:
+            raise
         except Exception as e:
             print(f"\n[NO] Error unificando PDFs: {e}")
             return None
 
-    def limpiar_temporales(self, mantener_originales=False):
+    def limpiar_temporales(self, mantener_originales: bool = False) -> int:
         """
         Limpia los archivos temporales descargados.
 
@@ -209,8 +235,12 @@ class UnificadorPDF:
 
         Retorna:
             int: Cantidad de archivos eliminados
+
+        Raises:
+            ErrorUnificacion: Si ocurre un error crítico durante la limpieza
         """
         if mantener_originales:
+            logger.debug("Limpieza de temporales deshabilitada (mantener_originales=True)")
             return 0
 
         print("\n️  Limpiando archivos temporales...\n")
@@ -239,7 +269,7 @@ class UnificadorPDF:
         return eliminados
 
 
-def crear_unificador(carpeta_temp, carpeta_salida=None):
+def crear_unificador(carpeta_temp: Path, carpeta_salida: Optional[Path] = None) -> UnificadorPDF:
     """
     Función auxiliar para crear un unificador preconfigurado.
 
@@ -250,4 +280,7 @@ def crear_unificador(carpeta_temp, carpeta_salida=None):
     Retorna:
         UnificadorPDF: Unificador listo para usar
     """
+    logger.debug(
+        f"Creando unificador con carpeta_temp={carpeta_temp}, carpeta_salida={carpeta_salida}"
+    )
     return UnificadorPDF(carpeta_temp, carpeta_salida)
