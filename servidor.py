@@ -31,6 +31,7 @@ from flask_cors import CORS
 import config
 from modulos.database import db, migrate
 from modulos.models import User
+from modulos.celery_app import init_celery_with_app
 
 # Logger simple sin módulo externo
 import logging

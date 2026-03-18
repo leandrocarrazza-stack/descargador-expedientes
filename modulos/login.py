@@ -323,12 +323,6 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
             )
             print("[SILENT] Navegador en modo silencioso (headless)...")
 
-                cliente.driver = webdriver.Chrome(
-                    service=Service(ChromeDriverManager().install()),
-                    options=options
-                )
-                print("[SILENT] Navegador en modo silencioso (headless)...")
-
             if sesion_cargada:
                 print("[OK] Usando sesión guardada (sin navegador visible)\n")
             else:
