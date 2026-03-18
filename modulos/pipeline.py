@@ -128,6 +128,17 @@ class PipelineDescargador:
                     expediente=expediente
                 )
 
+            # CERRAR CLIENTE AQUÍ para evitar crash
+            # El navegador ya no se necesita, conversión/unificación no requieren driver
+            logger.info("[CLEANUP] Cerrando navegador para evitar crash")
+            if self.cliente:
+                try:
+                    self.cliente.cerrar()
+                    self.cliente = None
+                    logger.info("[OK] Navegador cerrado exitosamente")
+                except Exception as e:
+                    logger.warning(f"[WARN] Error al cerrar navegador: {e}")
+
             # PASO 4: CONVERSIÓN RTF>PDF
             logger.info("[PASO 4/5] Conversión RTF>PDF")
             self.conversor = ConversorRTF()
