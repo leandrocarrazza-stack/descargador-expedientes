@@ -129,11 +129,12 @@ def descargar_expediente_task(
                 logger.info(f"✅ Descarga exitosa: {resultado_pipeline.pdf_final}")
 
                 # Crear registro en BD
+                exp = resultado_pipeline.expediente or {}
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
-                    caratula=resultado_pipeline.expediente.caratula if resultado_pipeline.expediente else None,
-                    tribunal=resultado_pipeline.expediente.tribunal if resultado_pipeline.expediente else None,
+                    caratula=exp.get('caratula') if isinstance(exp, dict) else None,
+                    tribunal=exp.get('tribunal') if isinstance(exp, dict) else None,
                     pdf_ruta_temporal=str(resultado_pipeline.pdf_final),
                     estado='completed',
                     completado_en=datetime.utcnow()
