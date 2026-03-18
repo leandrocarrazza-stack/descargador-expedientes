@@ -143,14 +143,16 @@ class PipelineDescargador:
             logger.info("[PASO 4/5] Conversión RTF>PDF")
             self.conversor = ConversorRTF()
 
-            # Convertir archivos descargados
+            # Convertir archivos descargados manteniendo metadata
             # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
             archivos_convertidos = []
             for arch in archivos_descargados:
                 ruta_original = arch['path']
                 pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
                 if pdf_convertido:
-                    archivos_convertidos.append(pdf_convertido)
+                    # Actualizar ruta con conversión realizada, mantener metadata
+                    arch['path'] = pdf_convertido
+                    archivos_convertidos.append(arch)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
@@ -166,15 +168,8 @@ class PipelineDescargador:
             logger.info("[PASO 5/5] Unificación de PDFs")
             self.unificador = UnificadorPDF(config.OUTPUT_DIR)
 
-            # Obtener rutas de archivos convertidos
-            rutas_para_unificar = [
-                str(arch)
-                for arch in archivos_convertidos
-            ]
-
-            # Nombre sanitizado
-            nombre_carpeta = numero_expediente.replace('/', '_')
-            pdf_final = self.unificador.unificar(rutas_para_unificar, nombre_carpeta)
+            # Pasar archivos con metadata al unificador
+            pdf_final = self.unificador.unificar(numero_expediente, archivos_convertidos)
 
             if not pdf_final or not pdf_final.exists():
                 logger.error(f"PDF final no generado o inexistente: {pdf_final}")
