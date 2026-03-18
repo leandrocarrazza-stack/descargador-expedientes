@@ -97,16 +97,16 @@ class DescargadorArchivos:
 
                 print(f"      > Encontradas {len(filas)} filas en esta página")
 
-                # ESTRATEGIA ROBUSTA: Obtener TODOS los enlaces de la tabla con Selenium
-                # Luego asociar a cada fila en orden
+                # ESTRATEGIA: Solo obtener enlaces de DESCARGA (segundo <a> en cada fila)
+                # El primer <a> es preview, el segundo es descarga
                 try:
-                    todos_enlaces_elem = driver.find_elements(By.XPATH, "//table//tbody//tr//a")
-                    print(f"      > Total enlaces encontrados en tabla: {len(todos_enlaces_elem)}")
+                    # Buscar solo el segundo <a> de cada fila (descarga)
+                    enlaces_descarga = driver.find_elements(By.XPATH, "//table//tbody//tr//a[2]")
+                    print(f"      > Total enlaces de DESCARGA encontrados: {len(enlaces_descarga)}")
                 except:
-                    todos_enlaces_elem = []
+                    enlaces_descarga = []
 
                 movimientos_pagina = 0
-                enlace_idx_global = 0  # Contador global para recorrer los enlaces en orden
 
                 for fila_idx, fila in enumerate(filas, 1):
                     # Obtener descripción de la fila
@@ -120,37 +120,30 @@ class DescargadorArchivos:
                         'pagina': pagina_actual,  # Registrar en qué página estaba
                     }
 
-                    # Obtener enlaces de esta fila usando BeautifulSoup (para contar cuantos hay)
-                    enlaces_fila_bs = fila.find_all('a')
-                    num_enlaces = len(enlaces_fila_bs)
+                    # Obtener el enlace de descarga de esta fila
+                    if fila_idx <= len(enlaces_descarga):
+                        try:
+                            elem = enlaces_descarga[fila_idx - 1]  # Índice 0-based
+                            href = elem.get_attribute('href') or ''
+                            print(f"         [FILA {fila_idx}] [DESCARGA] {href[:60]}...")
 
-                    # Extraer los enlaces correspondientes a esta fila del listado global de Selenium
-                    if enlace_idx_global < len(todos_enlaces_elem):
-                        print(f"         [FILA {fila_idx}] Tiene {num_enlaces} enlace(s)")
+                            # Agregar enlace de descarga
+                            if href:
+                                movimiento['enlaces_descarga'].append({
+                                    'href': href,
+                                    'texto': f'descarga_{fila_idx}',
+                                    'es_pdf': True,
+                                })
+                                print(f"                [OK] Agregado para descargar")
 
-                        # Procesar los siguientes N enlaces para esta fila
-                        for i in range(num_enlaces):
-                            if enlace_idx_global < len(todos_enlaces_elem):
-                                elem = todos_enlaces_elem[enlace_idx_global]
-                                href = elem.get_attribute('href') or ''
-                                es_api = '/api/archivos/' in href
-                                print(f"            [{i}] {'[API]' if es_api else '[PREV]'} {href[:50]}...")
-
-                                # Agregar TODOS los enlaces (API y preview)
-                                if href:
-                                    movimiento['enlaces_descarga'].append({
-                                        'href': href,
-                                        'texto': f'api_archivos',
-                                        'es_pdf': True,
-                                    })
-                                    print(f"                [OK] Agregado para descargar")
-
-                                enlace_idx_global += 1
-
-                        # Agregar si tiene enlaces
-                        if movimiento["enlaces_descarga"]:
-                            movimientos.append(movimiento)
-                            movimientos_pagina += 1
+                            # Agregar si tiene enlace
+                            if movimiento['enlaces_descarga']:
+                                movimientos.append(movimiento)
+                                movimientos_pagina += 1
+                        except Exception as e:
+                            print(f"         [ERROR] Error procesando fila {fila_idx}: {str(e)[:50]}")
+                    else:
+                        print(f"         [SKIP] Fila {fila_idx} sin enlace de descarga disponible")
 
                 print(f"      [OK] {movimientos_pagina} movimiento(s) con archivos en esta página")
 
