@@ -222,11 +222,10 @@ class BuscadorExpedientes:
                 # AHORA: Hacer click en el expediente para entrar a los detalles
                 print(f"\n   > Entrando a página de detalles del expediente...")
                 resultado_index = expediente_elegido.get('_resultado_index', 0)
-                self._clickear_expediente(driver, resultado_index)
+                self._clickear_expediente(driver, resultado_index, expediente_elegido)
 
-                # Extraer los movimientos desde la página de detalles
-                print(f"   > Extrayendo movimientos...")
-                expediente_elegido['movimientos'] = self._extraer_movimientos_detalle(driver)
+                # Los movimientos se extraerán usando DescargadorArchivos.obtener_movimientos()
+                # (método más robusto que maneja paginación y enlaces API correctamente)
 
             return expediente_elegido
 

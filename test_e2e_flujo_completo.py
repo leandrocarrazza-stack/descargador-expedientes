@@ -60,22 +60,24 @@ def test_flujo_completo(numero_expediente="14141"):
         print(f"      Tribunal: {tribunal}")
         print(f"      Caratula: {caratula}")
 
-        # PASO 3: Obtener movimientos
-        movimientos = expediente.get('movimientos', [])
-        print(f"\n[PASO 3/5] Movimientos extraidos: {len(movimientos)}")
+        # PASO 3: Obtener movimientos usando DescargadorArchivos (estrategia robusta)
+        print(f"\n[PASO 3/5] Obteniendo movimientos...")
+        descargador = crear_descargador(cliente)
+        movimientos = descargador.obtener_movimientos(numero)
+
+        print(f"  [OK] Movimientos extraidos: {len(movimientos)}")
 
         if not movimientos:
             print("  [WARNING] No hay movimientos/archivos para descargar")
             return False
 
         for i, mov in enumerate(movimientos[:3], 1):
-            fecha = mov.get('fecha', '')
             desc = mov.get('descripcion', '')[:40]
-            print(f"      [{i}] {fecha} - {desc}")
+            enlaces = mov.get('enlaces_descarga', [])
+            print(f"      [{i}] {desc} ({len(enlaces)} archivo(s))")
 
         # PASO 4: Descargar archivos
         print(f"\n[PASO 4/5] Descargando archivos...")
-        descargador = DescargadorArchivos(cliente, TEMP_DIR)
 
         # El descargador espera que estemos en la página del expediente
         # Ya estamos ahí, así que podemos descargar directamente
