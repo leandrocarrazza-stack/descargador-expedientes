@@ -118,7 +118,6 @@ def descargar_expediente_task(
             pipeline = PipelineDescargador()
             resultado_pipeline = pipeline.ejecutar(
                 numero_expediente=numero_expediente,
-                expediente_preseleccionado=expediente_preseleccionado,
                 limpiar_temp=config.LIMPIAR_TEMP
             )
 
