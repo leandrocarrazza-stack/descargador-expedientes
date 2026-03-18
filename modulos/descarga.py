@@ -136,8 +136,8 @@ class DescargadorArchivos:
                                 es_api = '/api/archivos/' in href
                                 print(f"            [{i}] {'[API]' if es_api else '[PREV]'} {href[:50]}...")
 
-                                # SOLO agregar enlaces API (descarga válida)
-                                if es_api and href:
+                                # Agregar TODOS los enlaces (API y preview)
+                                if href:
                                     movimiento['enlaces_descarga'].append({
                                         'href': href,
                                         'texto': f'api_archivos',
