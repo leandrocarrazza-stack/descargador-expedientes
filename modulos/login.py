@@ -323,10 +323,12 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
             )
             print("[SILENT] Navegador en modo silencioso (headless)...")
 
-            if sesion_cargada:
+            # CARGAR la sesión guardada
+            if cliente.cargar_sesion():
+                sesion_cargada = True
                 print("[OK] Usando sesión guardada (sin navegador visible)\n")
             else:
-                # Cerrar navegador y hacer login manual
+                # No se pudo cargar, requiere nuevo login
                 print("[WARN] Sesión expirada, se requiere nuevo login")
                 if cliente.driver:
                     try:
