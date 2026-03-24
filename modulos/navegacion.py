@@ -213,6 +213,10 @@ class BuscadorExpedientes:
                 exp = expedientes[0]
                 print(f"    Encontrado: {exp.get('caratula', 'Sin descripción')}")
                 print(f"      Número: {exp.get('numero')}")
+                # IMPORTANTE: Hacer click para entrar a los detalles
+                print(f"\n   > Entrando a página de detalles del expediente...")
+                resultado_index = exp.get('_resultado_index', 0)
+                self._clickear_expediente(driver, resultado_index, exp)
                 return exp
 
             # Si hay múltiples resultados, pedir que el usuario elija
