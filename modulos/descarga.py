@@ -234,6 +234,12 @@ class DescargadorArchivos:
                 "//a[contains(@aria-label, 'siguiente') and not(@aria-disabled='true')]",
                 "//button[text()[contains(., 'Siguiente')] and not(@disabled)]",
                 "//button[text()[contains(., 'siguiente')] and not(@disabled)]",
+                # Selectores más genéricos para Material-UI
+                "//button[@aria-label='Next page']",
+                "//button[@aria-label='next page']",
+                "//button[@aria-label='Siguiente página']",
+                # Buscar por clase o contenido
+                "//button[contains(., '>')]",  # Botón con >
             ]
 
             for selector in selectores_siguiente:
@@ -243,18 +249,51 @@ class DescargadorArchivos:
                     )
                     # Verificar que esté visible y habilitado
                     if elemento.is_enabled() and elemento.is_displayed():
-                        print(f"       Navegando a siguiente página...")
+                        print(f"       Navegando a siguiente página (selector: {selector[:40]}...)")
                         # Hacer scroll hasta el botón para asegurarse de que es clickeable
                         driver.execute_script("arguments[0].scrollIntoView(true);", elemento)
                         time.sleep(0.5)
                         elemento.click()
                         time.sleep(2)  # Esperar a que cargue la nueva página
                         return True
-                except:
+                except Exception as e:
                     continue
 
-            # ESTRATEGIA 3: Detectar si el botón "Siguiente" está deshabilitado
-            # (indica que estamos en la última página)
+            # ESTRATEGIA 3: Usar JavaScript para hacer click en botón siguiente
+            # (Más robusto para interfaces React/Material-UI)
+            try:
+                print(f"       Intentando navegar con JavaScript...")
+                resultado = driver.execute_script("""
+                    // Buscar botón siguiente en varios lugares
+                    let botones = document.querySelectorAll('button');
+                    for (let btn of botones) {
+                        let texto = btn.textContent.toLowerCase();
+                        let aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+                        // Buscar palabras clave
+                        if (texto.includes('siguiente') || aria.includes('siguiente') ||
+                            texto.includes('next') || aria.includes('next') ||
+                            texto.includes('>')) {
+
+                            // Verificar que no esté deshabilitado
+                            if (!btn.disabled && !btn.getAttribute('aria-disabled')) {
+                                btn.click();
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                """)
+
+                if resultado:
+                    print(f"       Navegado exitosamente con JavaScript")
+                    time.sleep(2)
+                    return True
+            except Exception as e:
+                print(f"       Error con JavaScript: {str(e)[:40]}")
+                pass
+
+            # ESTRATEGIA 4: Detectar si el botón "Siguiente" está deshabilitado
             selectores_siguiente_deshabilitado = [
                 "//button[contains(@aria-label, 'Siguiente') and @disabled]",
                 "//button[contains(@aria-label, 'siguiente') and @disabled]",
