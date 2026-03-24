@@ -29,18 +29,21 @@ descargas_bp = Blueprint('descargas', __name__, url_prefix='/descargas')
 PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
 
 
-@descargas_bp.route('/expediente', methods=['POST'])
+@descargas_bp.route('/expediente', methods=['GET', 'POST'])
 @login_required
 def descargar_expediente_sync():
     """
     Descarga sincrónica de expediente.
 
-    Request JSON:
+    GET: Retorna formulario HTML para ingresar número de expediente
+    POST: Ejecuta la descarga del expediente
+
+    Request JSON (POST):
         {
             "numero_expediente": "21/24"
         }
 
-    Response JSON:
+    Response JSON (POST):
         {
             "exito": true,
             "expediente_id": 123,
@@ -54,6 +57,12 @@ def descargar_expediente_sync():
         - 402: Créditos insuficientes
         - 500: Error en descarga (sesión expirada, expediente no encontrado, etc)
     """
+    # Si es GET, mostrar formulario
+    if request.method == 'GET':
+        return render_template('descargar_expediente.html',
+                             creditos=current_user.creditos_disponibles)
+
+    # Si es POST, procesar descarga
     try:
         # 1. PARSEAR REQUEST
         data = request.get_json() or {}
