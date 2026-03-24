@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descargar Expediente</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        .info {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .info-icon {
+            font-size: 24px;
+        }
+        .info-text {
+            font-size: 14px;
+            color: #555;
+        }
+        .creditos {
+            color: #667eea;
+            font-weight: bold;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .success {
+            background: #efe;
+            color: #3c3;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📥 Descargar Expediente</h1>
+
+        <div class="info">
+            <div class="info-icon">⭐</div>
+            <div class="info-text">
+                Tienes <span class="creditos">{{ creditos }} crédito{{ 's' if creditos != 1 else '' }}</span> disponible{{ 's' if creditos != 1 else '' }}
+            </div>
+        </div>
+
+        <div class="error" id="error-msg"></div>
+        <div class="success" id="success-msg"></div>
+
+        <form id="form-descargar" onsubmit="descargar(event)">
+            <div class="form-group">
+                <label for="numero_expediente">Número de Expediente</label>
+                <input
+                    type="text"
+                    id="numero_expediente"
+                    name="numero_expediente"
+                    placeholder="Ejemplo: 12881 o 21/24"
+                    required
+                    autofocus
+                >
+                <div class="hint">Ingresa el número del expediente que quieres descargar</div>
+            </div>
+
+            <button type="submit" id="btn-descargar">
+                Descargar Expediente
+            </button>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px; color: #666;">
+                Buscando y descargando expediente...<br>
+                <small>Esto puede tomar 30-120 segundos</small>
+            </p>
+        </div>
+
+        <div class="back-link">
+            <a href="/dashboard">← Volver al Dashboard</a>
+        </div>
+    </div>
+
+    <script>
+        function mostrarError(mensaje) {
+            const errorDiv = document.getElementById('error-msg');
+            errorDiv.textContent = mensaje;
+            errorDiv.style.display = 'block';
+            document.getElementById('success-msg').style.display = 'none';
+        }
+
+        function mostrarExito(mensaje) {
+            const successDiv = document.getElementById('success-msg');
+            successDiv.textContent = mensaje;
+            successDiv.style.display = 'block';
+            document.getElementById('error-msg').style.display = 'none';
+        }
+
+        async function descargar(event) {
+            event.preventDefault();
+
+            const numero = document.getElementById('numero_expediente').value.trim();
+            const btn = document.getElementById('btn-descargar');
+            const loading = document.getElementById('loading');
+            const form = document.getElementById('form-descargar');
+
+            if (!numero) {
+                mostrarError('Por favor ingresa un número de expediente');
+                return;
+            }
+
+            // Mostrar loading
+            btn.disabled = true;
+            form.style.display = 'none';
+            loading.style.display = 'block';
+            document.getElementById('error-msg').style.display = 'none';
+
+            try {
+                const response = await fetch('/descargas/expediente', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        numero_expediente: numero
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.exito) {
+                    mostrarExito(`✅ Expediente descargado exitosamente! Créditos restantes: ${data.creditos_restantes}`);
+
+                    // Descargar el PDF después de 1 segundo
+                    setTimeout(() => {
+                        window.location.href = data.pdf_url;
+                    }, 1000);
+
+                    // Limpiar formulario
+                    document.getElementById('numero_expediente').value = '';
+                } else {
+                    mostrarError(`❌ Error: ${data.mensaje}`);
+                    btn.disabled = false;
+                    form.style.display = 'block';
+                    loading.style.display = 'none';
+                }
+            } catch (error) {
+                mostrarError(`❌ Error de conexión: ${error.message}`);
+                btn.disabled = false;
+                form.style.display = 'block';
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
