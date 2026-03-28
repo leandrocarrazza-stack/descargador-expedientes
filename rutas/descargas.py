@@ -76,8 +76,8 @@ def descargar_expediente_sync():
                 'mensaje': 'Número de expediente requerido'
             }), 400
 
-        # 3. VALIDAR CRÉDITOS
-        if current_user.creditos_disponibles < 1:
+        # 3. VALIDAR CRÉDITOS (los admins están exentos del límite)
+        if not current_user.is_admin and current_user.creditos_disponibles < 1:
             logger.warning(f"Usuario {current_user.id} sin créditos (tiene {current_user.creditos_disponibles})")
             return jsonify({
                 'exito': False,
@@ -111,11 +111,12 @@ def descargar_expediente_sync():
             )
             db.session.add(expediente_db)
 
-            # Deducir créditos
-            current_user.creditos_disponibles -= 1
+            # Deducir créditos (los admins no gastan)
+            if not current_user.is_admin:
+                current_user.creditos_disponibles -= 1
             db.session.commit()
 
-            logger.info(f"Créditos deducidos: Usuario {current_user.id} ahora tiene {current_user.creditos_disponibles}")
+            logger.info(f"Descarga registrada: Usuario {current_user.id} (admin={current_user.is_admin}), créditos restantes: {current_user.creditos_disponibles}")
 
             return jsonify({
                 'exito': True,

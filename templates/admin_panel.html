@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block titulo %}Panel de Administración{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .admin-badge {
+        background: linear-gradient(135deg, #e53935, #b71c1c);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .tabla-usuarios thead th {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+    }
+    .creditos-badge {
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #4caf50;
+    }
+    .creditos-badge.sin-creditos {
+        color: #f44336;
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<h2 class="mb-1">Panel de Administración <span class="admin-badge">ADMIN</span></h2>
+<p class="text-muted mb-4">Gestión de usuarios y créditos del sistema.</p>
+
+<!-- OTORGAR CRÉDITOS -->
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 8px 8px 0 0;">
+        <strong>Otorgar Créditos Gratuitos</strong>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label">Email del usuario</label>
+                <input type="email" id="emailUsuario" class="form-control" placeholder="usuario@ejemplo.com">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Cantidad</label>
+                <input type="number" id="cantidadCreditos" class="form-control" value="5" min="1" max="100">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Motivo (opcional)</label>
+                <input type="text" id="motivoCreditos" class="form-control" placeholder="compensación, prueba...">
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" onclick="otorgarCreditos()">
+                    Otorgar
+                </button>
+            </div>
+        </div>
+        <div id="mensajeOtorgar" class="mt-3 d-none"></div>
+    </div>
+</div>
+
+<!-- TABLA DE USUARIOS -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center"
+         style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 8px 8px 0 0;">
+        <strong>Usuarios registrados ({{ usuarios|length }})</strong>
+        <button class="btn btn-sm btn-light" onclick="location.reload()">Actualizar</button>
+    </div>
+    <div class="card-body p-0">
+        {% if usuarios %}
+        <div class="table-responsive">
+            <table class="table tabla-usuarios mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Email</th>
+                        <th>Nombre</th>
+                        <th>Plan</th>
+                        <th>Créditos</th>
+                        <th>Rol</th>
+                        <th>Registrado</th>
+                        <th>Acción rápida</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td class="text-muted">{{ u.id }}</td>
+                        <td>
+                            <strong>{{ u.email }}</strong>
+                        </td>
+                        <td>{{ u.nombre or '—' }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ u.plan }}</span>
+                        </td>
+                        <td>
+                            <span class="creditos-badge {% if u.creditos_disponibles == 0 %}sin-creditos{% endif %}">
+                                {{ u.creditos_disponibles }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if u.is_admin %}
+                                <span class="admin-badge">ADMIN</span>
+                            {% else %}
+                                <span class="text-muted">usuario</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted" style="font-size: 0.85em;">
+                            {{ u.creado_en.strftime('%d/%m/%Y') }}
+                        </td>
+                        <td>
+                            <!-- Botón para dar 1 crédito rápido -->
+                            <button class="btn btn-sm btn-outline-success"
+                                    onclick="otorgarRapido('{{ u.email }}', 1)"
+                                    title="+1 crédito">
+                                +1
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary"
+                                    onclick="otorgarRapido('{{ u.email }}', 5)"
+                                    title="+5 créditos">
+                                +5
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-muted">
+            No hay usuarios registrados.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    // Otorgar créditos desde el formulario principal
+    async function otorgarCreditos() {
+        const email = document.getElementById('emailUsuario').value.trim();
+        const creditos = parseInt(document.getElementById('cantidadCreditos').value);
+        const motivo = document.getElementById('motivoCreditos').value.trim() || 'otorgado por admin';
+        const msgDiv = document.getElementById('mensajeOtorgar');
+
+        if (!email || creditos < 1) {
+            mostrarMensaje(msgDiv, 'Completá el email y la cantidad.', 'warning');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/admin/otorgar-creditos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, creditos, motivo })
+            });
+            const data = await resp.json();
+
+            if (data.exito) {
+                mostrarMensaje(msgDiv, `✓ ${data.mensaje} (total: ${data.creditos_nuevos})`, 'success');
+                // Recargar la tabla después de 1 segundo
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                mostrarMensaje(msgDiv, `Error: ${data.mensaje}`, 'danger');
+            }
+        } catch (err) {
+            mostrarMensaje(msgDiv, 'Error de conexión.', 'danger');
+        }
+    }
+
+    // Botones rápidos en la tabla
+    async function otorgarRapido(email, creditos) {
+        try {
+            const resp = await fetch('/admin/otorgar-creditos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, creditos, motivo: 'otorgado rápido desde panel' })
+            });
+            const data = await resp.json();
+            if (data.exito) {
+                alert(`✓ ${data.mensaje}`);
+                location.reload();
+            } else {
+                alert(`Error: ${data.mensaje}`);
+            }
+        } catch (err) {
+            alert('Error de conexión.');
+        }
+    }
+
+    // Mostrar mensaje con estilo Bootstrap
+    function mostrarMensaje(div, texto, tipo) {
+        div.className = `mt-3 alert alert-${tipo}`;
+        div.textContent = texto;
+        div.classList.remove('d-none');
+    }
+</script>
+{% endblock %}

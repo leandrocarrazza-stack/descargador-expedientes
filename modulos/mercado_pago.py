@@ -24,7 +24,8 @@ MP_PENDING_URL = os.getenv('MERCADO_PAGO_PENDING_URL', 'http://localhost:5000/pa
 
 # URLs de API de Mercado Pago
 MP_API_BASE = 'https://api.mercadopago.com'
-MP_ORDERS_ENDPOINT = f'{MP_API_BASE}/v2/orders'
+# Checkout Pro (Preferences API) - estándar para webs con redirección al checkout de MP
+MP_PREFERENCES_ENDPOINT = f'{MP_API_BASE}/checkout/preferences'
 
 
 class MercadoPagoError(Exception):
@@ -67,19 +68,15 @@ def crear_orden_pago(
 
     creditos = CREDITOS_POR_PLAN.get(plan, 0)
 
-    # Cuerpo de la solicitud según API de Orders
+    # Payload para Checkout Pro (Preferences API)
+    # Documentación: https://www.mercadopago.com.ar/developers/es/docs/checkout-pro
     payload = {
-        "title": f"Compra de {creditos} créditos - {descripcion}",
-        "description": descripcion,
-        "external_reference": f"user_{user_id}_plan_{plan}",
-        "total_amount": monto,
-        "currency": moneda,
         "items": [
             {
-                "title": f"{creditos} créditos para descargar expedientes",
+                "title": f"{creditos} créditos - Descargador de Expedientes",
                 "description": descripcion,
                 "quantity": 1,
-                "unit_price": monto,
+                "unit_price": float(monto),
                 "currency_id": moneda
             }
         ],
@@ -91,10 +88,15 @@ def crear_orden_pago(
             "failure": MP_FAILURE_URL,
             "pending": MP_PENDING_URL
         },
+        "auto_return": "approved",  # Redirige automáticamente solo si el pago fue aprobado
+        "external_reference": f"user_{user_id}_plan_{plan}",
         "statement_descriptor": "Descargador Expedientes",
-        "notification_url": "https://tu-servidor.com/webhook-mercado-pago",  # Se actualiza en producción
-        "expiration_date": None  # Sin vencimiento
     }
+
+    # Agregar notification_url solo si está configurada (en producción)
+    notif_url = os.getenv('MERCADO_PAGO_NOTIFICATION_URL')
+    if notif_url:
+        payload["notification_url"] = notif_url
 
     headers = {
         'Content-Type': 'application/json',
@@ -102,31 +104,25 @@ def crear_orden_pago(
     }
 
     try:
-        # Crear orden en Mercado Pago
-        response = requests.post(MP_ORDERS_ENDPOINT, json=payload, headers=headers)
+        # Crear preferencia de pago en Mercado Pago
+        response = requests.post(MP_PREFERENCES_ENDPOINT, json=payload, headers=headers)
         response.raise_for_status()
 
         data = response.json()
 
-        # Extraer datos importantes
+        # La respuesta de Preferences tiene init_point (producción) y sandbox_init_point (testing)
+        # init_point es la URL a la que redirigir al usuario para pagar
+        checkout_url = data.get('init_point') or data.get('sandbox_init_point')
+
         orden = {
             'id': data.get('id'),
             'external_reference': data.get('external_reference'),
-            'status': data.get('status'),
-            'total_amount': data.get('total_amount'),
-            'items': data.get('items', []),
-            'payer_email': data.get('payer', {}).get('email'),
-            # Link de pago (varía según la respuesta)
-            'checkout_url': None
+            'status': 'pending',
+            'total_amount': monto,
+            'checkout_url': checkout_url,
         }
 
-        # Buscar link de pago en las opciones de transacción
-        if 'processing_modes' in data:
-            for mode in data.get('processing_modes', []):
-                if mode.get('type') == 'online':
-                    orden['checkout_url'] = mode.get('url')
-
-        logger.info(f"Orden creada exitosamente: {orden['id']} para usuario {user_id}")
+        logger.info(f"Preferencia creada exitosamente: {orden['id']} para usuario {user_id}")
         return orden
 
     except requests.exceptions.RequestException as e:
@@ -137,19 +133,19 @@ def crear_orden_pago(
 
 def obtener_orden(orden_id: str) -> Dict[str, Any]:
     """
-    Obtiene los detalles de una orden existente.
+    Obtiene los detalles de una preferencia existente.
 
     Args:
-        orden_id: ID de la orden en Mercado Pago
+        orden_id: ID de la preferencia en Mercado Pago
 
     Returns:
-        Dict con datos de la orden
+        Dict con datos de la preferencia
 
     Raises:
         MercadoPagoError: Si falla la consulta
     """
 
-    url = f'{MP_ORDERS_ENDPOINT}/{orden_id}'
+    url = f'{MP_PREFERENCES_ENDPOINT}/{orden_id}'
     headers = {
         'Authorization': f'Bearer {MP_ACCESS_TOKEN}'
     }
