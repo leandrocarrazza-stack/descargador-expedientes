@@ -31,6 +31,7 @@ from flask_cors import CORS
 import config
 from modulos.database import db, migrate
 from modulos.models import User
+from modulos.celery_app import init_celery_with_app
 
 # Logger simple sin módulo externo
 import logging
@@ -90,12 +91,19 @@ def crear_app(config_obj=None):
     CORS(app, supports_credentials=True)
 
     # ═════════════════════════════════════════════════════════════════════
+    #  INICIALIZAR CELERY (para tareas asincrónicas)
+    # ═════════════════════════════════════════════════════════════════════
+
+    init_celery_with_app(app)
+    logger.info("[OK] Celery inicializado (broker: Redis)")
+
+    # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
     # ═════════════════════════════════════════════════════════════════════
 
     with app.app_context():
         db.create_all()
-        logger.info(f"✅ Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
+        logger.info(f"[OK] Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
 
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
@@ -104,12 +112,14 @@ def crear_app(config_obj=None):
     from rutas.auth import auth_bp
     from rutas.pagos import pagos_bp
     from rutas.descargas import descargas_bp
+    from rutas.admin import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
+    app.register_blueprint(admin_bp)
 
-    logger.info("✅ Blueprints registrados")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
@@ -136,6 +146,17 @@ def crear_app(config_obj=None):
             return render_template('dashboard.html', usuario=current_user)
 
         return _dashboard()
+
+    @app.route('/descargar')
+    def descargar():
+        """Página de descarga de expedientes (requiere login)."""
+        from flask_login import login_required
+
+        @login_required
+        def _descargar():
+            return render_template('descargar.html')
+
+        return _descargar()
 
     # ═════════════════════════════════════════════════════════════════════
     #  MANEJO DE ERRORES
@@ -170,7 +191,7 @@ def crear_app(config_obj=None):
     #  LOGGING
     # ═════════════════════════════════════════════════════════════════════
 
-    logger.info(f"✅ Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
+    logger.info(f"[OK] Aplicación Flask inicializada (ambiente: {config.FLASK_ENV})")
 
     return app
 

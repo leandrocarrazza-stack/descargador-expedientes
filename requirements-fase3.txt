@@ -1,0 +1,64 @@
+# FASE 3: Escalabilidad con Celery + Redis + Pool Selenium
+# Instalar con: pip install -r requirements-fase3.txt
+
+# ═════════════════════════════════════════════════════════════════════════
+#  FASE 1 + 2: Dependencias Base + Pagos
+# ═════════════════════════════════════════════════════════════════════════
+
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.3
+Flask-Migrate==4.0.4
+Flask-Login==0.6.2
+Flask-WTF==1.1.1
+Flask-CORS==4.0.0
+Werkzeug==2.3.6
+SQLAlchemy==1.4.48
+python-dotenv==1.0.0
+email-validator==2.0.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+PyPDF2==3.0.1
+
+# Pagos
+# (Mercado Pago se accede vía requests, sin SDK)
+
+# ═════════════════════════════════════════════════════════════════════════
+#  FASE 3: Tasks Asincrónicas + Browser Pool
+# ═════════════════════════════════════════════════════════════════════════
+
+# Celery para tareas asincrónicas
+Celery==5.3.1
+redis==4.5.5
+
+# Selenium para Web Scraping (reutilizar del código existente)
+selenium==4.8.0
+webdriver-manager==3.8.5
+
+# ═════════════════════════════════════════════════════════════════════════
+#  PRODUCCIÓN: WSGI + Async Workers
+# ═════════════════════════════════════════════════════════════════════════
+
+# Servidor WSGI para producción
+gunicorn==20.1.0
+
+# Driver PostgreSQL para producción
+psycopg2-binary==2.9.6
+
+# ═════════════════════════════════════════════════════════════════════════
+#  NOTAS
+# ═════════════════════════════════════════════════════════════════════════
+
+# Para librerías existentes del proyecto (pipeline, login, etc.):
+# - Ya están en el código del proyecto
+# - No requieren pip install adicional
+
+# Verificar Redis está instalado en sistema:
+#   macOS: brew install redis
+#   Ubuntu: sudo apt install redis-server
+#   Windows: usar WSL2 o Docker
+
+# Ejecutar Celery worker:
+#   celery -A modulos.celery_app worker --loglevel=info
+
+# En producción (Docker):
+#   CMD ["celery", "-A", "modulos.celery_app", "worker", "--loglevel=info"]

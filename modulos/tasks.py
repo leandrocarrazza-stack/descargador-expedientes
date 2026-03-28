@@ -1,283 +1,306 @@
 """
-Tareas Asincrónicas para Descargador de Expedientes
-===================================================
+Tareas Celery para descargas asincrónicas
+==========================================
 
-Define tareas que se ejecutan en workers Celery de forma asincrónica.
-Las tareas se ejecutan en background sin bloquear Flask.
+Las tareas se ejecutan en workers de Celery en background.
+Permite que el servidor Flask siga respondiendo mientras se descargan expedientes.
 
-Importante:
-- Cada tarea necesita acceso a Flask app context para SQLAlchemy
-- Implementar reintentos automáticos para fallos de sesión
-- Loguear estados en detalle para debugging
+Uso:
+    celery -A modulos.celery_app worker --loglevel=info
 
-Ejemplo de uso desde Flask:
-    from modulos.tasks import descargar_expediente_task
-
-    # Ejecutar en background (retorna inmediatamente)
-    task = descargar_expediente_task.delay(
-        user_id=1,
-        numero_expediente="21/24"
-    )
-
-    # Obtener estado
-    status = task.status  # 'PENDING', 'PROGRESS', 'SUCCESS', 'FAILURE'
-    result = task.result  # resultado cuando esté listo
+    # En Flask, disparar una tarea:
+    from modulos.celery_app import celery_app
+    task = descargar_expediente_task.delay(user_id, numero_exp)
+    print(task.id)  # ID para hacer polling
 """
 
-import logging
-from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, Optional
 
-from celery import shared_task
 from modulos.celery_app import celery_app
-from modulos.pipeline import PipelineDescargador
 from modulos.database import db
-from modulos.models import ExpedienteDescargado, User
+from modulos.models import User, ExpedienteDescargado
+from modulos.pipeline import PipelineDescargador
+from modulos.selenium_pool import obtener_pool
+from modulos.logger import crear_logger
 
-# NO importar aquí para evitar circular import
-# from servidor import app
-# Se importa lazy dentro de cada función
+import config
 
-logger = logging.getLogger(__name__)
+logger = crear_logger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  TAREA PRINCIPAL: DESCARGAR EXPEDIENTE
+#  TAREA: DESCARGAR EXPEDIENTE
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 @celery_app.task(
     bind=True,
-    max_retries=3,
-    default_retry_delay=60,  # Reintentar en 60 segundos
-    time_limit=600,  # Timeout: 10 minutos
-    acks_late=True,  # Confirmar después de ejecutar
-    name='descargar_expediente_task'
+    name='tareas.descargar_expediente',
+    max_retries=config.MAX_REINTENTOS,
+    default_retry_delay=30  # Reintentar en 30 segundos
 )
-def descargar_expediente_task(self, user_id, numero_expediente):
+def descargar_expediente_task(
+    self,
+    user_id: int,
+    numero_expediente: str,
+    expediente_preseleccionado: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    Descarga asincrónica de un expediente.
+    Tarea asincrónica para descargar un expediente.
+
+    Pasos:
+    1. Validar usuario y créditos
+    2. Ejecutar pipeline de descarga
+    3. Guardar resultado en BD
+    4. Actualizar créditos del usuario
 
     Args:
-        user_id (int): ID del usuario que solicita la descarga
-        numero_expediente (str): Número de expediente (ej: "21/24")
+        user_id: ID del usuario
+        numero_expediente: Ej: "21/24"
+        expediente_preseleccionado: Datos del expediente si ya fue seleccionado
 
     Returns:
         dict: {
-            "exito": bool,
-            "expediente_id": int (si exito),
-            "pdf_url": str (si exito),
-            "error": str (si falla),
-            "tipo_error": str
+            'exito': bool,
+            'expediente_id': int,
+            'pdf_url': str,
+            'mensaje': str,
+            'error': str (si exito=False)
         }
 
     Raises:
-        Reintenta automáticamente si falla (max 3 intentos)
+        Retries automáticos si falla (hasta MAX_REINTENTOS)
     """
 
-    # Información de la tarea
-    logger.info(f"TAREA INICIADA: {self.request.id}")
-    logger.info(f"Usuario: {user_id}, Expediente: {numero_expediente}")
+    logger.info(f"📥 Iniciando descarga: Usuario {user_id}, Expediente {numero_expediente}")
 
-    try:
-        # ═════════════════════════════════════════════════════════════════
-        #  NECESARIO: Contexto de Flask para SQLAlchemy
-        # ═════════════════════════════════════════════════════════════════
-        # Import lazy para evitar circular import
-        from servidor import app
+    # Importar app localmente para evitar importación circular
+    from servidor import app
 
-        with app.app_context():
+    # Ejecutar dentro del contexto de Flask para acceder a la BD
+    with app.app_context():
+        try:
+            # ═════════════════════════════════════════════════════════════════
+            #  PASO 1: Validar usuario y créditos
+            # ═════════════════════════════════════════════════════════════════
 
-            # 1. VALIDAR USUARIO
             usuario = User.query.get(user_id)
             if not usuario:
-                logger.error(f"Usuario {user_id} no encontrado")
                 return {
-                    "exito": False,
-                    "error": "Usuario no encontrado",
-                    "tipo_error": "user_not_found"
+                    'exito': False,
+                    'expediente_id': None,
+                    'pdf_url': None,
+                    'mensaje': 'Usuario no encontrado',
+                    'error': f'Usuario {user_id} no existe'
                 }
 
-            logger.info(f"Usuario validado: {usuario.email}")
+            # Verificar créditos
+            if usuario.creditos_disponibles < 1:
+                return {
+                    'exito': False,
+                    'expediente_id': None,
+                    'pdf_url': None,
+                    'mensaje': 'Créditos insuficientes',
+                    'error': 'No tienes créditos disponibles. Compra más para continuar.'
+                }
 
-            # 2. EJECUTAR PIPELINE DE DESCARGA
-            logger.info(f"Iniciando pipeline...")
+            # ═════════════════════════════════════════════════════════════════
+            #  PASO 2: Ejecutar pipeline
+            # ═════════════════════════════════════════════════════════════════
+
+            logger.info(f"🔄 Ejecutando pipeline para: {numero_expediente}")
+
+            # Obtener driver del pool
+            pool = obtener_pool()
+            # Nota: El PipelineDescargador crea su propio driver internamente
+            # En FASE 4, integraríamos el pool aquí
+
             pipeline = PipelineDescargador()
-            resultado = pipeline.ejecutar(
+            resultado_pipeline = pipeline.ejecutar(
                 numero_expediente=numero_expediente,
-                limpiar_temp=True
+                limpiar_temp=config.LIMPIAR_TEMP
             )
 
-            # 3. PROCESAR RESULTADO
-            if resultado.exito:
-                logger.info(f"Pipeline exitoso. PDF: {resultado.pdf_final}")
+            # ═════════════════════════════════════════════════════════════════
+            #  PASO 3: Guardar resultado en BD
+            # ═════════════════════════════════════════════════════════════════
 
-                # Guardar en BD
+            if resultado_pipeline.exito:
+                logger.info(f"✅ Descarga exitosa: {resultado_pipeline.pdf_final}")
+
+                # Crear registro en BD
+                exp = resultado_pipeline.expediente or {}
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
-                    caratula=resultado.expediente.get('caratula') if resultado.expediente else None,
-                    tribunal=resultado.expediente.get('tribunal') if resultado.expediente else None,
-                    pdf_ruta_temporal=str(resultado.pdf_final) if resultado.pdf_final else None,
+                    caratula=exp.get('caratula') if isinstance(exp, dict) else None,
+                    tribunal=exp.get('tribunal') if isinstance(exp, dict) else None,
+                    pdf_ruta_temporal=str(resultado_pipeline.pdf_final),
                     estado='completed',
-                    error_msg=None
+                    completado_en=datetime.utcnow()
                 )
                 db.session.add(expediente_db)
 
-                # Deducir créditos (solo si éxito)
+                # ═════════════════════════════════════════════════════════════
+                #  PASO 4: Actualizar créditos
+                # ═════════════════════════════════════════════════════════════
+
                 usuario.creditos_disponibles -= 1
+                usuario.creditos_usados_mes = (usuario.creditos_usados_mes or 0) + 1
+
                 db.session.commit()
 
-                logger.info(f"Expediente guardado: {expediente_db.id}")
-                logger.info(f"Créditos deducidos: {usuario.creditos_disponibles} restantes")
+                logger.info(
+                    f"💳 Crédito deducido: Usuario {usuario.email} "
+                    f"ahora tiene {usuario.creditos_disponibles} créditos"
+                )
 
                 return {
-                    "exito": True,
-                    "expediente_id": expediente_db.id,
-                    "pdf_url": f"/descargas/expediente/{expediente_db.id}/descargar",
-                    "numero_expediente": numero_expediente,
-                    "creditos_restantes": usuario.creditos_disponibles
+                    'exito': True,
+                    'expediente_id': expediente_db.id,
+                    'pdf_url': f'/descargas/expediente/{expediente_db.id}/descargar',
+                    'mensaje': f'Expediente {numero_expediente} descargado exitosamente',
+                    'creditos_restantes': usuario.creditos_disponibles
                 }
 
             else:
-                # Pipeline falló o necesita intervención
-                logger.error(f"Pipeline falló: {resultado.error}")
+                logger.error(f"❌ Fallo en pipeline: {resultado_pipeline.error}")
 
-                # ESPECIAL: Si hay múltiples expedientes, retornar lista para selector web
-                if resultado.tipo_error == "multiple_results" and resultado.expedientes_disponibles:
-                    logger.info(f"Múltiples expedientes encontrados, retornando lista para selección")
-                    return {
-                        "exito": False,
-                        "error": resultado.error,
-                        "tipo_error": "multiple_results",
-                        "expedientes_disponibles": resultado.expedientes_disponibles,
-                        "creditos_disponibles": usuario.creditos_disponibles
-                    }
-
-                # Guardar intento fallido (sin deducir créditos)
+                # Registrar intento fallido en BD
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
                     estado='failed',
-                    error_msg=resultado.error,
-                    caratula=None,
-                    tribunal=None,
-                    pdf_ruta_temporal=None
+                    error_msg=str(resultado_pipeline.error),
+                    completado_en=datetime.utcnow()
                 )
                 db.session.add(expediente_db)
                 db.session.commit()
 
-                logger.info(f"Intento fallido guardado en BD")
+                # Reintentar si aún hay intentos
+                if self.request.retries < self.max_retries:
+                    logger.warning(
+                        f"🔄 Reintentando descarga ({self.request.retries + 1}/"
+                        f"{self.max_retries})..."
+                    )
+                    raise self.retry(exc=Exception(resultado_pipeline.error))
 
-                # Reintentar si es error de sesión (SesionNoValida, etc)
-                if "sesion" in resultado.error.lower() or "expirado" in resultado.error.lower():
-                    logger.warning(f"Sesión inválida, reintentando en 60s...")
-                    # Celery reintentará automáticamente
-                    raise Exception(f"Sesión inválida: {resultado.error}")
-
-                # Otros errores no se retentan
                 return {
-                    "exito": False,
-                    "error": resultado.error,
-                    "tipo_error": resultado.tipo_error or "unknown",
-                    "creditos_disponibles": usuario.creditos_disponibles
+                    'exito': False,
+                    'expediente_id': expediente_db.id,
+                    'pdf_url': None,
+                    'mensaje': f'Error al descargar: {resultado_pipeline.error}',
+                    'error': str(resultado_pipeline.error)
                 }
 
-    except Exception as exc:
-        """
-        Manejo de excepciones no esperadas.
-        Reintenta automáticamente si se configura max_retries.
-        """
-        logger.error(f"Excepción en tarea: {str(exc)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"💥 Error inesperado en tarea: {str(e)}", exc_info=True)
 
-        # Contar reintentos
-        retry_count = self.request.retries
-        logger.warning(f"Reintento {retry_count} de {self.max_retries}")
+            # Reintentar si es posible
+            if self.request.retries < self.max_retries:
+                logger.warning(
+                    f"🔄 Reintentando por error ({self.request.retries + 1}/"
+                    f"{self.max_retries})..."
+                )
+                raise self.retry(exc=e)
 
-        # Reintentar si no llegó al máximo
-        if self.request.retries < self.max_retries:
-            logger.info(f"Reintentando en 60 segundos...")
-            raise self.retry(exc=exc, countdown=60)
-
-        # Máx reintentos alcanzado
-        logger.error(f"Máximo de reintentos alcanzado para {numero_expediente}")
-
-        try:
-            from servidor import app
-            with app.app_context():
-                usuario = User.query.get(user_id)
-                return {
-                    "exito": False,
-                    "error": f"Error después de {self.max_retries} reintentos: {str(exc)}",
-                    "tipo_error": "max_retries_exceeded",
-                    "creditos_disponibles": usuario.creditos_disponibles if usuario else 0
-                }
-        except:
             return {
-                "exito": False,
-                "error": f"Error fatal: {str(exc)}",
-                "tipo_error": "fatal_error",
-                "creditos_disponibles": 0
+                'exito': False,
+                'expediente_id': None,
+                'pdf_url': None,
+                'mensaje': 'Error inesperado durante la descarga',
+                'error': str(e)
             }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  TAREA AUXILIAR: LIMPIAR ARCHIVOS ANTIGUOS (Opcional)
+#  TAREA: LIMPIAR DESCARGAS ANTIGUAS
 # ═══════════════════════════════════════════════════════════════════════════
 
-@celery_app.task(
-    bind=True,
-    name='limpiar_archivos_antiguos_task'
-)
-def limpiar_archivos_antiguos_task(self):
+@celery_app.task(name='tareas.limpiar_descargas_antiguas')
+def limpiar_descargas_antiguas_task(dias: int = 7) -> Dict[str, Any]:
     """
-    Tarea periódica que limpia archivos PDF temporales más antiguos de 7 días.
+    Limpia expedientes descargados hace más de X días.
 
-    Se puede ejecutar con schedule periódico (ej: diariamente).
+    Tarea programada (ej: cada medianoche).
+
+    Args:
+        dias: Eliminar descargas más antiguas que X días
 
     Returns:
-        dict: {"archivos_eliminados": int, "espacio_liberado_mb": float}
+        dict: Cantidad de registros eliminados
     """
-    logger.info("Iniciando limpieza de archivos antiguos...")
+    from datetime import timedelta
 
-    try:
-        from datetime import datetime, timedelta
-        import os
-        from servidor import app
+    logger.info(f"🧹 Limpiando descargas más antiguas de {dias} días")
 
-        with app.app_context():
-            # Configurar carpeta de descargas
-            descargas_dir = Path(__file__).parent.parent / "descargas"
+    # Importar app localmente para evitar importación circular
+    from servidor import app
 
-            if not descargas_dir.exists():
-                logger.warning(f"Carpeta {descargas_dir} no existe")
-                return {"archivos_eliminados": 0, "espacio_liberado_mb": 0}
+    with app.app_context():
+        try:
+            fecha_limite = datetime.utcnow() - timedelta(days=dias)
 
-            # Buscar archivos más antiguos de 7 días
-            ahora = datetime.now()
-            siete_dias_atras = ahora - timedelta(days=7)
-            archivos_eliminados = 0
-            espacio_liberado = 0
+            # Buscar expedientes antiguos
+            expedientes_viejos = ExpedienteDescargado.query.filter(
+                ExpedienteDescargado.completado_en < fecha_limite
+            ).all()
 
-            for archivo in descargas_dir.glob("Expediente_*.pdf"):
-                tiempo_modificacion = datetime.fromtimestamp(archivo.stat().st_mtime)
+            cantidad = len(expedientes_viejos)
 
-                if tiempo_modificacion < siete_dias_atras:
-                    tamaño_kb = archivo.stat().st_size / 1024
-                    archivo.unlink()  # Eliminar
-                    archivos_eliminados += 1
-                    espacio_liberado += tamaño_kb
+            # Eliminar archivos y registros
+            for exp in expedientes_viejos:
+                if exp.pdf_ruta_temporal:
+                    try:
+                        from pathlib import Path
+                        Path(exp.pdf_ruta_temporal).unlink(missing_ok=True)
+                    except Exception as e:
+                        logger.warning(f"⚠️ No se pudo eliminar {exp.pdf_ruta}: {e}")
 
-                    logger.info(f"Eliminado: {archivo.name} ({tamaño_kb:.2f} KB)")
+                db.session.delete(exp)
 
-            logger.info(f"Limpieza completada: {archivos_eliminados} archivos, {espacio_liberado / 1024:.2f} MB liberados")
+            db.session.commit()
+
+            logger.info(f"✅ {cantidad} descargas antiguas eliminadas")
 
             return {
-                "archivos_eliminados": archivos_eliminados,
-                "espacio_liberado_mb": espacio_liberado / 1024
+                'exito': True,
+                'cantidad_eliminada': cantidad
             }
 
-    except Exception as exc:
-        logger.error(f"Error en limpieza: {str(exc)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"❌ Error al limpiar descargas: {e}")
+            return {
+                'exito': False,
+                'error': str(e)
+            }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  TAREA: LIMPIAR POOL DE SELENIUM
+# ═══════════════════════════════════════════════════════════════════════════
+
+@celery_app.task(name='tareas.verificar_pool_selenium')
+def verificar_pool_selenium_task() -> Dict[str, Any]:
+    """
+    Verifica el estado del pool de Selenium.
+
+    Tarea de monitoreo que se puede ejecutar periódicamente.
+
+    Returns:
+        dict: Estado del pool
+    """
+    try:
+        pool = obtener_pool()
+        estado = pool.estado()
+        logger.info(f"📊 Estado del pool Selenium: {estado}")
         return {
-            "exito": False,
-            "error": str(exc)
+            'exito': True,
+            'estado': estado
+        }
+    except Exception as e:
+        logger.error(f"❌ Error al verificar pool: {e}")
+        return {
+            'exito': False,
+            'error': str(e)
         }

@@ -1,56 +1,73 @@
 """
-Configuración de Celery para Descargador de Expedientes
-========================================================
+Configuración de Celery para tareas asincrónicas
+================================================
 
-Celery es un task queue distribuido que permite ejecutar tareas
-de larga duración en background sin bloquear el servidor Flask.
-
-Arquitectura:
-- Broker (Redis): Cola de tareas
-- Worker: Procesos que ejecutan tareas
-- Result Backend (Redis): Almacena resultados
+Inicializa Celery con Redis como broker.
+Permite ejecutar tareas en background sin bloquear el servidor.
 
 Uso:
-    # En otra terminal, ejecutar worker:
-    python worker.py
-
-    # O con Celery directamente:
-    celery -A modulos.celery_app worker --pool=solo (Windows)
-    celery -A modulos.celery_app worker (Linux/Mac)
+    celery -A modulos.celery_app worker --loglevel=info
 """
 
 from celery import Celery
 import config
-import logging
-
-logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CREAR INSTANCIA DE CELERY
 # ═══════════════════════════════════════════════════════════════════════════
 
-celery_app = Celery(__name__)
+celery_app = Celery(
+    __name__,
+    broker=config.CELERY_BROKER_URL,
+    backend=config.CELERY_RESULT_BACKEND
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CARGAR CONFIGURACIÓN DESDE config.py
+#  CONFIGURAR CELERY
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Método 1: Usar CELERY_CONFIG (recomendado)
-celery_app.config_from_object(config.CELERY_CONFIG)
+celery_app.conf.update(
+    task_serializer='json',
+    accept_content=['json'],
+    result_serializer='json',
+    timezone='America/Argentina/Buenos_Aires',
+    enable_utc=False,
 
-# Método 2: Configuración individual (por compatibilidad)
-celery_app.conf.broker_url = config.CELERY_BROKER_URL
-celery_app.conf.result_backend = config.CELERY_RESULT_BACKEND
+    # Timeouts
+    task_soft_time_limit=3600,  # Soft limit: 1 hora
+    task_time_limit=3700,        # Hard limit: 1 hora + 100s para cleanup
+
+    # Reintentos
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
+
+    # Resultados
+    result_expires=3600,  # Guardar resultados por 1 hora
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  AUTO-DISCOVER DE TAREAS
+#  AUTODISCOVER
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Buscar automáticamente tareas en modulos/tasks.py
-# (Se ejecuta cuando se importa este módulo)
+# Autodiscover tareas en modulos
 celery_app.autodiscover_tasks(['modulos'])
 
-logger.info(f"✅ Celery configurado")
-logger.info(f"   Broker: {config.CELERY_BROKER_URL}")
-logger.info(f"   Backend: {config.CELERY_RESULT_BACKEND}")
-logger.info(f"   Pool: {config.CELERY_POOL}")
+# ═══════════════════════════════════════════════════════════════════════════
+#  INTEGRACIÓN CON FLASK
+# ═══════════════════════════════════════════════════════════════════════════
+
+def init_celery_with_app(app):
+    """
+    Integra Celery con la app Flask de forma simple.
+
+    Args:
+        app: Instancia de Flask app
+
+    Returns:
+        celery_app: Instancia de Celery
+    """
+    # Configurar que la app Flask esté disponible en las tareas
+    # Las tareas pueden usar: from flask import current_app
+    # O pueden acceder a la BD sin problemas porque SQLAlchemy
+    # está configurado con Flask
+    return celery_app

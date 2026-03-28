@@ -15,6 +15,10 @@ import os
 import logging
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN BASE

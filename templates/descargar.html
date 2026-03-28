@@ -1,0 +1,431 @@
+{% extends "base.html" %}
+
+{% block titulo %}Descargar Expediente{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+  <!-- Encabezado -->
+  <div class="row mb-5">
+    <div class="col-lg-8 mx-auto">
+      <h1 class="display-5 fw-bold mb-2">📥 Descargar Expediente</h1>
+      <p class="lead text-muted">
+        Ingresa el número de expediente para descargar todos sus archivos en PDF
+      </p>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <div class="row mb-5">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+
+          <!-- Estado de créditos -->
+          <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <div>
+              <strong>💳 Créditos disponibles:</strong>
+              <span id="creditos-disponibles" class="badge bg-primary">{{ current_user.creditos_disponibles }}</span>
+            </div>
+            <small class="text-muted">Cada descarga cuesta 1 crédito ($3.000 ARS)</small>
+          </div>
+
+          <!-- Formulario de búsqueda -->
+          <form id="form-descarga" class="mb-3">
+            <div class="mb-3">
+              <label for="numero-expediente" class="form-label fw-semibold">
+                Número de Expediente
+              </label>
+              <input
+                type="text"
+                class="form-control form-control-lg"
+                id="numero-expediente"
+                name="numero_expediente"
+                placeholder="Ej: 21/24, 2024/12345, etc."
+                required
+              >
+              <small class="text-muted">Formato: año/número</small>
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary btn-lg w-100"
+              id="btn-descargar"
+            >
+              <i class="bi bi-download me-2"></i>Descargar Ahora
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de progreso (oculta inicialmente) -->
+  <div class="row mb-5" id="progreso-container" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0">
+        <div class="card-body p-4">
+
+          <h5 class="fw-semibold mb-1">Descargando expediente <span id="detalles-numero" class="text-primary"></span></h5>
+          <p class="text-muted small mb-4">Este proceso puede tardar entre 1 y 3 minutos.</p>
+
+          <!-- Barra de progreso con porcentaje -->
+          <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+              <span id="estado-texto" class="small text-muted">Iniciando...</span>
+              <span id="progreso-texto" class="small fw-semibold text-primary">0%</span>
+            </div>
+            <div class="progress" style="height: 18px; border-radius: 10px;">
+              <div
+                class="progress-bar progress-bar-striped progress-bar-animated"
+                id="progreso-barra"
+                role="progressbar"
+                style="width: 0%; transition: width 1.5s ease;"
+                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+              ></div>
+            </div>
+          </div>
+
+          <!-- Etapas del proceso -->
+          <div class="mt-4">
+            <div class="d-flex flex-column gap-2" id="etapas-lista">
+              <div class="d-flex align-items-center gap-2" id="etapa-0">
+                <span class="badge rounded-pill bg-secondary" id="etapa-0-badge" style="width:24px; height:24px; line-height:16px;">1</span>
+                <span class="small text-muted" id="etapa-0-texto">Autenticando en Mesa Virtual...</span>
+              </div>
+              <div class="d-flex align-items-center gap-2" id="etapa-1">
+                <span class="badge rounded-pill bg-secondary" id="etapa-1-badge" style="width:24px; height:24px; line-height:16px;">2</span>
+                <span class="small text-muted" id="etapa-1-texto">Buscando expediente...</span>
+              </div>
+              <div class="d-flex align-items-center gap-2" id="etapa-2">
+                <span class="badge rounded-pill bg-secondary" id="etapa-2-badge" style="width:24px; height:24px; line-height:16px;">3</span>
+                <span class="small text-muted" id="etapa-2-texto">Descargando archivos...</span>
+              </div>
+              <div class="d-flex align-items-center gap-2" id="etapa-3">
+                <span class="badge rounded-pill bg-secondary" id="etapa-3-badge" style="width:24px; height:24px; line-height:16px;">4</span>
+                <span class="small text-muted" id="etapa-3-texto">Convirtiendo y unificando PDF...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Botón cancelar -->
+          <div class="mt-4">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-cancelar">
+              <i class="bi bi-x-circle me-1"></i>Cancelar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de resultado (éxito) -->
+  <div class="row mb-5" id="resultado-exito" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0 border-success border-3">
+        <div class="card-body p-4 text-center">
+
+          <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+
+          <h3 class="mt-3 mb-2">✅ ¡Descarga Exitosa!</h3>
+          <p class="text-muted mb-4">
+            Tu expediente está listo para descargar
+          </p>
+
+          <!-- Detalles del resultado -->
+          <div class="alert alert-light text-start mb-4">
+            <small>
+              <strong>Expediente:</strong> <span id="resultado-numero">—</span> <br>
+              <strong>Caratula:</strong> <span id="resultado-caratula">—</span> <br>
+              <strong>Créditos restantes:</strong>
+              <strong class="text-success" id="resultado-creditos">—</strong>
+            </small>
+          </div>
+
+          <!-- Botones -->
+          <div class="d-flex gap-2">
+            <a href="#" class="btn btn-success flex-grow-1" id="btn-descargar-pdf">
+              <i class="bi bi-download me-2"></i>Descargar PDF
+            </a>
+            <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-outline-secondary flex-grow-1">
+              <i class="bi bi-clock-history me-2"></i>Historial
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Área de resultado (error) -->
+  <div class="row mb-5" id="resultado-error" style="display: none;">
+    <div class="col-lg-8 mx-auto">
+      <div class="card shadow-sm border-0 border-danger border-3">
+        <div class="card-body p-4 text-center">
+
+          <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+
+          <h3 class="mt-3 mb-2">❌ Error en Descarga</h3>
+
+          <div class="alert alert-danger text-start mb-4">
+            <strong>Motivo:</strong>
+            <p id="error-mensaje" class="mb-0">—</p>
+          </div>
+
+          <!-- Botones -->
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary flex-grow-1" onclick="location.reload()">
+              <i class="bi bi-arrow-clockwise me-2"></i>Reintentar
+            </button>
+            <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-outline-secondary flex-grow-1">
+              <i class="bi bi-clock-history me-2"></i>Historial
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historial reciente -->
+  <div class="row mt-5 pt-5">
+    <div class="col-lg-8 mx-auto">
+      <h3 class="fw-bold mb-3">📋 Últimas Descargas</h3>
+      <div id="historial-container">
+        <p class="text-muted">Cargando historial...</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+// ═════════════════════════════════════════════════════════════════════════
+//  DESCARGA SINCRÓNICA
+//  El backend ejecuta todo el pipeline y devuelve el resultado final.
+//  No hay task_id ni polling — simplemente esperamos la respuesta del fetch.
+//  (La descarga puede tardar 1-2 minutos mientras Selenium trabaja)
+// ═════════════════════════════════════════════════════════════════════════
+
+// ── Etapas del pipeline con tiempos estimados reales ──────────────────────
+// Cada etapa tiene: texto, % al llegar, segundos estimados desde el inicio
+const ETAPAS = [
+  { idx: 0, texto: 'Autenticando en Mesa Virtual...',   porcentaje: 10, segundos: 2  },
+  { idx: 1, texto: 'Buscando expediente...',            porcentaje: 25, segundos: 12 },
+  { idx: 2, texto: 'Descargando archivos...',           porcentaje: 75, segundos: 30 },
+  { idx: 3, texto: 'Convirtiendo y unificando PDF...',  porcentaje: 95, segundos: 80 },
+];
+
+let etapaTimers = [];
+
+function iniciarAnimacionEtapas() {
+  const barra    = document.getElementById('progreso-barra');
+  const pctTexto = document.getElementById('progreso-texto');
+  const estTexto = document.getElementById('estado-texto');
+
+  // Resetear badges
+  for (let i = 0; i < 4; i++) {
+    document.getElementById(`etapa-${i}-badge`).className =
+      'badge rounded-pill bg-secondary';
+    document.getElementById(`etapa-${i}-badge`).innerHTML = i + 1;
+    document.getElementById(`etapa-${i}-texto`).className = 'small text-muted';
+  }
+
+  ETAPAS.forEach(etapa => {
+    const t = setTimeout(() => {
+      // Activar etapa actual
+      const badge = document.getElementById(`etapa-${etapa.idx}-badge`);
+      const texto = document.getElementById(`etapa-${etapa.idx}-texto`);
+      badge.className = 'badge rounded-pill bg-primary';
+      badge.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      texto.className = 'small fw-semibold text-primary';
+
+      // Marcar etapa anterior como completada
+      if (etapa.idx > 0) {
+        const prevBadge = document.getElementById(`etapa-${etapa.idx - 1}-badge`);
+        const prevTexto = document.getElementById(`etapa-${etapa.idx - 1}-texto`);
+        prevBadge.className = 'badge rounded-pill bg-success';
+        prevBadge.innerHTML = '<i class="bi bi-check"></i>';
+        prevTexto.className = 'small text-success';
+      }
+
+      // Actualizar barra y texto
+      barra.style.width = etapa.porcentaje + '%';
+      barra.setAttribute('aria-valuenow', etapa.porcentaje);
+      pctTexto.textContent = etapa.porcentaje + '%';
+      estTexto.textContent = etapa.texto;
+
+    }, etapa.segundos * 1000);
+    etapaTimers.push(t);
+  });
+}
+
+function detenerAnimacion() {
+  etapaTimers.forEach(t => clearTimeout(t));
+  etapaTimers = [];
+}
+
+function marcarExitoAnimacion() {
+  detenerAnimacion();
+  // Marcar todas las etapas como completadas
+  for (let i = 0; i < 4; i++) {
+    const badge = document.getElementById(`etapa-${i}-badge`);
+    const texto = document.getElementById(`etapa-${i}-texto`);
+    badge.className = 'badge rounded-pill bg-success';
+    badge.innerHTML = '<i class="bi bi-check"></i>';
+    texto.className = 'small text-success';
+  }
+  const barra = document.getElementById('progreso-barra');
+  barra.style.width = '100%';
+  barra.className = 'progress-bar bg-success';
+  document.getElementById('progreso-texto').textContent = '100%';
+  document.getElementById('estado-texto').textContent = 'Completado';
+}
+
+function marcarErrorAnimacion(mensaje) {
+  detenerAnimacion();
+  const barra = document.getElementById('progreso-barra');
+  barra.className = 'progress-bar bg-danger';
+  document.getElementById('estado-texto').textContent = 'Error: ' + mensaje;
+}
+
+// ── Submit del formulario ──────────────────────────────────────────────────
+
+document.getElementById('form-descarga').addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const numeroExpediente = document.getElementById('numero-expediente').value.trim();
+
+  if (!numeroExpediente) {
+    alert('Por favor ingresa un número de expediente');
+    return;
+  }
+
+  const creditosDisponibles = parseInt(
+    document.getElementById('creditos-disponibles').textContent
+  );
+
+  if (creditosDisponibles < 1) {
+    alert('No tienes créditos disponibles. Compra más para continuar.');
+    return;
+  }
+
+  // Mostrar panel de progreso y arrancar animación de etapas
+  document.getElementById('form-descarga').parentElement.style.display = 'none';
+  document.getElementById('progreso-container').style.display = 'block';
+  document.getElementById('detalles-numero').textContent = numeroExpediente;
+  iniciarAnimacionEtapas();
+
+  try {
+    // El fetch bloquea hasta que el pipeline termina (1-3 minutos)
+    const response = await fetch('/descargas/expediente', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numero_expediente: numeroExpediente })
+    });
+
+    const data = await response.json();
+
+    if (data.exito) {
+      marcarExitoAnimacion();
+      setTimeout(() => {
+        document.getElementById('progreso-container').style.display = 'none';
+        document.getElementById('resultado-exito').style.display = 'block';
+        document.getElementById('resultado-numero').textContent = numeroExpediente;
+        document.getElementById('resultado-creditos').textContent =
+          data.creditos_restantes !== undefined ? data.creditos_restantes : '—';
+        document.getElementById('btn-descargar-pdf').href = data.pdf_url;
+      }, 800);  // pequeña pausa para que el usuario vea el 100%
+
+    } else {
+      marcarErrorAnimacion(data.mensaje || 'Error desconocido');
+      setTimeout(() => {
+        document.getElementById('progreso-container').style.display = 'none';
+        document.getElementById('resultado-error').style.display = 'block';
+        document.getElementById('error-mensaje').textContent =
+          data.mensaje || 'Error desconocido';
+      }, 800);
+    }
+
+  } catch (error) {
+    console.error('Error:', error);
+    document.getElementById('progreso-container').style.display = 'none';
+    document.getElementById('resultado-error').style.display = 'block';
+    document.getElementById('error-mensaje').textContent =
+      'Error de conexión: ' + error.message;
+  }
+});
+
+// Cancelar simplemente recarga la página (en modo sincrónico no se puede
+// interrumpir la tarea que ya está corriendo en el servidor)
+document.getElementById('btn-cancelar').addEventListener('click', function() {
+  if (confirm('¿Cancelar? La descarga seguirá corriendo en el servidor hasta terminar.')) {
+    location.reload();
+  }
+});
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  CARGAR HISTORIAL
+// ═════════════════════════════════════════════════════════════════════════
+
+async function cargar_historial() {
+  try {
+    const response = await fetch('/descargas/historial?limite=5');
+    const data = await response.json();
+
+    const container = document.getElementById('historial-container');
+
+    if (!data.exito || data.expedientes.length === 0) {
+      container.innerHTML = '<p class="text-muted">Sin descargas anteriores</p>';
+      return;
+    }
+
+    let html = '<div class="list-group">';
+
+    for (const exp of data.expedientes) {
+      const badge = exp.estado === 'completed'
+        ? '<span class="badge bg-success">✓</span>'
+        : '<span class="badge bg-danger">✗</span>';
+
+      const link = exp.estado === 'completed'
+        ? `<a href="${exp.pdf_url}" class="text-primary">Descargar</a>`
+        : '<span class="text-muted">—</span>';
+
+      html += `
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h6 class="mb-1">Expediente ${exp.numero} ${badge}</h6>
+              <small class="text-muted">${exp.caratula || '—'}</small>
+            </div>
+            <div class="text-end">
+              <small class="text-muted">
+                ${new Date(exp.descargado_en).toLocaleString('es-AR')}
+              </small> <br>
+              ${link}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+
+  } catch (error) {
+    console.error('Error al cargar historial:', error);
+    document.getElementById('historial-container').innerHTML =
+      '<p class="text-danger">Error al cargar historial</p>';
+  }
+}
+
+// Cargar historial al iniciar
+document.addEventListener('DOMContentLoaded', cargar_historial);
+
+</script>
+{% endblock %}

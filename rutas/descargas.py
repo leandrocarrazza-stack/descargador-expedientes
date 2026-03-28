@@ -29,18 +29,21 @@ descargas_bp = Blueprint('descargas', __name__, url_prefix='/descargas')
 PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
 
 
-@descargas_bp.route('/expediente', methods=['POST'])
+@descargas_bp.route('/expediente', methods=['GET', 'POST'])
 @login_required
 def descargar_expediente_sync():
     """
     Descarga sincrónica de expediente.
 
-    Request JSON:
+    GET: Retorna formulario HTML para ingresar número de expediente
+    POST: Ejecuta la descarga del expediente
+
+    Request JSON (POST):
         {
             "numero_expediente": "21/24"
         }
 
-    Response JSON:
+    Response JSON (POST):
         {
             "exito": true,
             "expediente_id": 123,
@@ -54,10 +57,19 @@ def descargar_expediente_sync():
         - 402: Créditos insuficientes
         - 500: Error en descarga (sesión expirada, expediente no encontrado, etc)
     """
+    # Si es GET, mostrar formulario
+    if request.method == 'GET':
+        return render_template('descargar_expediente.html',
+                             creditos=current_user.creditos_disponibles)
+
+    # Si es POST, procesar descarga
     try:
         # 1. PARSEAR REQUEST
         data = request.get_json() or {}
         numero_expediente = data.get('numero_expediente', '').strip()
+        indice_expediente = data.get('indice_expediente')  # Opcional: cuál elegir si hay múltiples
+        if indice_expediente is not None:
+            indice_expediente = int(indice_expediente)
 
         # 2. VALIDAR ENTRADA
         if not numero_expediente:
@@ -67,8 +79,8 @@ def descargar_expediente_sync():
                 'mensaje': 'Número de expediente requerido'
             }), 400
 
-        # 3. VALIDAR CRÉDITOS
-        if current_user.creditos_disponibles < 1:
+        # 3. VALIDAR CRÉDITOS (los admins están exentos del límite)
+        if not current_user.is_admin and current_user.creditos_disponibles < 1:
             logger.warning(f"Usuario {current_user.id} sin créditos (tiene {current_user.creditos_disponibles})")
             return jsonify({
                 'exito': False,
@@ -78,12 +90,13 @@ def descargar_expediente_sync():
             }), 402
 
         # 4. EJECUTAR PIPELINE SINCRÓNICO (BLOQUEANTE)
-        logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}")
+        logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}, Índice {indice_expediente}")
 
         pipeline = PipelineDescargador()
         resultado = pipeline.ejecutar(
             numero_expediente=numero_expediente,
-            limpiar_temp=config.LIMPIAR_TEMP
+            limpiar_temp=config.LIMPIAR_TEMP,
+            indice_expediente=indice_expediente
         )
 
         # 5. PROCESAR RESULTADO DEL PIPELINE
@@ -102,11 +115,12 @@ def descargar_expediente_sync():
             )
             db.session.add(expediente_db)
 
-            # Deducir créditos
-            current_user.creditos_disponibles -= 1
+            # Deducir créditos (los admins no gastan)
+            if not current_user.is_admin:
+                current_user.creditos_disponibles -= 1
             db.session.commit()
 
-            logger.info(f"Créditos deducidos: Usuario {current_user.id} ahora tiene {current_user.creditos_disponibles}")
+            logger.info(f"Descarga registrada: Usuario {current_user.id} (admin={current_user.is_admin}), créditos restantes: {current_user.creditos_disponibles}")
 
             return jsonify({
                 'exito': True,
@@ -116,8 +130,18 @@ def descargar_expediente_sync():
                 'mensaje': 'Expediente descargado exitosamente'
             }), 200
 
+        elif resultado.tipo_error == 'multiples_opciones':
+            # Hay múltiples expedientes: no se descuenta crédito, se devuelven las opciones
+            logger.info(f"Múltiples resultados para {numero_expediente}: {len(resultado.opciones)} opciones")
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'multiples_opciones',
+                'opciones': resultado.opciones,
+                'mensaje': f'Se encontraron {len(resultado.opciones)} expedientes con ese número. Seleccioná cuál descargar.'
+            }), 200
+
         else:
-            # Error en pipeline
+            # Error real en pipeline
             logger.error(f"Error en descarga: {numero_expediente} - {resultado.error}")
 
             # Guardar intento fallido en BD (sin deducir créditos)

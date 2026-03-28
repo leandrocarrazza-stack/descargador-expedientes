@@ -26,6 +26,7 @@ class BuscadorExpedientes:
         """
         self.cliente = cliente_selenium
         self.timeout = timeout
+        self._opciones_multiples = []  # Lista de opciones cuando hay múltiples resultados
 
     def buscar(self, numero, indice_expediente=None):
         """
@@ -213,9 +214,21 @@ class BuscadorExpedientes:
                 exp = expedientes[0]
                 print(f"    Encontrado: {exp.get('caratula', 'Sin descripción')}")
                 print(f"      Número: {exp.get('numero')}")
+                # IMPORTANTE: Hacer click para entrar a los detalles
+                print(f"\n   > Entrando a página de detalles del expediente...")
+                resultado_index = exp.get('_resultado_index', 0)
+                self._clickear_expediente(driver, resultado_index, exp)
                 return exp
 
-            # Si hay múltiples resultados, pedir que el usuario elija
+            # Si hay múltiples resultados, el usuario debe elegir cuál descargar
+            if indice_expediente is None:
+                # No hay índice: guardar opciones y retornar None para que el pipeline
+                # pueda informar al frontend y esperar que el usuario elija
+                print(f"\n   [MULTIPLES] {len(expedientes)} resultados encontrados, se requiere selección del usuario")
+                self._opciones_multiples = expedientes
+                return None
+
+            # Hay índice especificado: seleccionar ese expediente
             expediente_elegido = self._elegir_expediente(expedientes, driver, indice_expediente)
 
             if expediente_elegido:

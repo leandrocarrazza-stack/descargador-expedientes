@@ -4,7 +4,21 @@
       "Bash(timeout 300 python test_descarga_completa.py)",
       "Bash(timeout 180 python -c \":*)",
       "Bash(ls -1 modulos/*.py)",
-      "Bash(timeout 300 python test_e2e_flujo_completo.py)"
+      "Bash(timeout 300 python test_e2e_flujo_completo.py)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(find . -type d -name \"__pycache__\" -exec rm -rf {} +)",
+      "Bash(find . -type f -name \"*.pyc\" -delete)",
+      "Bash(rm -f ./*.log server.log worker.log worker_celery.log)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"Agregar configuración CELERY_CONFIG a config.py:*)",
+      "Bash(git rm:*)",
+      "Bash(git commit -m \"Limpiar archivos de log innecesarios:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git commit -m \"Agregar archivos Celery copiados del worktree:*)",
+      "Bash(git rebase:*)",
+      "Bash(git commit -m \"Resolver conflictos de merge con origin/main:*)"
     ]
   }
 }

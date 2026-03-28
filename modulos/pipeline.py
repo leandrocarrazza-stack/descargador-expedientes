@@ -37,6 +37,7 @@ class ResultadoPipeline:
     tipo_error: Optional[str] = None
     movimientos: Optional[List[Dict]] = None
     archivos_descargados: int = 0
+    opciones: Optional[List[Dict[str, Any]]] = None  # Cuando hay múltiples expedientes
 
 
 class PipelineDescargador:
@@ -50,7 +51,7 @@ class PipelineDescargador:
         self.unificador: Optional[UnificadorPDF] = None
         self.carpeta_temp: Optional[Path] = None
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -77,9 +78,24 @@ class PipelineDescargador:
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
             self.buscador = BuscadorExpedientes(self.cliente)
-            resultado_busqueda = self.buscador.buscar(numero_expediente)
+            resultado_busqueda = self.buscador.buscar(numero_expediente, indice_expediente=indice_expediente)
 
             if not resultado_busqueda:
+                # Verificar si hay múltiples opciones pendientes de selección
+                if self.buscador._opciones_multiples:
+                    opciones = self.buscador._opciones_multiples
+                    logger.info(f"[MULTIPLES] {len(opciones)} expedientes encontrados, requiere selección")
+                    return ResultadoPipeline(
+                        exito=False,
+                        tipo_error="multiples_opciones",
+                        opciones=[{
+                            'indice': i + 1,
+                            'numero': op.get('numero', ''),
+                            'caratula': op.get('caratula', 'Sin descripción'),
+                            'tribunal': op.get('tribunal', 'No especificado'),
+                        } for i, op in enumerate(opciones)]
+                    )
+
                 logger.error(f"Expediente no encontrado: {numero_expediente}")
                 return ResultadoPipeline(
                     exito=False,
@@ -100,24 +116,10 @@ class PipelineDescargador:
             # Crear descargador con carpeta temp
             self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp)
 
-            # Obtener movimientos
-            movimientos = self.descargador.obtener_movimientos(numero_expediente)
-            logger.info(f"[OK] {len(movimientos) if movimientos else 0} movimientos encontrados")
-
-            if not movimientos:
-                logger.warning(f"No hay movimientos para {numero_expediente}")
-                return ResultadoPipeline(
-                    exito=False,
-                    error="No hay archivos para descargar",
-                    tipo_error="no_files",
-                    expediente=expediente
-                )
-
-            # Descargar archivos (carpeta_temp ya está en self.descargador)
-            archivos_descargados = self.descargador.descargar_archivos(
-                numero_expediente,
-                movimientos
-            )
+            # Descargar por paginas: en cada pagina descargamos todos los archivos
+            # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
+            # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
+            archivos_descargados = self.descargador.descargar_todo_por_paginas(numero_expediente)
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
 
             if not archivos_descargados:
@@ -128,18 +130,31 @@ class PipelineDescargador:
                     expediente=expediente
                 )
 
+            # CERRAR CLIENTE AQUÍ para evitar crash
+            # El navegador ya no se necesita, conversión/unificación no requieren driver
+            logger.info("[CLEANUP] Cerrando navegador para evitar crash")
+            if self.cliente:
+                try:
+                    self.cliente.cerrar()
+                    self.cliente = None
+                    logger.info("[OK] Navegador cerrado exitosamente")
+                except Exception as e:
+                    logger.warning(f"[WARN] Error al cerrar navegador: {e}")
+
             # PASO 4: CONVERSIÓN RTF>PDF
             logger.info("[PASO 4/5] Conversión RTF>PDF")
             self.conversor = ConversorRTF()
 
-            # Convertir archivos descargados
-            # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
+            # Convertir archivos descargados manteniendo metadata
+            # descargar_todo_por_paginas() retorna {path, tipo, movimiento, url}
             archivos_convertidos = []
             for arch in archivos_descargados:
                 ruta_original = arch['path']
                 pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
                 if pdf_convertido:
-                    archivos_convertidos.append(pdf_convertido)
+                    # Actualizar ruta con conversión realizada, mantener metadata
+                    arch['path'] = pdf_convertido
+                    archivos_convertidos.append(arch)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
@@ -155,15 +170,8 @@ class PipelineDescargador:
             logger.info("[PASO 5/5] Unificación de PDFs")
             self.unificador = UnificadorPDF(config.OUTPUT_DIR)
 
-            # Obtener rutas de archivos convertidos
-            rutas_para_unificar = [
-                str(arch)
-                for arch in archivos_convertidos
-            ]
-
-            # Nombre sanitizado
-            nombre_carpeta = numero_expediente.replace('/', '_')
-            pdf_final = self.unificador.unificar(rutas_para_unificar, nombre_carpeta)
+            # Pasar archivos con metadata al unificador
+            pdf_final = self.unificador.unificar(numero_expediente, archivos_convertidos)
 
             if not pdf_final or not pdf_final.exists():
                 logger.error(f"PDF final no generado o inexistente: {pdf_final}")
@@ -181,7 +189,6 @@ class PipelineDescargador:
                 exito=True,
                 expediente=expediente,
                 pdf_final=pdf_final,
-                movimientos=movimientos,
                 archivos_descargados=len(archivos_descargados)
             )
 

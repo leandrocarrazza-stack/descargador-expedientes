@@ -1,5 +1,6 @@
 """Módulos del descargador de expedientes."""
 
+# Clientes y orquestadores
 from .login import ClienteSelenium, crear_cliente_sesion
 from .navegacion import BuscadorExpedientes, crear_buscador
 from .descarga import DescargadorArchivos, crear_descargador
