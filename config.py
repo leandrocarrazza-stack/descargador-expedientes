@@ -172,6 +172,20 @@ STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
+# Configuración de Celery
+CELERY_POOL = 'threads'  # 'threads', 'solo', o 'processes'
+CELERY_CONFIG = {
+    'broker_url': CELERY_BROKER_URL,
+    'result_backend': CELERY_RESULT_BACKEND,
+    'task_serializer': 'json',
+    'accept_content': ['json'],
+    'result_serializer': 'json',
+    'timezone': 'America/Argentina/Buenos_Aires',
+    'enable_utc': True,
+    'task_track_started': True,
+    'task_time_limit': 30 * 60,  # 30 minutos
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  VALIDACIÓN AUTOMÁTICA
 # ═══════════════════════════════════════════════════════════════════════════
