@@ -131,6 +131,40 @@ def crear_orden_pago(
         raise MercadoPagoError(error_msg)
 
 
+def obtener_pago(payment_id: str) -> Dict[str, Any]:
+    """
+    Obtiene los detalles de un PAGO específico por su ID.
+
+    Importante: en MP, una "preferencia" (preference) y un "pago" (payment)
+    son objetos distintos con IDs distintos.
+    - La preferencia se crea cuando el usuario hace click en "Comprar"
+    - El pago se crea cuando el usuario efectivamente paga
+    El webhook envía el ID del PAGO, no de la preferencia.
+
+    Args:
+        payment_id: ID del pago (lo que envía el webhook en data.id)
+
+    Returns:
+        Dict con datos del pago, incluyendo 'status' y 'external_reference'
+
+    Raises:
+        MercadoPagoError: Si falla la consulta
+    """
+    url = f'{MP_API_BASE}/v1/payments/{payment_id}'
+    headers = {
+        'Authorization': f'Bearer {MP_ACCESS_TOKEN}'
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Error al obtener pago {payment_id}: {str(e)}"
+        logger.error(error_msg)
+        raise MercadoPagoError(error_msg)
+
+
 def obtener_orden(orden_id: str) -> Dict[str, Any]:
     """
     Obtiene los detalles de una preferencia existente.

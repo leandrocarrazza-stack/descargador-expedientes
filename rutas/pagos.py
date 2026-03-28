@@ -12,7 +12,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 from dotenv import load_dotenv
 
-from modulos.mercado_pago import crear_orden_pago, procesar_webhook, MercadoPagoError
+from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
 import config
@@ -138,56 +138,69 @@ def webhook_mercado_pago():
     """
 
     try:
-        # Mercado Pago envía el webhook de dos formas:
-        # 1. application/x-www-form-urlencoded (parámetros query)
-        # 2. application/json (en FASE 2 avanzada)
-
-        # Por ahora, manejamos la forma más simple: query parameters
-        action = request.args.get('action')
-        data_id = request.args.get('data.id')
-
-        if not action or not data_id:
-            # Si viene JSON en el body
-            data = request.get_json() or {}
-            action = data.get('action')
-            data_id = data.get('data', {}).get('id')
+        # MP envía el webhook como JSON en el body
+        data = request.get_json() or {}
+        # También puede venir como query param
+        action = data.get('action') or request.args.get('action')
+        # El ID que viene en el webhook es el ID del PAGO (no de la preferencia)
+        data_id = data.get('data', {}).get('id') or request.args.get('data.id')
 
         logger.info(f"Webhook recibido: action={action}, data_id={data_id}")
 
-        # Solo procesar pagos completados
-        if action == 'payment.created' or action == 'payment.updated':
-            # En Mercado Pago, el status se encuentra en los datos
-            # Este es un flujo simplificado
+        # Solo procesar eventos de pago
+        if action in ('payment.created', 'payment.updated') and data_id:
+            # 1. Consultar el pago a la API de MP para obtener status y external_reference
+            #    (el webhook solo trae el ID, no el estado ni la referencia)
+            pago = obtener_pago(str(data_id))
+            status_pago = pago.get('status')           # 'approved', 'rejected', 'pending', etc.
+            external_ref = pago.get('external_reference')  # 'user_1_plan_basico'
 
-            # Buscar la compra pendiente por orden ID
-            compra = CompraCreditos.query.filter_by(
-                stripe_payment_id=str(data_id),
-                estado='pending'
-            ).first()
+            logger.info(f"Pago {data_id}: status={status_pago}, ref={external_ref}")
 
-            if compra:
-                # Actualizar estado a confirmado
-                compra.estado = 'completed'
-                db.session.commit()
+            # 2. Solo acreditar si el pago fue aprobado
+            if status_pago == 'approved' and external_ref:
+                # Buscar la compra por external_reference (guardada en stripe_session_id)
+                compra = CompraCreditos.query.filter_by(
+                    stripe_session_id=external_ref,
+                    estado='pending'
+                ).first()
 
-                # Actualizar créditos del usuario
-                usuario = User.query.get(compra.user_id)
-                if usuario:
-                    usuario.creditos_disponibles += compra.creditos_comprados
-                    db.session.commit()
+                if compra:
+                    _confirmar_compra(compra)
+                else:
+                    logger.info(f"Compra con ref={external_ref} ya fue procesada o no existe")
 
-                    logger.info(
-                        f"Pago confirmado: Usuario {usuario.email} recibió "
-                        f"+{compra.creditos_comprados} créditos"
-                    )
-
-        # Responder rápidamente a Mercado Pago (200 OK)
+        # MP requiere 200 OK rápido — siempre responder 200
         return jsonify({'status': 'received'}), 200
 
+    except MercadoPagoError as e:
+        logger.error(f"Error MP en webhook: {str(e)}")
+        return jsonify({'status': 'error'}), 200  # Igual 200 para que MP no reintente
+
     except Exception as e:
-        logger.error(f"Error en webhook_mercado_pago: {str(e)}")
-        # Seguir devolviendo 200 para que Mercado Pago no reintente
-        return jsonify({'status': 'error', 'message': str(e)}), 200
+        logger.error(f"Error inesperado en webhook: {str(e)}")
+        return jsonify({'status': 'error'}), 200
+
+
+def _confirmar_compra(compra: CompraCreditos) -> None:
+    """
+    Marca una compra como completada y acredita los créditos al usuario.
+    Función auxiliar usada tanto por el webhook como por pago_confirmado.
+    """
+    from datetime import datetime
+
+    compra.estado = 'completed'
+    compra.completado_en = datetime.utcnow()
+    db.session.commit()
+
+    usuario = User.query.get(compra.user_id)
+    if usuario:
+        usuario.creditos_disponibles += compra.creditos_comprados
+        db.session.commit()
+        logger.info(
+            f"Créditos acreditados: {usuario.email} recibió "
+            f"+{compra.creditos_comprados} créditos (total: {usuario.creditos_disponibles})"
+        )
 
 
 @pagos_bp.route('/pago-confirmado', methods=['GET'])
@@ -195,30 +208,53 @@ def webhook_mercado_pago():
 def pago_confirmado():
     """
     Página que se muestra después de un pago exitoso.
-    El usuario es redirigido aquí por Mercado Pago.
+    MP redirige aquí con los parámetros del pago en la URL.
+
+    MP envía en la URL:
+    - payment_id: ID del pago
+    - status: 'approved', 'rejected', 'pending'
+    - external_reference: nuestra referencia (user_1_plan_basico)
+    - collection_status: igual que status
     """
 
     try:
-        # Obtener parámetros que Mercado Pago devuelve en la URL
-        collection_id = request.args.get('collection_id')
-        collection_status = request.args.get('collection_status')
-        payment_id = request.args.get('payment_id')
-        status = request.args.get('status')
+        status = request.args.get('status') or request.args.get('collection_status')
+        external_ref = request.args.get('external_reference')
+        payment_id = request.args.get('payment_id') or request.args.get('collection_id')
 
-        # Buscar la última compra del usuario
-        compra = CompraCreditos.query.filter_by(user_id=current_user.id).order_by(
-            CompraCreditos.fecha_creacion.desc()
-        ).first()
+        logger.info(f"Retorno de MP: status={status}, ref={external_ref}, payment_id={payment_id}")
 
-        contexto = {
-            'usuario': current_user,
-            'compra': compra,
-            'collection_id': collection_id,
-            'payment_id': payment_id,
-            'status': status
-        }
+        compra = None
 
-        return render_template('pago-confirmado.html', **contexto), 200
+        # Si el pago fue aprobado, intentar acreditar créditos
+        # (el webhook puede llegar después que el redirect, así que lo hacemos acá también)
+        if status == 'approved' and external_ref:
+            compra = CompraCreditos.query.filter_by(
+                stripe_session_id=external_ref,
+                estado='pending'
+            ).first()
+
+            if compra:
+                _confirmar_compra(compra)
+                logger.info(f"Créditos acreditados via redirect (antes que el webhook)")
+            else:
+                # Ya fue procesado por el webhook, buscar la compra completada
+                compra = CompraCreditos.query.filter_by(
+                    stripe_session_id=external_ref
+                ).first()
+
+        # Si no tenemos compra todavía, buscar la más reciente del usuario
+        if not compra:
+            compra = CompraCreditos.query.filter_by(
+                user_id=current_user.id
+            ).order_by(CompraCreditos.creado_en.desc()).first()
+
+        return render_template('pago-confirmado.html',
+            usuario=current_user,
+            compra=compra,
+            payment_id=payment_id,
+            status=status
+        ), 200
 
     except Exception as e:
         logger.error(f"Error en pago_confirmado: {str(e)}")
@@ -257,7 +293,7 @@ def historial_compras():
 
     try:
         compras = CompraCreditos.query.filter_by(user_id=current_user.id).order_by(
-            CompraCreditos.fecha_creacion.desc()
+            CompraCreditos.creado_en.desc()
         ).all()
 
         return render_template('historial-compras.html', compras=compras), 200
