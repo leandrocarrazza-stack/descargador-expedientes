@@ -43,14 +43,15 @@
 
 <div class="row">
     <div class="col-md-8">
-        <h3 class="mb-3">📋 Historial de Descargas</h3>
-        <div class="alert alert-info">
-            <strong>ℹ️ Próxima fase:</strong> Aquí aparecerá tu historial de descargas
-        </div>
+        <h3 class="mb-3">📋 Últimas Descargas</h3>
+        <p class="text-muted">
+            Tus expedientes descargados recientemente aparecen en el
+            <a href="{{ url_for('descargas.historial_descargas') }}">historial completo</a>.
+        </p>
     </div>
     <div class="col-md-4">
         <h3 class="mb-3">🎯 Acciones</h3>
-        <a href="/descargar" class="btn btn-primary w-100 mb-2">
+        <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn btn-primary w-100 mb-2">
             📥 Descargar Expediente
         </a>
         <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-success w-100 mb-2">
@@ -59,13 +60,6 @@
         <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-info w-100 mb-2">
             📋 Mi Historial
         </a>
-        <a href="/configuracion" class="btn btn-secondary w-100">
-            ⚙️ Configuración
-        </a>
     </div>
-</div>
-
-<div class="alert alert-success mt-4">
-    <strong>📢 Estado:</strong> ✅ Fase 1 (Auth + BD) + ✅ Fase 2 (Pagos) + ✅ Fase 3 (Async Queue). 🚀 Fase 4 (Deploy) próximamente.
 </div>
 {% endblock %}
