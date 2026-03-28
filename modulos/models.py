@@ -39,6 +39,9 @@ class User(db.Model):
     # Plan: free, pro, premium (ver config.py)
     plan = db.Column(db.String(50), default='free', nullable=False)
 
+    # Admin: puede descargar sin gastar créditos y otorgar créditos a otros
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+
     # Créditos disponibles (modelo prepagado)
     creditos_disponibles = db.Column(db.Integer, default=0, nullable=False)
 

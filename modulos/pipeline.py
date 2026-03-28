@@ -37,6 +37,7 @@ class ResultadoPipeline:
     tipo_error: Optional[str] = None
     movimientos: Optional[List[Dict]] = None
     archivos_descargados: int = 0
+    opciones: Optional[List[Dict[str, Any]]] = None  # Cuando hay múltiples expedientes
 
 
 class PipelineDescargador:
@@ -50,7 +51,7 @@ class PipelineDescargador:
         self.unificador: Optional[UnificadorPDF] = None
         self.carpeta_temp: Optional[Path] = None
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -77,9 +78,24 @@ class PipelineDescargador:
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
             self.buscador = BuscadorExpedientes(self.cliente)
-            resultado_busqueda = self.buscador.buscar(numero_expediente)
+            resultado_busqueda = self.buscador.buscar(numero_expediente, indice_expediente=indice_expediente)
 
             if not resultado_busqueda:
+                # Verificar si hay múltiples opciones pendientes de selección
+                if self.buscador._opciones_multiples:
+                    opciones = self.buscador._opciones_multiples
+                    logger.info(f"[MULTIPLES] {len(opciones)} expedientes encontrados, requiere selección")
+                    return ResultadoPipeline(
+                        exito=False,
+                        tipo_error="multiples_opciones",
+                        opciones=[{
+                            'indice': i + 1,
+                            'numero': op.get('numero', ''),
+                            'caratula': op.get('caratula', 'Sin descripción'),
+                            'tribunal': op.get('tribunal', 'No especificado'),
+                        } for i, op in enumerate(opciones)]
+                    )
+
                 logger.error(f"Expediente no encontrado: {numero_expediente}")
                 return ResultadoPipeline(
                     exito=False,

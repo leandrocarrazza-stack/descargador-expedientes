@@ -112,12 +112,14 @@ def crear_app(config_obj=None):
     from rutas.auth import auth_bp
     from rutas.pagos import pagos_bp
     from rutas.descargas import descargas_bp
+    from rutas.admin import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
+    app.register_blueprint(admin_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
