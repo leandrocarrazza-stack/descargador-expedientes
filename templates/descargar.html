@@ -141,7 +141,7 @@
             <a href="#" class="btn btn-success flex-grow-1" id="btn-descargar-pdf">
               <i class="bi bi-download me-2"></i>Descargar PDF
             </a>
-            <a href="{{ url_for('descargas.obtener_historial') }}" class="btn btn-outline-secondary flex-grow-1">
+            <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-outline-secondary flex-grow-1">
               <i class="bi bi-clock-history me-2"></i>Historial
             </a>
           </div>
@@ -171,7 +171,7 @@
             <button type="button" class="btn btn-primary flex-grow-1" onclick="location.reload()">
               <i class="bi bi-arrow-clockwise me-2"></i>Reintentar
             </button>
-            <a href="{{ url_for('descargas.obtener_historial') }}" class="btn btn-outline-secondary flex-grow-1">
+            <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-outline-secondary flex-grow-1">
               <i class="bi bi-clock-history me-2"></i>Historial
             </a>
           </div>
@@ -198,16 +198,10 @@
 {% block scripts_extra %}
 <script>
 // ═════════════════════════════════════════════════════════════════════════
-//  VARIABLES GLOBALES
-// ═════════════════════════════════════════════════════════════════════════
-
-let taskId = null;
-let pollingInterval = null;
-const POLLING_INTERVAL = 1000; // 1 segundo
-
-
-// ═════════════════════════════════════════════════════════════════════════
-//  DISPARAR DESCARGA
+//  DESCARGA SINCRÓNICA
+//  El backend ejecuta todo el pipeline y devuelve el resultado final.
+//  No hay task_id ni polling — simplemente esperamos la respuesta del fetch.
+//  (La descarga puede tardar 1-2 minutos mientras Selenium trabaja)
 // ═════════════════════════════════════════════════════════════════════════
 
 document.getElementById('form-descarga').addEventListener('submit', async function(e) {
@@ -220,7 +214,6 @@ document.getElementById('form-descarga').addEventListener('submit', async functi
     return;
   }
 
-  // Validar créditos
   const creditosDisponibles = parseInt(
     document.getElementById('creditos-disponibles').textContent
   );
@@ -230,167 +223,64 @@ document.getElementById('form-descarga').addEventListener('submit', async functi
     return;
   }
 
-  try {
-    // Disparar descarga
-    console.log('📤 Disparando descarga:', numeroExpediente);
+  // Ocultar formulario y mostrar spinner mientras el pipeline corre
+  document.getElementById('form-descarga').parentElement.style.display = 'none';
+  document.getElementById('progreso-container').style.display = 'block';
+  document.getElementById('detalles-numero').textContent = numeroExpediente;
+  document.getElementById('detalles-estado').textContent = 'Procesando...';
+  document.getElementById('estado-texto').textContent = 'Buscando y descargando expediente...';
 
+  // Animar barra de progreso (indeterminada — no sabemos el % real)
+  const barra = document.getElementById('progreso-barra');
+  barra.style.width = '100%';
+  barra.textContent = '';
+
+  try {
+    console.log('Iniciando descarga:', numeroExpediente);
+
+    // El fetch puede tardar minutos — el pipeline de Selenium corre en el servidor
     const response = await fetch('/descargas/expediente', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        numero_expediente: numeroExpediente
-      })
+      body: JSON.stringify({ numero_expediente: numeroExpediente })
     });
 
     const data = await response.json();
 
-    if (!data.exito) {
-      alert('Error: ' + (data.mensaje || 'Desconocido'));
-      return;
+    // Ocultar spinner
+    document.getElementById('progreso-container').style.display = 'none';
+
+    if (data.exito) {
+      // Mostrar resultado exitoso
+      document.getElementById('resultado-exito').style.display = 'block';
+      document.getElementById('resultado-numero').textContent = numeroExpediente;
+      document.getElementById('resultado-creditos').textContent =
+        data.creditos_restantes !== undefined ? data.creditos_restantes : '—';
+
+      const btnDescargar = document.getElementById('btn-descargar-pdf');
+      btnDescargar.href = data.pdf_url;
+
+    } else {
+      // Mostrar error
+      document.getElementById('resultado-error').style.display = 'block';
+      document.getElementById('error-mensaje').textContent =
+        data.mensaje || 'Error desconocido';
     }
-
-    // Guardar task_id y mostrar progreso
-    taskId = data.task_id;
-    console.log('✅ Tarea creada:', taskId);
-
-    // Ocultar formulario, mostrar progreso
-    document.getElementById('form-descarga').parentElement.style.display = 'none';
-    document.getElementById('progreso-container').style.display = 'block';
-
-    // Actualizar detalles
-    document.getElementById('detalles-numero').textContent = numeroExpediente;
-
-    // Iniciar polling
-    iniciar_polling();
 
   } catch (error) {
     console.error('Error:', error);
-    alert('Error al iniciar descarga: ' + error.message);
+    document.getElementById('progreso-container').style.display = 'none';
+    document.getElementById('resultado-error').style.display = 'block';
+    document.getElementById('error-mensaje').textContent =
+      'Error de conexión: ' + error.message;
   }
 });
 
-
-// ═════════════════════════════════════════════════════════════════════════
-//  POLLING - Obtener estado de tarea
-// ═════════════════════════════════════════════════════════════════════════
-
-async function iniciar_polling() {
-  console.log('🔄 Iniciando polling para tarea:', taskId);
-
-  if (pollingInterval) clearInterval(pollingInterval);
-
-  pollingInterval = setInterval(async () => {
-    try {
-      const response = await fetch(`/descargas/tarea/${taskId}/estado`);
-      const data = await response.json();
-
-      actualizar_ui(data);
-
-      // Detener si completó o falló
-      if (data.estado === 'SUCCESS' || data.estado === 'FAILURE') {
-        clearInterval(pollingInterval);
-      }
-
-    } catch (error) {
-      console.error('Error en polling:', error);
-    }
-  }, POLLING_INTERVAL);
-
-  // Llamada inicial inmediata
-  const response = await fetch(`/descargas/tarea/${taskId}/estado`);
-  const data = await response.json();
-  actualizar_ui(data);
-}
-
-
-// ═════════════════════════════════════════════════════════════════════════
-//  ACTUALIZAR UI SEGÚN ESTADO
-// ═════════════════════════════════════════════════════════════════════════
-
-function actualizar_ui(data) {
-  const estado = data.estado;
-  const progreso = data.progreso || 0;
-  const mensaje = data.mensaje || 'Procesando...';
-
-  console.log(`[${estado}] ${mensaje} (${progreso}%)`);
-
-  // Actualizar barra de progreso
-  document.getElementById('progreso-barra').style.width = progreso + '%';
-  document.getElementById('progreso-barra').setAttribute('aria-valuenow', progreso);
-  document.getElementById('progreso-texto').textContent = progreso + '%';
-
-  // Actualizar estado
-  document.getElementById('estado-texto').textContent = mensaje;
-  document.getElementById('detalles-estado').textContent = estado;
-
-  // Estados específicos
-  if (estado === 'PENDING') {
-    document.getElementById('spinner').style.display = 'inline-block';
-  }
-
-  if (estado === 'PROGRESS') {
-    document.getElementById('detalles-intento').textContent = 'En progreso...';
-  }
-
-  if (estado === 'RETRY') {
-    document.getElementById('detalles-intento').textContent = 'Reintentando...';
-  }
-
-  // ✅ ÉXITO
-  if (estado === 'SUCCESS' && data.resultado && data.resultado.exito) {
-    clearInterval(pollingInterval);
-
-    document.getElementById('progreso-container').style.display = 'none';
-    document.getElementById('resultado-exito').style.display = 'block';
-
-    // Rellenar datos del resultado
-    document.getElementById('resultado-numero').textContent = data.resultado.mensaje;
-    document.getElementById('resultado-creditos').textContent =
-      data.resultado.creditos_restantes || '—';
-
-    // Botón de descarga
-    const btnDescargar = document.getElementById('btn-descargar-pdf');
-    btnDescargar.href = data.resultado.pdf_url;
-  }
-
-  // ❌ ERROR
-  if (estado === 'FAILURE' || (estado === 'SUCCESS' && data.resultado && !data.resultado.exito)) {
-    clearInterval(pollingInterval);
-
-    document.getElementById('progreso-container').style.display = 'none';
-    document.getElementById('resultado-error').style.display = 'block';
-
-    document.getElementById('error-mensaje').textContent =
-      data.resultado?.error || data.error || 'Error desconocido';
-  }
-}
-
-
-// ═════════════════════════════════════════════════════════════════════════
-//  CANCELAR DESCARGA
-// ═════════════════════════════════════════════════════════════════════════
-
-document.getElementById('btn-cancelar').addEventListener('click', async function() {
-  if (!taskId || !confirm('¿Cancelar la descarga?')) return;
-
-  try {
-    const response = await fetch(`/descargas/tarea/${taskId}/cancelar`, {
-      method: 'POST'
-    });
-
-    const data = await response.json();
-
-    if (data.exito) {
-      clearInterval(pollingInterval);
-      alert('Descarga cancelada');
-      location.reload();
-    } else {
-      alert('Error al cancelar: ' + data.error);
-    }
-
-  } catch (error) {
-    console.error('Error al cancelar:', error);
-    alert('Error al cancelar descarga');
+// Cancelar simplemente recarga la página (en modo sincrónico no se puede
+// interrumpir la tarea que ya está corriendo en el servidor)
+document.getElementById('btn-cancelar').addEventListener('click', function() {
+  if (confirm('¿Cancelar? La descarga seguirá corriendo en el servidor hasta terminar.')) {
+    location.reload();
   }
 });
 

@@ -609,6 +609,133 @@ class DescargadorArchivos:
             return False
 
 
+    def descargar_todo_por_paginas(self, numero: str, max_movimientos: int = 200) -> List[dict]:
+        """
+        Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
+
+        CRITICO (aprendido del skill manual):
+        Los JWT tokens en los hrefs expiran cuando navegas a otra pagina.
+        Si primero recolectas todos los hrefs y despues descargas,
+        los tokens de pagina 1 ya vencieron cuando llegaste a pagina 2 -> HTTP 403.
+        Solucion: descargar TODOS los archivos de la pagina actual ANTES de navegar.
+
+        Orden cronologico:
+        Mesa Virtual muestra mas nuevo primero (pagina 1 = mas reciente).
+        Asignamos mov_idx secuencial: 1, 2, 3... donde 1 = mas reciente.
+        El unificador usa reverse=True, poniendo el mas antiguo primero en el PDF.
+
+        Args:
+            numero: Numero del expediente (solo para logs)
+            max_movimientos: Limite de seguridad para no crashear con expedientes enormes
+
+        Retorna:
+            List[dict]: Lista de {path, tipo, movimiento, url} de archivos descargados
+        """
+        print(f"\n[DESCARGA POR PAGINAS] Expediente: {numero}")
+        print(f"  [INFO] Estrategia: descargar cada pagina antes de navegar (evita expiracion JWT)")
+
+        archivos_descargados = []
+        pagina_actual = 1
+        mov_idx_global = 0
+
+        try:
+            driver = self.cliente.driver
+
+            while mov_idx_global < max_movimientos:
+                print(f"\n  [PAG {pagina_actual}] Extrayendo enlaces...")
+                time.sleep(1)
+
+                # 1. Extraer hrefs de la pagina ACTUAL (tokens validos ahora)
+                hrefs = self._extraer_hrefs_pagina_actual(driver)
+                print(f"  [PAG {pagina_actual}] {len(hrefs)} enlace(s) de descarga encontrado(s)")
+
+                if not hrefs:
+                    print(f"  [PAG {pagina_actual}] Sin archivos, terminando")
+                    break
+
+                # 2. Descargar TODOS los archivos de esta pagina ANTES de navegar
+                for href in hrefs:
+                    if mov_idx_global >= max_movimientos:
+                        print(f"  [LIMIT] Limite de {max_movimientos} movimientos alcanzado")
+                        break
+
+                    mov_idx_global += 1
+
+                    # Construir URL absoluta si es relativa
+                    if href.startswith("http"):
+                        url = href
+                    else:
+                        url = f"https://mesavirtual.jusentrerios.gov.ar{href}"
+
+                    nombre_archivo = f"{mov_idx_global:04d}_pag{pagina_actual:02d}.pdf"
+                    ruta_archivo = self.carpeta_temp / nombre_archivo
+
+                    print(f"    > [{mov_idx_global}] {url[:70]}...")
+
+                    if self._descargar_archivo_selenium(url, ruta_archivo):
+                        # Detectar tipo real por magic bytes
+                        tipo = "pdf"
+                        try:
+                            with open(ruta_archivo, "rb") as f:
+                                magic = f.read(10)
+                            if magic.startswith(b"{\\rtf"):
+                                ruta_rtf = ruta_archivo.with_suffix(".rtf")
+                                ruta_archivo.rename(ruta_rtf)
+                                ruta_archivo = ruta_rtf
+                                tipo = "rtf"
+                                print(f"      [OK] mov {mov_idx_global} (.rtf detectado)")
+                            else:
+                                print(f"      [OK] mov {mov_idx_global} (.pdf)")
+                        except Exception:
+                            print(f"      [OK] mov {mov_idx_global}")
+
+                        archivos_descargados.append({
+                            "path": ruta_archivo,
+                            "tipo": tipo,
+                            "movimiento": mov_idx_global,
+                            "url": url,
+                        })
+                    else:
+                        print(f"      [WARN] No se pudo descargar mov {mov_idx_global}")
+
+                # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
+                hay_siguiente = self._navegar_siguiente_pagina(driver)
+                if not hay_siguiente:
+                    print(f"\n  [PAG {pagina_actual}] Ultima pagina, terminando")
+                    break
+                pagina_actual += 1
+
+        except Exception as e:
+            print(f"[ERROR] descargar_todo_por_paginas: {str(e)[:100]}")
+            logger.error(f"Error en descargar_todo_por_paginas: {e}", exc_info=True)
+
+        print(f"\n[OK] Total archivos descargados: {len(archivos_descargados)} ({pagina_actual} pagina(s))")
+        return archivos_descargados
+
+    def _extraer_hrefs_pagina_actual(self, driver) -> List[str]:
+        """
+        Extrae los hrefs de descarga de la pagina actualmente visible en el navegador.
+
+        En Mesa Virtual cada fila de la tabla tiene dos enlaces:
+        - Primero: preview del documento
+        - Segundo: descarga del documento (el que queremos)
+
+        Retorna solo los hrefs del segundo <a> de cada fila.
+        """
+        try:
+            # Segundo <a> de cada fila = enlace de descarga
+            elementos = driver.find_elements(By.XPATH, "//table//tbody//tr//a[2]")
+            hrefs = []
+            for elem in elementos:
+                href = elem.get_attribute("href") or ""
+                if href:
+                    hrefs.append(href)
+            return hrefs
+        except Exception as e:
+            print(f"  [WARN] Error extrayendo hrefs de pagina actual: {str(e)[:60]}")
+            return []
+
+
 def crear_descargador(
     cliente_selenium, api_graphql_url=None, api_archivos_url=None, carpeta_temp=None
 ):
