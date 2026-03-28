@@ -20,18 +20,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # LibreOffice: convierte RTF a PDF
 # Ghostscript: compresión de PDFs (opcional, desactivado por defecto)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Chrome y dependencias
+    # Herramientas base necesarias para agregar repos externos
     wget \
     gnupg \
+    ca-certificates \
     unzip \
-    fonts-liberation \
-    libnss3 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libxkbcommon0 \
-    libgbm1 \
-    libasound2 \
-    libxshmfence1 \
     # LibreOffice (solo el writer, no la suite completa → ahorra ~200 MB)
     libreoffice-writer \
     # Ghostscript (para compresión de PDFs, desactivado por defecto)
@@ -41,9 +34,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Instalar Chrome ──
-# Usamos Chrome de Google (no Chromium) para máxima compatibilidad con Selenium
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" \
+# Método moderno (Debian 12+): gpg --dearmor en vez del obsoleto apt-key
+RUN mkdir -p /etc/apt/keyrings \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub \
+       | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
        > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends google-chrome-stable \
