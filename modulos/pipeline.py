@@ -100,24 +100,10 @@ class PipelineDescargador:
             # Crear descargador con carpeta temp
             self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp)
 
-            # Obtener movimientos
-            movimientos = self.descargador.obtener_movimientos(numero_expediente)
-            logger.info(f"[OK] {len(movimientos) if movimientos else 0} movimientos encontrados")
-
-            if not movimientos:
-                logger.warning(f"No hay movimientos para {numero_expediente}")
-                return ResultadoPipeline(
-                    exito=False,
-                    error="No hay archivos para descargar",
-                    tipo_error="no_files",
-                    expediente=expediente
-                )
-
-            # Descargar archivos (carpeta_temp ya está en self.descargador)
-            archivos_descargados = self.descargador.descargar_archivos(
-                numero_expediente,
-                movimientos
-            )
+            # Descargar por paginas: en cada pagina descargamos todos los archivos
+            # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
+            # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
+            archivos_descargados = self.descargador.descargar_todo_por_paginas(numero_expediente)
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
 
             if not archivos_descargados:
@@ -144,7 +130,7 @@ class PipelineDescargador:
             self.conversor = ConversorRTF()
 
             # Convertir archivos descargados manteniendo metadata
-            # NOTA: descargar_archivos() retorna {path, tipo, movimiento}
+            # descargar_todo_por_paginas() retorna {path, tipo, movimiento, url}
             archivos_convertidos = []
             for arch in archivos_descargados:
                 ruta_original = arch['path']
@@ -187,7 +173,6 @@ class PipelineDescargador:
                 exito=True,
                 expediente=expediente,
                 pdf_final=pdf_final,
-                movimientos=movimientos,
                 archivos_descargados=len(archivos_descargados)
             )
 
