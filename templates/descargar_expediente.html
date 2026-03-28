@@ -5,13 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Descargar Expediente</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -21,66 +17,44 @@
         }
         .container {
             background: white;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             padding: 40px;
-            max-width: 500px;
+            max-width: 560px;
             width: 100%;
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 24px;
-        }
-        .info {
+        h1 { color: #333; margin-bottom: 20px; font-size: 24px; }
+
+        /* CREDITOS */
+        .creditos-info {
             background: #f0f4ff;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 24px;
             display: flex;
-            gap: 15px;
             align-items: center;
-        }
-        .info-icon {
-            font-size: 24px;
-        }
-        .info-text {
+            gap: 12px;
             font-size: 14px;
             color: #555;
         }
-        .creditos {
-            color: #667eea;
-            font-weight: bold;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-        }
-        input[type="text"] {
+        .creditos-num { color: #667eea; font-weight: bold; font-size: 16px; }
+
+        /* FORMULARIO */
+        #panel-form label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        #panel-form input[type="text"] {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 16px;
             transition: border-color 0.3s;
+            margin-bottom: 6px;
         }
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .hint {
-            font-size: 12px;
-            color: #999;
-            margin-top: 5px;
-        }
-        button {
+        #panel-form input[type="text"]:focus { outline: none; border-color: #667eea; }
+        .hint { font-size: 12px; color: #999; margin-bottom: 20px; }
+        .btn-primary {
             width: 100%;
-            padding: 12px;
+            padding: 13px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
@@ -88,101 +62,239 @@
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.2s, opacity 0.2s;
         }
-        button:hover {
-            transform: translateY(-2px);
+        .btn-primary:hover { transform: translateY(-2px); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        /* PROGRESO */
+        #panel-progreso { display: none; }
+        .etapas { margin-bottom: 20px; }
+        .etapa {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
         }
-        button:active {
-            transform: translateY(0);
-        }
-        .loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+        .etapa:last-child { border-bottom: none; }
+        .etapa-badge {
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
+            background: #e8e8e8;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+            transition: all 0.4s;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .etapa-badge.activa {
+            background: #667eea;
+            color: white;
+            animation: pulsar 1.2s ease-in-out infinite;
         }
-        .error {
-            background: #fee;
-            color: #c33;
-            padding: 12px;
+        .etapa-badge.completa { background: #4caf50; color: white; }
+        .etapa-badge.error-badge { background: #f44336; color: white; }
+        @keyframes pulsar {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(102,126,234,0.4); }
+            50% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(102,126,234,0); }
+        }
+        .etapa-texto { font-size: 14px; color: #555; }
+        .etapa-texto.activa { color: #333; font-weight: 500; }
+        .etapa-texto.completa { color: #4caf50; }
+
+        .barra-container { margin-top: 16px; }
+        .barra-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+        .barra-bg {
+            background: #e8e8e8;
             border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
+            height: 10px;
+            overflow: hidden;
         }
-        .success {
-            background: #efe;
-            color: #3c3;
-            padding: 12px;
+        .barra-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
             border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
+            transition: width 1.5s ease;
+            width: 0%;
         }
-        .back-link {
+        .barra-fill.error-barra { background: #f44336; }
+
+        /* SELECCIÓN MÚLTIPLE */
+        #panel-seleccion { display: none; }
+        #panel-seleccion h3 { margin-bottom: 8px; color: #333; }
+        #panel-seleccion p { font-size: 13px; color: #777; margin-bottom: 16px; }
+        .opcion-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .opcion-card:hover { border-color: #667eea; background: #f8f9ff; }
+        .opcion-caratula { font-weight: 600; font-size: 14px; color: #333; margin-bottom: 4px; }
+        .opcion-meta { font-size: 12px; color: #888; }
+        .opcion-meta span { margin-right: 12px; }
+        .btn-opcion {
+            margin-top: 8px;
+            padding: 7px 16px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-opcion:hover { opacity: 0.85; }
+
+        /* ÉXITO */
+        #panel-exito { display: none; }
+        .exito-box {
+            background: #f0fff4;
+            border: 1px solid #b2dfdb;
+            border-radius: 10px;
+            padding: 20px;
             text-align: center;
-            margin-top: 20px;
+            margin-bottom: 16px;
         }
-        .back-link a {
-            color: #667eea;
+        .exito-icono { font-size: 40px; margin-bottom: 10px; }
+        .exito-titulo { font-size: 18px; font-weight: bold; color: #2e7d32; margin-bottom: 6px; }
+        .exito-creditos { font-size: 13px; color: #666; }
+        .btn-descargar {
+            display: block;
+            width: 100%;
+            padding: 13px;
+            background: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
             text-decoration: none;
+            margin-bottom: 10px;
+            transition: opacity 0.2s;
+        }
+        .btn-descargar:hover { opacity: 0.85; }
+
+        /* ERROR */
+        #panel-error { display: none; }
+        .error-box {
+            background: #fff5f5;
+            border: 1px solid #ffcdd2;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .error-titulo { font-weight: bold; color: #c62828; margin-bottom: 6px; }
+        .error-msg { font-size: 13px; color: #666; }
+
+        /* LINKS */
+        .back-link { text-align: center; margin-top: 20px; }
+        .back-link a { color: #667eea; text-decoration: none; font-size: 14px; }
+        .back-link a:hover { text-decoration: underline; }
+        .btn-reintentar {
+            width: 100%;
+            padding: 11px;
+            background: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 8px;
             font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 8px;
         }
-        .back-link a:hover {
-            text-decoration: underline;
-        }
+        .btn-reintentar:hover { background: #ebebeb; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📥 Descargar Expediente</h1>
 
-        <div class="info">
-            <div class="info-icon">⭐</div>
-            <div class="info-text">
-                Tienes <span class="creditos">{{ creditos }} crédito{{ 's' if creditos != 1 else '' }}</span> disponible{{ 's' if creditos != 1 else '' }}
+        <!-- Créditos disponibles -->
+        <div class="creditos-info">
+            <span style="font-size:22px">⭐</span>
+            <span>Tenés <span class="creditos-num" id="creditos-display">{{ creditos }}</span>
+            crédito{{ 's' if creditos != 1 else '' }} disponible{{ 's' if creditos != 1 else '' }}</span>
+        </div>
+
+        <!-- PANEL 1: Formulario -->
+        <div id="panel-form">
+            <label for="numero_expediente">Número de Expediente</label>
+            <input type="text" id="numero_expediente" placeholder="Ejemplo: 12881 o 21/24" autofocus>
+            <div class="hint">Ingresá el número del expediente que querés descargar</div>
+            <button class="btn-primary" onclick="iniciarDescarga()">Descargar Expediente</button>
+        </div>
+
+        <!-- PANEL 2: Progreso animado -->
+        <div id="panel-progreso">
+            <div class="etapas">
+                <div class="etapa" id="etapa-0">
+                    <div class="etapa-badge" id="badge-0">1</div>
+                    <span class="etapa-texto" id="texto-0">Autenticando en Mesa Virtual...</span>
+                </div>
+                <div class="etapa" id="etapa-1">
+                    <div class="etapa-badge" id="badge-1">2</div>
+                    <span class="etapa-texto" id="texto-1">Buscando expediente...</span>
+                </div>
+                <div class="etapa" id="etapa-2">
+                    <div class="etapa-badge" id="badge-2">3</div>
+                    <span class="etapa-texto" id="texto-2">Descargando archivos...</span>
+                </div>
+                <div class="etapa" id="etapa-3">
+                    <div class="etapa-badge" id="badge-3">4</div>
+                    <span class="etapa-texto" id="texto-3">Convirtiendo y unificando PDF...</span>
+                </div>
+            </div>
+            <div class="barra-container">
+                <div class="barra-label">
+                    <span id="etapa-label">Iniciando...</span>
+                    <span id="porcentaje-label">0%</span>
+                </div>
+                <div class="barra-bg">
+                    <div class="barra-fill" id="barra-fill"></div>
+                </div>
             </div>
         </div>
 
-        <div class="error" id="error-msg"></div>
-        <div class="success" id="success-msg"></div>
+        <!-- PANEL 3: Selección múltiple -->
+        <div id="panel-seleccion">
+            <h3>Varios expedientes encontrados</h3>
+            <p>Se encontraron múltiples expedientes con ese número. Elegí cuál descargar:</p>
+            <div id="lista-opciones"></div>
+        </div>
 
-        <form id="form-descargar" onsubmit="descargar(event)">
-            <div class="form-group">
-                <label for="numero_expediente">Número de Expediente</label>
-                <input
-                    type="text"
-                    id="numero_expediente"
-                    name="numero_expediente"
-                    placeholder="Ejemplo: 12881 o 21/24"
-                    required
-                    autofocus
-                >
-                <div class="hint">Ingresa el número del expediente que quieres descargar</div>
+        <!-- PANEL 4: Éxito -->
+        <div id="panel-exito">
+            <div class="exito-box">
+                <div class="exito-icono">✅</div>
+                <div class="exito-titulo">¡Expediente descargado!</div>
+                <div class="exito-creditos" id="exito-creditos"></div>
             </div>
+            <a class="btn-descargar" id="btn-descargar-pdf" href="#">⬇ Descargar PDF</a>
+            <button class="btn-reintentar" onclick="reiniciar()">Descargar otro expediente</button>
+        </div>
 
-            <button type="submit" id="btn-descargar">
-                Descargar Expediente
-            </button>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p style="margin-top: 15px; color: #666;">
-                Buscando y descargando expediente...<br>
-                <small>Esto puede tomar 30-120 segundos</small>
-            </p>
+        <!-- PANEL 5: Error -->
+        <div id="panel-error">
+            <div class="error-box">
+                <div class="error-titulo">❌ Error en la descarga</div>
+                <div class="error-msg" id="error-detalle"></div>
+            </div>
+            <button class="btn-reintentar" onclick="reiniciar()">Reintentar</button>
         </div>
 
         <div class="back-link">
@@ -191,75 +303,207 @@
     </div>
 
     <script>
-        function mostrarError(mensaje) {
-            const errorDiv = document.getElementById('error-msg');
-            errorDiv.textContent = mensaje;
-            errorDiv.style.display = 'block';
-            document.getElementById('success-msg').style.display = 'none';
+        // Etapas con tiempos estimados para la animación
+        const ETAPAS = [
+            { idx: 0, porcentaje: 10, segundos: 2  },
+            { idx: 1, porcentaje: 25, segundos: 12 },
+            { idx: 2, porcentaje: 75, segundos: 30 },
+            { idx: 3, porcentaje: 95, segundos: 80 },
+        ];
+
+        let timers = [];
+        let numeroActual = '';
+
+        // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
+        function mostrarSolo(idPanel) {
+            ['panel-form', 'panel-progreso', 'panel-seleccion', 'panel-exito', 'panel-error']
+                .forEach(id => document.getElementById(id).style.display = 'none');
+            document.getElementById(idPanel).style.display = 'block';
         }
 
-        function mostrarExito(mensaje) {
-            const successDiv = document.getElementById('success-msg');
-            successDiv.textContent = mensaje;
-            successDiv.style.display = 'block';
-            document.getElementById('error-msg').style.display = 'none';
+        // ─── ANIMACIÓN DE PROGRESO ─────────────────────────────────────────────
+        function iniciarAnimacion() {
+            mostrarSolo('panel-progreso');
+            setBarra(0, 'Iniciando...');
+
+            let delay = 0;
+            ETAPAS.forEach((etapa) => {
+                const t = setTimeout(() => activarEtapa(etapa.idx, etapa.porcentaje), delay * 1000);
+                timers.push(t);
+                delay += etapa.segundos;
+            });
         }
 
-        async function descargar(event) {
-            event.preventDefault();
+        function activarEtapa(idx, pct) {
+            // Marcar anteriores como completadas
+            for (let i = 0; i < idx; i++) marcarEtapaCompleta(i);
 
+            // Activar la actual
+            const badge = document.getElementById(`badge-${idx}`);
+            const texto = document.getElementById(`texto-${idx}`);
+            badge.className = 'etapa-badge activa';
+            texto.className = 'etapa-texto activa';
+
+            const textos = [
+                'Autenticando en Mesa Virtual...',
+                'Buscando expediente...',
+                'Descargando archivos...',
+                'Convirtiendo y unificando PDF...'
+            ];
+            texto.textContent = textos[idx];
+            setBarra(pct, textos[idx]);
+        }
+
+        function marcarEtapaCompleta(idx) {
+            document.getElementById(`badge-${idx}`).className = 'etapa-badge completa';
+            document.getElementById(`badge-${idx}`).textContent = '✓';
+            document.getElementById(`texto-${idx}`).className = 'etapa-texto completa';
+        }
+
+        function setBarra(pct, label) {
+            document.getElementById('barra-fill').style.width = pct + '%';
+            document.getElementById('porcentaje-label').textContent = pct + '%';
+            document.getElementById('etapa-label').textContent = label;
+        }
+
+        function detenerAnimacion() {
+            timers.forEach(t => clearTimeout(t));
+            timers = [];
+        }
+
+        function animarExito() {
+            detenerAnimacion();
+            ETAPAS.forEach(e => marcarEtapaCompleta(e.idx));
+            setBarra(100, '¡Completado!');
+        }
+
+        function animarError() {
+            detenerAnimacion();
+            document.getElementById('barra-fill').classList.add('error-barra');
+            setBarra(100, 'Error');
+            ETAPAS.forEach(e => {
+                const badge = document.getElementById(`badge-${e.idx}`);
+                if (!badge.classList.contains('completa')) {
+                    badge.className = 'etapa-badge error-badge';
+                    badge.textContent = '✗';
+                }
+            });
+        }
+
+        // ─── FLUJO PRINCIPAL ──────────────────────────────────────────────────
+        async function iniciarDescarga() {
             const numero = document.getElementById('numero_expediente').value.trim();
-            const btn = document.getElementById('btn-descargar');
-            const loading = document.getElementById('loading');
-            const form = document.getElementById('form-descargar');
-
             if (!numero) {
-                mostrarError('Por favor ingresa un número de expediente');
+                alert('Ingresá un número de expediente');
                 return;
             }
+            numeroActual = numero;
+            await enviarDescarga(numero, null);
+        }
 
-            // Mostrar loading
-            btn.disabled = true;
-            form.style.display = 'none';
-            loading.style.display = 'block';
-            document.getElementById('error-msg').style.display = 'none';
+        async function descargarConIndice(indice) {
+            // Llamado desde el panel de selección múltiple
+            mostrarSolo('panel-progreso');
+            iniciarAnimacion();
+            await enviarDescarga(numeroActual, indice);
+        }
+
+        async function enviarDescarga(numero, indice) {
+            iniciarAnimacion();
+
+            const body = { numero_expediente: numero };
+            if (indice !== null) body.indice_expediente = indice;
 
             try {
-                const response = await fetch('/descargas/expediente', {
+                const resp = await fetch('/descargas/expediente', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        numero_expediente: numero
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
                 });
 
-                const data = await response.json();
+                const data = await resp.json();
 
                 if (data.exito) {
-                    mostrarExito(`✅ Expediente descargado exitosamente! Créditos restantes: ${data.creditos_restantes}`);
-
-                    // Descargar el PDF después de 1 segundo
+                    // Éxito: mostrar panel con botón de descarga
+                    animarExito();
                     setTimeout(() => {
+                        detenerAnimacion();
+                        document.getElementById('exito-creditos').textContent =
+                            `Créditos restantes: ${data.creditos_restantes}`;
+                        document.getElementById('btn-descargar-pdf').href = data.pdf_url;
+                        mostrarSolo('panel-exito');
+                        // También descargar automáticamente
                         window.location.href = data.pdf_url;
-                    }, 1000);
+                    }, 800);
 
-                    // Limpiar formulario
-                    document.getElementById('numero_expediente').value = '';
+                } else if (data.tipo_error === 'multiples_opciones') {
+                    // Múltiples resultados: mostrar panel de selección
+                    detenerAnimacion();
+                    mostrarOpciones(data.opciones);
+
                 } else {
-                    mostrarError(`❌ Error: ${data.mensaje}`);
-                    btn.disabled = false;
-                    form.style.display = 'block';
-                    loading.style.display = 'none';
+                    // Error real
+                    animarError();
+                    setTimeout(() => {
+                        document.getElementById('error-detalle').textContent = data.mensaje || 'Error desconocido';
+                        mostrarSolo('panel-error');
+                    }, 800);
                 }
-            } catch (error) {
-                mostrarError(`❌ Error de conexión: ${error.message}`);
-                btn.disabled = false;
-                form.style.display = 'block';
-                loading.style.display = 'none';
+
+            } catch (err) {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                    mostrarSolo('panel-error');
+                }, 800);
             }
         }
+
+        // ─── PANEL DE SELECCIÓN MÚLTIPLE ──────────────────────────────────────
+        function mostrarOpciones(opciones) {
+            const lista = document.getElementById('lista-opciones');
+            lista.innerHTML = '';
+
+            opciones.forEach(op => {
+                const card = document.createElement('div');
+                card.className = 'opcion-card';
+                card.innerHTML = `
+                    <div class="opcion-caratula">${op.caratula || 'Sin descripción'}</div>
+                    <div class="opcion-meta">
+                        <span>📋 ${op.numero || ''}</span>
+                        <span>🏛️ ${op.tribunal || 'Tribunal no especificado'}</span>
+                    </div>
+                    <button class="btn-opcion" onclick="descargarConIndice(${op.indice})">
+                        ⬇ Descargar este expediente
+                    </button>
+                `;
+                lista.appendChild(card);
+            });
+
+            mostrarSolo('panel-seleccion');
+        }
+
+        // ─── REINICIAR ────────────────────────────────────────────────────────
+        function reiniciar() {
+            detenerAnimacion();
+            // Reset barra
+            document.getElementById('barra-fill').style.width = '0%';
+            document.getElementById('barra-fill').classList.remove('error-barra');
+            ETAPAS.forEach(e => {
+                const badge = document.getElementById(`badge-${e.idx}`);
+                badge.className = 'etapa-badge';
+                badge.textContent = e.idx + 1;
+                document.getElementById(`texto-${e.idx}`).className = 'etapa-texto';
+            });
+            mostrarSolo('panel-form');
+        }
+
+        // Enter en el input dispara la descarga
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('numero_expediente').addEventListener('keydown', e => {
+                if (e.key === 'Enter') iniciarDescarga();
+            });
+        });
     </script>
 </body>
 </html>

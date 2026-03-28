@@ -67,6 +67,9 @@ def descargar_expediente_sync():
         # 1. PARSEAR REQUEST
         data = request.get_json() or {}
         numero_expediente = data.get('numero_expediente', '').strip()
+        indice_expediente = data.get('indice_expediente')  # Opcional: cuál elegir si hay múltiples
+        if indice_expediente is not None:
+            indice_expediente = int(indice_expediente)
 
         # 2. VALIDAR ENTRADA
         if not numero_expediente:
@@ -87,12 +90,13 @@ def descargar_expediente_sync():
             }), 402
 
         # 4. EJECUTAR PIPELINE SINCRÓNICO (BLOQUEANTE)
-        logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}")
+        logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}, Índice {indice_expediente}")
 
         pipeline = PipelineDescargador()
         resultado = pipeline.ejecutar(
             numero_expediente=numero_expediente,
-            limpiar_temp=config.LIMPIAR_TEMP
+            limpiar_temp=config.LIMPIAR_TEMP,
+            indice_expediente=indice_expediente
         )
 
         # 5. PROCESAR RESULTADO DEL PIPELINE
@@ -126,8 +130,18 @@ def descargar_expediente_sync():
                 'mensaje': 'Expediente descargado exitosamente'
             }), 200
 
+        elif resultado.tipo_error == 'multiples_opciones':
+            # Hay múltiples expedientes: no se descuenta crédito, se devuelven las opciones
+            logger.info(f"Múltiples resultados para {numero_expediente}: {len(resultado.opciones)} opciones")
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'multiples_opciones',
+                'opciones': resultado.opciones,
+                'mensaje': f'Se encontraron {len(resultado.opciones)} expedientes con ese número. Seleccioná cuál descargar.'
+            }), 200
+
         else:
-            # Error en pipeline
+            # Error real en pipeline
             logger.error(f"Error en descarga: {numero_expediente} - {resultado.error}")
 
             # Guardar intento fallido en BD (sin deducir créditos)
