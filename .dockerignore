@@ -1,0 +1,21 @@
+# No copiar estos archivos/carpetas al Docker image
+.git
+.claude
+.planning
+.env
+*.pkl
+*.db
+*.log
+*.bat
+__pycache__
+temp/
+output/
+logs/
+descargas/
+debug_*
+test_*
+tests/
+*.md
+*.lnk
+memory/
+scripts/

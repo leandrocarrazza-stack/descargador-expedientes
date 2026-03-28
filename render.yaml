@@ -1,0 +1,58 @@
+# render.yaml — Configuración de deploy en Render.com
+# =====================================================
+#
+# Este archivo le dice a Render cómo construir y ejecutar la app.
+#
+# PASOS PARA DEPLOY:
+# 1. Crear cuenta en render.com
+# 2. Crear "New Web Service" → conectar tu repo de GitHub
+# 3. Render detecta este archivo automáticamente
+# 4. Configurar las variables de entorno en el panel de Render
+# 5. Deploy!
+#
+# PLAN RECOMENDADO:
+#   Starter ($7/mes) — 512 MB RAM, suficiente para esta app
+#   Free tier NO soporta Docker (solo native runtimes)
+
+services:
+  - type: web
+    name: descargador-expedientes
+    runtime: docker
+
+    # Render busca el Dockerfile en la raíz del repo
+    dockerfilePath: ./Dockerfile
+
+    # Variables de entorno (las sensibles se configuran en el panel de Render)
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true   # Render genera un valor seguro automáticamente
+      - key: PDF_TTL_HOURS
+        value: "12"           # Disco limitado en Render → limpiar más seguido
+      - key: LOTE_UNIFICACION
+        value: "5"            # RAM limitada → lotes más chicos
+      - key: COMPRIMIR_PDF
+        value: "false"
+      - key: MESA_VIRTUAL_SESSION_PATH
+        value: "/data/sesion.pkl"
+
+      # Estas se configuran MANUALMENTE en el panel de Render:
+      # - DATABASE_URL          (Render PostgreSQL addon)
+      # - REDIS_URL             (Upstash o Render Redis addon)
+      # - MERCADO_PAGO_ACCESS_TOKEN
+      # - MERCADO_PAGO_PUBLIC_KEY
+      # - MERCADO_PAGO_NOTIFICATION_URL
+
+    # Disco persistente para la sesión de Mesa Virtual
+    disk:
+      name: session-storage
+      mountPath: /data
+      sizeGB: 1
+
+    # Health check
+    healthCheckPath: /
+
+databases:
+  - name: descargador-db
+    plan: starter   # PostgreSQL starter ($7/mes)

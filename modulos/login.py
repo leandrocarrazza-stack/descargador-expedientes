@@ -37,7 +37,10 @@ class ClienteSelenium:
         self.url_mesa_virtual = url_mesa_virtual or "https://mesavirtual.jusentrerios.gov.ar/"
         self.driver = None
         self.timeout = 30
-        self.archivo_sesion = Path.home() / ".mesa_virtual_sesion.pkl"
+        # Ruta de la sesión guardada. Configurable por env var para que en Docker
+        # apunte a un volumen persistente (si no, se pierde al reiniciar el container)
+        ruta_sesion = os.environ.get('MESA_VIRTUAL_SESSION_PATH')
+        self.archivo_sesion = Path(ruta_sesion) if ruta_sesion else Path.home() / ".mesa_virtual_sesion.pkl"
 
     def abrir_navegador_y_loguearse(self, timeout_segundos=600):
         """Abre el navegador y espera a que el usuario se loguee.
@@ -310,12 +313,20 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         print("\n[OK] Sesión guardada detectada, intentando cargar...")
         try:
             # Crear navegador en headless mode (sin interfaz visible)
+            # Los argumentos extra son CRÍTICOS para que Chrome funcione
+            # en servidores Linux sin entorno gráfico (Docker, Render, Railway)
             options = webdriver.ChromeOptions()
             if headless:
-                options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
+                options.add_argument('--headless=new')    # Modo headless v2 (más estable)
+            options.add_argument('--no-sandbox')          # Requerido en Docker (sin usuario root)
+            options.add_argument('--disable-dev-shm-usage')  # Usa /tmp en vez de /dev/shm (evita OOM)
+            options.add_argument('--disable-gpu')         # Sin GPU en servidores
+            options.add_argument('--disable-extensions')  # Sin extensiones = menos memoria
+            options.add_argument('--disable-background-networking')  # Sin tráfico extra
+            options.add_argument('--window-size=1920,1080')  # Viewport fijo
             options.add_argument('--disable-blink-features=AutomationControlled')
+            # Limitar memoria de Chrome (importante en servidores con RAM limitada)
+            options.add_argument('--js-flags=--max-old-space-size=256')
 
             cliente.driver = webdriver.Chrome(
                 service=Service(ChromeDriverManager().install()),

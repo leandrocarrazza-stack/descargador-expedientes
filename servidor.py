@@ -111,7 +111,7 @@ def crear_app(config_obj=None):
 
     from rutas.auth import auth_bp
     from rutas.pagos import pagos_bp
-    from rutas.descargas import descargas_bp
+    from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos
     from rutas.admin import admin_bp
 
     app.register_blueprint(auth_bp)
@@ -120,6 +120,10 @@ def crear_app(config_obj=None):
     app.register_blueprint(admin_bp)
 
     logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
+
+    # Limpiar PDFs antiguos del disco al iniciar la app
+    # Evita que el disco del servidor se llene con descargas viejas
+    limpiar_pdfs_antiguos()
 
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES

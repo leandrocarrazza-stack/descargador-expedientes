@@ -1,0 +1,39 @@
+# docker-compose.yml — Para desarrollo/testing local
+# ===================================================
+#
+# Levanta la app + Redis en un solo comando:
+#   docker-compose up --build
+#
+# La app estará en: http://localhost:5000
+#
+# NOTA: En producción (Render/Railway) NO se usa docker-compose.
+# Render lee el Dockerfile directamente y Redis se agrega como addon.
+
+services:
+  # ── Aplicación Flask ──
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=development
+      - REDIS_URL=redis://redis:6379/0
+      - MESA_VIRTUAL_SESSION_PATH=/data/sesion.pkl
+    volumes:
+      # Persistir la sesión de Mesa Virtual entre reinicios
+      - session_data:/data
+      # Montar código fuente para desarrollo (hot reload)
+      - .:/app
+    depends_on:
+      - redis
+
+  # ── Redis (broker para Celery) ──
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  session_data:

@@ -13,6 +13,7 @@ Retorna: ResultadoPipeline con .exito, .pdf_final, .error
 """
 
 import logging
+import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -22,6 +23,7 @@ from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
 from modulos.conversion import ConversorRTF
 from modulos.unificacion import UnificadorPDF
+from modulos.compresion import comprimir_pdf
 import config
 
 logger = logging.getLogger(__name__)
@@ -184,6 +186,10 @@ class PipelineDescargador:
 
             logger.info(f"[OK] PDF final generado: {pdf_final}")
 
+            # PASO 6 (OPCIONAL): COMPRESIÓN
+            # Solo comprime si COMPRIMIR_PDF=true en .env (desactivado por defecto)
+            pdf_final = comprimir_pdf(pdf_final)
+
             # SUCCESS
             return ResultadoPipeline(
                 exito=True,
@@ -201,9 +207,24 @@ class PipelineDescargador:
             )
 
         finally:
-            # Limpiar
+            # ═══════════════════════════════════════════════════════════════
+            # LIMPIEZA AGRESIVA
+            # Siempre limpiar recursos, haya éxito o error.
+            # En servidores cloud con disco limitado, dejar basura = disco lleno.
+            # ═══════════════════════════════════════════════════════════════
+
+            # 1. Cerrar navegador Chrome (liberar RAM)
             if self.cliente:
                 try:
                     self.cliente.cerrar()
-                except:
+                except Exception:
                     pass
+
+            # 2. Borrar carpeta temporal completa (RTFs, PDFs individuales, lotes)
+            #    El PDF final ya está en OUTPUT_DIR, así que temp/ es descartable
+            if self.carpeta_temp and self.carpeta_temp.exists():
+                try:
+                    shutil.rmtree(self.carpeta_temp, ignore_errors=True)
+                    logger.info(f"[CLEANUP] Carpeta temporal eliminada: {self.carpeta_temp}")
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] No se pudo eliminar temp: {e}")

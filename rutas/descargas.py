@@ -8,12 +8,18 @@ Arquitectura simplificada: ejecución sincrónica sin Celery.
 - Retorna JSON con ruta del PDF o error
 
 Modelo: Cada descarga cuesta $3.000 ARS de créditos prepagados
+
+LIMPIEZA: El PDF final se borra del servidor después de que el usuario
+lo descarga (after_this_request). Además, al iniciar la app se borran
+PDFs con más de PDF_TTL_HOURS horas de antigüedad.
 """
 
 import logging
 import os
+import time
+import threading
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_file, render_template
+from flask import Blueprint, request, jsonify, send_file, render_template, after_this_request
 from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
@@ -27,6 +33,50 @@ logger = logging.getLogger(__name__)
 descargas_bp = Blueprint('descargas', __name__, url_prefix='/descargas')
 
 PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
+
+# Horas máximas que un PDF permanece en disco antes de ser borrado
+PDF_TTL_HOURS = int(os.environ.get('PDF_TTL_HOURS', '24'))
+
+
+def limpiar_pdfs_antiguos():
+    """
+    Borra PDFs del directorio output/ que tengan más de PDF_TTL_HOURS horas.
+    Se llama al iniciar la app para evitar que el disco se llene.
+    Es segura: si un archivo está en uso o no puede borrarse, lo ignora.
+    """
+    try:
+        ahora = time.time()
+        eliminados = 0
+        for pdf in Path(config.OUTPUT_DIR).glob("*.pdf"):
+            edad_horas = (ahora - pdf.stat().st_mtime) / 3600
+            if edad_horas > PDF_TTL_HOURS:
+                try:
+                    pdf.unlink()
+                    eliminados += 1
+                except Exception:
+                    pass  # Archivo en uso o sin permisos, ignorar
+        if eliminados > 0:
+            logger.info(f"[CLEANUP] {eliminados} PDF(s) antiguos eliminados de output/")
+    except Exception as e:
+        logger.warning(f"[CLEANUP] Error limpiando PDFs antiguos: {e}")
+
+
+def _borrar_diferido(ruta: str, delay: int = 10):
+    """
+    Borra un archivo después de N segundos en un hilo background.
+    Se usa para borrar el PDF después de que send_file() lo haya enviado.
+    El delay da tiempo a que Flask termine de transmitir el archivo.
+    """
+    def borrar():
+        time.sleep(delay)
+        try:
+            if os.path.exists(ruta):
+                os.unlink(ruta)
+                logger.info(f"[CLEANUP] PDF borrado tras descarga: {Path(ruta).name}")
+        except Exception:
+            pass  # No es crítico si no se borra ahora — el cleanup de startup lo atrapa
+    t = threading.Thread(target=borrar, daemon=True)
+    t.start()
 
 
 @descargas_bp.route('/expediente', methods=['GET', 'POST'])
@@ -201,11 +251,17 @@ def descargar_pdf(expediente_id):
             logger.error(f"PDF no encontrado: {expediente.pdf_ruta_temporal}")
             return render_template('error.html', mensaje='Archivo PDF no encontrado'), 404
 
-        # Descargar
+        # Descargar y programar limpieza del archivo
         logger.info(f"Descargando PDF: Usuario {current_user.id}, Expediente {expediente.numero}")
 
+        pdf_path = expediente.pdf_ruta_temporal
+
+        # Programar borrado del PDF 10 segundos después de enviarlo.
+        # Esto libera disco en el servidor. El usuario ya tiene su copia.
+        _borrar_diferido(pdf_path, delay=10)
+
         return send_file(
-            expediente.pdf_ruta_temporal,
+            pdf_path,
             as_attachment=True,
             download_name=f"Expediente_{expediente.numero.replace('/', '_')}.pdf"
         )
