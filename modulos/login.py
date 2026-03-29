@@ -144,18 +144,46 @@ class ClienteSelenium:
 
             print(f"[COOKIES] Cargando {len(cookies)} cookie(s)...")
 
+            # PROBLEMA: después de navegar a Mesa Virtual, el driver queda
+            # redirigido a ol-sso.jusentrerios.gov.ar (el login de Keycloak).
+            # add_cookie() falla silenciosamente si el dominio de la cookie
+            # no coincide con el dominio actual del driver.
+            #
+            # SOLUCIÓN: usar Chrome DevTools Protocol (CDP) que permite inyectar
+            # cookies para cualquier dominio sin restricción de dominio actual.
+            try:
+                self.driver.execute_cdp_cmd('Network.enable', {})
+                usar_cdp = True
+                print("[COOKIES] Usando CDP para inyección cross-domain...")
+            except Exception:
+                usar_cdp = False
+                print("[COOKIES] CDP no disponible, usando add_cookie()")
+
             cookies_cargadas = 0
             for cookie in cookies:
                 try:
-                    # Remover el campo 'expiry' si existe (puede causar problemas)
-                    if 'expiry' in cookie:
-                        del cookie['expiry']
-
-                    self.driver.add_cookie(cookie)
+                    if usar_cdp:
+                        # Construir el dict para CDP (campos distintos a add_cookie)
+                        cdp_cookie = {
+                            'name': cookie['name'],
+                            'value': cookie['value'],
+                            'domain': cookie.get('domain', ''),
+                            'path': cookie.get('path', '/'),
+                            'secure': cookie.get('secure', False),
+                            'httpOnly': cookie.get('httpOnly', False),
+                        }
+                        # Agregar expiración si existe
+                        if 'expiry' in cookie:
+                            cdp_cookie['expires'] = cookie['expiry']
+                        self.driver.execute_cdp_cmd('Network.setCookie', cdp_cookie)
+                    else:
+                        # Fallback: método original (solo funciona si el dominio coincide)
+                        if 'expiry' in cookie:
+                            del cookie['expiry']
+                        self.driver.add_cookie(cookie)
                     cookies_cargadas += 1
                 except Exception as e:
-                    # Algunas cookies pueden no ser compatibles, continuar
-                    pass
+                    print(f"[WARN] No se pudo cargar cookie '{cookie.get('name', '?')}': {e}")
 
             print(f"[OK] {cookies_cargadas} cookie(s) cargada(s)")
 
