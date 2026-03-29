@@ -102,8 +102,17 @@ def crear_app(config_obj=None):
     # ═════════════════════════════════════════════════════════════════════
 
     with app.app_context():
-        db.create_all()
-        logger.info(f"[OK] Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
+        try:
+            db.create_all()
+            logger.info(f"[OK] Tablas de BD creadas (ambiente: {config.FLASK_ENV})")
+        except Exception as e:
+            # Con múltiples workers de Gunicorn puede haber condición de carrera
+            # al crear tablas simultáneamente. Si ya existen, es seguro continuar.
+            error_str = str(e)
+            if "already exists" in error_str or "UniqueViolation" in error_str:
+                logger.info("[OK] Tablas ya existentes (otro worker las creó primero)")
+            else:
+                raise
 
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
