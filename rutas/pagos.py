@@ -76,6 +76,17 @@ def crear_orden():
 
         plan_info = PLANES[plan]
 
+        # Generar URLs de retorno del servidor actual.
+        # url_for con _external=True produce la URL completa (https://servidor.com/ruta).
+        # Esto funciona en producción sin configurar variables de entorno adicionales.
+        # Si el admin configura MERCADO_PAGO_SUCCESS_URL etc. en Render, esas toman prioridad
+        # (el módulo mercado_pago.py las usa si no se pasan parámetros).
+        success_url = os.getenv('MERCADO_PAGO_SUCCESS_URL') or url_for('pagos.pago_confirmado', _external=True)
+        failure_url = os.getenv('MERCADO_PAGO_FAILURE_URL') or url_for('pagos.pago_fallido', _external=True)
+        pending_url = os.getenv('MERCADO_PAGO_PENDING_URL') or url_for('pagos.pago_pendiente', _external=True)
+
+        logger.info(f"Back URLs de MP → success: {success_url}")
+
         # Crear orden en Mercado Pago (en ARS)
         orden = crear_orden_pago(
             user_id=current_user.id,
@@ -83,7 +94,10 @@ def crear_orden():
             descripcion=plan_info['descripcion'],
             monto=plan_info['precio_ars'],
             moneda='ARS',
-            email_usuario=current_user.email
+            email_usuario=current_user.email,
+            success_url=success_url,
+            failure_url=failure_url,
+            pending_url=pending_url,
         )
 
         # Guardar referencia de la orden en BD (estado: pending)

@@ -39,7 +39,10 @@ def crear_orden_pago(
     descripcion: str,
     monto: float,
     email_usuario: str,
-    moneda: str = 'ARS'
+    moneda: str = 'ARS',
+    success_url: str = None,
+    failure_url: str = None,
+    pending_url: str = None,
 ) -> Dict[str, Any]:
     """
     Crea una orden de pago en Mercado Pago.
@@ -51,6 +54,9 @@ def crear_orden_pago(
         monto: Monto a pagar
         email_usuario: Email del usuario
         moneda: Moneda de pago (ARS o USD) - por defecto ARS
+        success_url: URL de retorno cuando el pago fue aprobado (override del env var)
+        failure_url: URL de retorno cuando el pago falló (override del env var)
+        pending_url: URL de retorno cuando el pago quedó pendiente (override del env var)
 
     Returns:
         Dict con datos de la orden (id, link de pago, etc.)
@@ -91,9 +97,10 @@ def crear_orden_pago(
             "email": email_usuario
         },
         "back_urls": {
-            "success": MP_SUCCESS_URL,
-            "failure": MP_FAILURE_URL,
-            "pending": MP_PENDING_URL
+            # Usar parámetro si se pasó, si no usar env var, si no el default (localhost)
+            "success": success_url or MP_SUCCESS_URL,
+            "failure": failure_url or MP_FAILURE_URL,
+            "pending": pending_url or MP_PENDING_URL,
         },
         "auto_return": "approved",  # Redirige automáticamente solo si el pago fue aprobado
         "external_reference": f"user_{user_id}_plan_{plan}",
