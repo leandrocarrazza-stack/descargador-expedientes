@@ -9,9 +9,6 @@ Funciones:
 """
 
 import logging
-import base64
-import os
-from pathlib import Path
 from functools import wraps
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -76,44 +73,3 @@ def otorgar_creditos():
         'creditos_nuevos': usuario.creditos_disponibles
     })
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  RUTA TEMPORAL: subir sesion.pkl via web (protegida por token)
-#  Usar UNA VEZ para inicializar la sesión en producción, luego eliminar.
-# ─────────────────────────────────────────────────────────────────────────────
-
-_SETUP_TOKEN = 'leandro-setup-sesion-2026'
-
-
-@admin_bp.route('/set-sesion', methods=['GET', 'POST'])
-def set_sesion():
-    """
-    Ruta temporal para subir sesion.pkl desde el browser.
-    Requiere token secreto en la URL: /admin/set-sesion?token=...
-    """
-    token = request.args.get('token', '')
-    if token != _SETUP_TOKEN:
-        return 'Token inválido', 403
-
-    if request.method == 'POST':
-        b64 = request.form.get('sesion_b64', '').strip()
-        try:
-            data = base64.b64decode(b64)
-            sesion_path = os.environ.get('MESA_VIRTUAL_SESSION_PATH', '/data/sesion.pkl')
-            Path(sesion_path).parent.mkdir(parents=True, exist_ok=True)
-            Path(sesion_path).write_bytes(data)
-            return f'<h2>✅ OK — {len(data)} bytes guardados en {sesion_path}</h2>'
-        except Exception as e:
-            return f'<h2>❌ Error: {e}</h2>', 400
-
-    return '''
-    <html><body style="font-family:monospace;padding:2rem">
-    <h2>Subir sesion.pkl</h2>
-    <form method="post">
-        <textarea name="sesion_b64" rows="6" cols="80"
-            placeholder="Pegá aquí el contenido base64 de sesion.pkl"></textarea>
-        <br><br>
-        <button type="submit" style="padding:.5rem 2rem;font-size:1rem">Guardar sesión</button>
-    </form>
-    </body></html>
-    '''
