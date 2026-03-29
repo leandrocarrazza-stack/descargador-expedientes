@@ -109,14 +109,20 @@ def crear_orden():
         }), 200
 
     except MercadoPagoError as e:
-        logger.error(f"Error de Mercado Pago: {str(e)}")
+        msg = str(e)
+        logger.error(f"Error de Mercado Pago: {msg}")
+        # Mensaje amigable para el usuario (sin exponer detalles técnicos internos)
+        if 'ACCESS_TOKEN' in msg:
+            mensaje_usuario = 'El servicio de pagos no está configurado. Contactá al administrador.'
+        else:
+            mensaje_usuario = 'No se pudo conectar con Mercado Pago. Intentá de nuevo en unos minutos.'
         return jsonify({
             'success': False,
-            'mensaje': f'Error al procesar el pago: {str(e)}'
+            'mensaje': mensaje_usuario
         }), 500
 
     except Exception as e:
-        logger.error(f"Error en crear_orden: {str(e)}")
+        logger.error(f"Error en crear_orden: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'mensaje': 'Error inesperado al crear la orden'

@@ -24,7 +24,7 @@ Uso:
 """
 
 import logging
-from flask import Blueprint, request, jsonify, session, render_template
+from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email
 from modulos.models import User
@@ -160,7 +160,8 @@ def logout():
 
     logger.info(f"✅ Logout: {email}")
 
-    return jsonify({'mensaje': '✅ Sesión cerrada'}), 200
+    # Redirigir al login en lugar de devolver JSON
+    return redirect(url_for('auth.login'))
 
 
 @auth_bp.route('/user', methods=['GET'])

@@ -66,6 +66,13 @@ def crear_orden_pago(
         'profesional': 20
     }
 
+    # Verificar que el token esté configurado antes de intentar llamar a la API
+    if not MP_ACCESS_TOKEN:
+        raise MercadoPagoError(
+            "MERCADO_PAGO_ACCESS_TOKEN no está configurado en las variables de entorno. "
+            "Configuralo en Render > Environment."
+        )
+
     creditos = CREDITOS_POR_PLAN.get(plan, 0)
 
     # Payload para Checkout Pro (Preferences API)
@@ -106,7 +113,13 @@ def crear_orden_pago(
     try:
         # Crear preferencia de pago en Mercado Pago
         response = requests.post(MP_PREFERENCES_ENDPOINT, json=payload, headers=headers)
-        response.raise_for_status()
+
+        # Si la respuesta no es 2xx, loguear el cuerpo del error para diagnóstico
+        if not response.ok:
+            logger.error(
+                f"MP respondió {response.status_code}: {response.text[:500]}"
+            )
+            response.raise_for_status()
 
         data = response.json()
 
