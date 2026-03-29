@@ -16,8 +16,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# Nota: NO usamos webdriver_manager porque falla con versiones nuevas de Chrome.
+# Selenium 4.6+ incluye "Selenium Manager" que descarga el driver correcto automáticamente.
 import time
 from modulos.logger import crear_logger
 
@@ -48,7 +48,7 @@ class ClienteSelenium:
         try:
             options = webdriver.ChromeOptions()
             self.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
+                # Sin Service() explícito: Selenium Manager elige el driver correcto automáticamente
                 options=options
             )
             print("[NET] Abriendo navegador Chrome...")
@@ -429,7 +429,7 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         print("\n[ARCHIVO] Sesión local detectada, intentando...")
         try:
             cliente.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
+                # Sin Service() explícito: Selenium Manager elige el driver correcto automáticamente
                 options=options
             )
             if cliente.cargar_sesion():
@@ -459,7 +459,7 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         if cookies_db:
             try:
                 cliente.driver = webdriver.Chrome(
-                    service=Service(ChromeDriverManager().install()),
+                    # Sin Service() explícito: Selenium Manager elige el driver correcto automáticamente
                     options=options
                 )
                 if _inyectar_cookies_en_driver(cliente.driver, cookies_db, url_mesa_virtual):
