@@ -231,6 +231,20 @@
             crédito{{ 's' if creditos != 1 else '' }} disponible{{ 's' if creditos != 1 else '' }}</span>
         </div>
 
+        <!-- Estado de sesión Mesa Virtual -->
+        {% if tiene_sesion_mv %}
+        <div style="background:#f0fff4;border:1px solid #b2dfdb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#2e7d32;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px">✅</span>
+            <span>Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}</span>
+            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:#667eea;font-size:12px;">Reconectar</a>
+        </div>
+        {% else %}
+        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#f57f17;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px">⚠️</span>
+            <span>Mesa Virtual no conectada. Al descargar te pediremos tu usuario y contraseña.</span>
+        </div>
+        {% endif %}
+
         <!-- PANEL 1: Formulario -->
         <div id="panel-form">
             <label for="numero_expediente">Número de Expediente</label>
@@ -440,6 +454,11 @@
                     // Múltiples resultados: mostrar panel de selección
                     detenerAnimacion();
                     mostrarOpciones(data.opciones);
+
+                } else if (data.tipo_error === 'sesion_mv_requerida') {
+                    // No hay sesión de Mesa Virtual → redirigir al login de MV
+                    detenerAnimacion();
+                    window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
 
                 } else {
                     // Error real
