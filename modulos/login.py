@@ -192,26 +192,33 @@ class ClienteSelenium:
 
             print(f"[OK] {cookies_cargadas} cookie(s) cargada(s)")
 
-            # Navegar de nuevo para aplicar las cookies
+            # Navegar de nuevo para aplicar las cookies.
+            # Las cookies de Keycloak inyectadas via CDP permiten que el SSO
+            # auto-autentique sin pedir credenciales, pero la cadena de redirects
+            # puede tomar varios segundos.
             self.driver.get(self.url_mesa_virtual)
-            time.sleep(3)
 
-            # Verificar que se cargó algo
-            url_actual = self.driver.current_url
-            print(f"[OK] URL actual: {url_actual[:80]}...")
+            # Esperar en bucle hasta que la URL se estabilice (máx 20 segundos).
+            # Esto es más robusto que un sleep fijo.
+            tiempo_max = 20
+            inicio = time.time()
+            url_anterior = ""
+            while time.time() - inicio < tiempo_max:
+                url_actual = self.driver.current_url
+                if url_actual != url_anterior:
+                    print(f"[OK] URL: {url_actual[:80]}...")
+                    url_anterior = url_actual
 
-            # Verificar que la sesión es válida
-            # La sesión es válida solo si NO fuimos redirigidos a login/SSO
-            if "ol-sso" in url_actual or "login" in url_actual or "keycloak" in url_actual.lower():
-                print("[WARN] Sesión expirada - fuimos redirigidos a login")
-                return False
+                # Éxito: llegamos a Mesa Virtual y ya no estamos en SSO
+                if ("mesavirtual.jusentrerios.gov.ar" in url_actual and
+                        "ol-sso" not in url_actual):
+                    print("[OK] Sesión restaurada correctamente")
+                    return True
 
-            if "mesavirtual.jusentrerios.gov.ar" in url_actual:
-                print("[OK] Sesión restaurada correctamente")
-                return True
+                time.sleep(1)
 
-            # Si no estamos en login pero tampoco en la URL esperada, probablemente falló
-            print(f"[WARN] URL inesperada después de cargar sesión: {url_actual[:80]}")
+            # Si llegamos acá, no se autenticó en 20 segundos
+            print(f"[WARN] Timeout esperando autenticación. Última URL: {url_actual[:80]}")
             return False
 
         except Exception as e:
