@@ -66,7 +66,8 @@ EXPOSE 5000
 # Timeout alto (300s) porque las descargas son bloqueantes y lentas.
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--timeout", "300", \
      "--access-logfile", "-", \
+     "--log-level", "info", \
      "servidor:app"]

@@ -65,11 +65,25 @@ def _limpiar_drivers_viejos():
 def _crear_driver_headless():
     """Crea un Chrome headless con las opciones correctas para Render."""
     options = webdriver.ChromeOptions()
+
+    # ── Opciones base ──────────────────────────────────────────────────────────
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-blink-features=AutomationControlled')
-    # Sin webdriver_manager: Selenium Manager elige el driver correcto
+    options.add_argument('--disable-dev-shm-usage')       # Usa /tmp en vez de /dev/shm (limitado en Docker)
+    options.add_argument('--disable-blink-features=AutomationControlled')  # Evita detección como bot
+
+    # ── Ahorro de memoria (Render starter plan: 512 MB) ────────────────────────
+    options.add_argument('--disable-extensions')           # No cargar extensiones (~30 MB ahorrados)
+    options.add_argument('--disable-plugins')              # No cargar plugins del sistema
+    options.add_argument('--disable-background-networking') # Desactivar sync y updates en background
+    options.add_argument('--disable-default-apps')        # No apps de Chrome por defecto
+    options.add_argument('--disable-sync')                # Desactivar sincronización con cuenta Google
+    options.add_argument('--no-first-run')                # Saltar wizard de primera vez
+    options.add_argument('--mute-audio')                  # Sin audio (innecesario en headless)
+    options.add_argument('--disable-gpu')                  # Sin GPU (irrelevante en servidor, ahorra RAM)
+    options.add_argument('--js-flags=--max-old-space-size=256')  # Limitar heap de JS a 256 MB
+
+    # Sin webdriver_manager: Selenium Manager elige el driver correcto automáticamente
     return webdriver.Chrome(options=options)
 
 
