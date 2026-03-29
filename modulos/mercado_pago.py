@@ -16,8 +16,9 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Configuración de Mercado Pago
-MP_ACCESS_TOKEN = os.getenv('MERCADO_PAGO_ACCESS_TOKEN')
-MP_PUBLIC_KEY = os.getenv('MERCADO_PAGO_PUBLIC_KEY')
+# .strip() elimina espacios/saltos de línea accidentales al copiar/pegar en Render
+MP_ACCESS_TOKEN = (os.getenv('MERCADO_PAGO_ACCESS_TOKEN') or '').strip() or None
+MP_PUBLIC_KEY = (os.getenv('MERCADO_PAGO_PUBLIC_KEY') or '').strip() or None
 MP_SUCCESS_URL = os.getenv('MERCADO_PAGO_SUCCESS_URL', 'http://localhost:5000/pago-confirmado')
 MP_FAILURE_URL = os.getenv('MERCADO_PAGO_FAILURE_URL', 'http://localhost:5000/pago-fallido')
 MP_PENDING_URL = os.getenv('MERCADO_PAGO_PENDING_URL', 'http://localhost:5000/pago-pendiente')
