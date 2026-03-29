@@ -31,8 +31,7 @@ redis==5.0.0
 # Server & Production
 gunicorn==21.2.0
 
-# Payment
-stripe==5.14.0
+# Payment (Mercado Pago via requests, sin SDK separado)
 
 # Logging & Monitoring
 python-json-logger==2.0.7
