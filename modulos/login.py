@@ -163,7 +163,10 @@ class ClienteSelenium:
             for cookie in cookies:
                 try:
                     if usar_cdp:
-                        # Construir el dict para CDP (campos distintos a add_cookie)
+                        # Construir el dict para CDP.
+                        # Soporta dos formatos de cookie guardada:
+                        #   - Formato Selenium (get_cookies): usa 'expiry' (int)
+                        #   - Formato CDP (Network.getAllCookies): usa 'expires' (float)
                         cdp_cookie = {
                             'name': cookie['name'],
                             'value': cookie['value'],
@@ -172,8 +175,10 @@ class ClienteSelenium:
                             'secure': cookie.get('secure', False),
                             'httpOnly': cookie.get('httpOnly', False),
                         }
-                        # Agregar expiración si existe
-                        if 'expiry' in cookie:
+                        # Expiración: formato Selenium usa 'expiry', CDP usa 'expires'
+                        if 'expires' in cookie and cookie['expires'] > 0:
+                            cdp_cookie['expires'] = cookie['expires']
+                        elif 'expiry' in cookie:
                             cdp_cookie['expires'] = cookie['expiry']
                         self.driver.execute_cdp_cmd('Network.setCookie', cdp_cookie)
                     else:
