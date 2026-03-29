@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block titulo %}Conectar Mesa Virtual{% endblock %}
+
+{% block contenido %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+
+            <!-- PASO 1: Usuario y contraseña -->
+            <div id="paso-1" class="card shadow">
+                <div class="card-body p-4">
+                    <div class="text-center mb-3">
+                        <span style="font-size: 2.5rem;">⚖️</span>
+                        <h4 class="mt-2 mb-0">Conectar Mesa Virtual</h4>
+                        <p class="text-muted small mt-1">
+                            Ingresá tu usuario y contraseña de Mesa Virtual.<br>
+                            Tu contraseña <strong>no se guarda</strong> en ningún lado.
+                        </p>
+                    </div>
+
+                    <div id="error-paso1" class="alert alert-danger d-none"></div>
+
+                    <form id="form-credenciales">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Usuario de Mesa Virtual</label>
+                            <input type="text" id="mv-usuario" class="form-control form-control-lg"
+                                   placeholder="Tu usuario de MV" autocomplete="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Contraseña</label>
+                            <input type="password" id="mv-password" class="form-control form-control-lg"
+                                   placeholder="Tu contraseña de MV" autocomplete="current-password" required>
+                        </div>
+                        <button type="submit" id="btn-conectar" class="btn btn-primary btn-lg w-100">
+                            Conectar →
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- PASO 2: Código 2FA (oculto hasta que se necesite) -->
+            <div id="paso-2" class="card shadow d-none">
+                <div class="card-body p-4">
+                    <div class="text-center mb-3">
+                        <span style="font-size: 2.5rem;">🔐</span>
+                        <h4 class="mt-2 mb-0">Código de verificación</h4>
+                        <p class="text-muted small mt-1">
+                            Abrí tu app autenticadora e ingresá el código de 6 dígitos.
+                        </p>
+                    </div>
+
+                    <div id="error-paso2" class="alert alert-danger d-none"></div>
+
+                    <form id="form-2fa">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Código de 6 dígitos</label>
+                            <input type="text" id="codigo-2fa" class="form-control form-control-lg text-center"
+                                   placeholder="123456" maxlength="6" inputmode="numeric"
+                                   autocomplete="one-time-code" required
+                                   style="font-size: 2rem; letter-spacing: 0.3em;">
+                            <div class="form-text text-center">El código cambia cada 30 segundos</div>
+                        </div>
+                        <button type="submit" id="btn-verificar" class="btn btn-success btn-lg w-100">
+                            Verificar →
+                        </button>
+                        <button type="button" id="btn-volver" class="btn btn-link w-100 mt-2 text-muted">
+                            ← Volver e ingresar de nuevo
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- CARGANDO (oculto) -->
+            <div id="cargando" class="card shadow d-none">
+                <div class="card-body p-4 text-center">
+                    <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;"></div>
+                    <p class="mb-0 fw-semibold" id="msg-cargando">Conectando con Mesa Virtual...</p>
+                    <p class="text-muted small">Esto puede tardar unos segundos</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // URL a la que redirigir después del login exitoso
+    const NEXT_URL = "{{ next_url | default('/descargas/expediente') }}";
+
+    let sessionId = null;  // session_id del paso 1, necesario para el paso 2
+
+    // ── Mostrar/ocultar secciones ─────────────────────────────────────────────
+
+    function mostrarPaso(paso) {
+        document.getElementById('paso-1').classList.add('d-none');
+        document.getElementById('paso-2').classList.add('d-none');
+        document.getElementById('cargando').classList.add('d-none');
+        document.getElementById(paso).classList.remove('d-none');
+    }
+
+    function mostrarError(idDiv, mensaje) {
+        const div = document.getElementById(idDiv);
+        div.textContent = '❌ ' + mensaje;
+        div.classList.remove('d-none');
+    }
+
+    function ocultarError(idDiv) {
+        document.getElementById(idDiv).classList.add('d-none');
+    }
+
+    // ── Paso 1: enviar credenciales ───────────────────────────────────────────
+
+    document.getElementById('form-credenciales').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        ocultarError('error-paso1');
+
+        const mvUsuario = document.getElementById('mv-usuario').value.trim();
+        const mvPassword = document.getElementById('mv-password').value.trim();
+
+        if (!mvUsuario || !mvPassword) return;
+
+        // Mostrar spinner
+        mostrarPaso('cargando');
+        document.getElementById('msg-cargando').textContent = 'Conectando con Mesa Virtual...';
+
+        try {
+            const resp = await fetch('/auth/mv-login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    mv_usuario: mvUsuario,
+                    mv_password: mvPassword,
+                    next: NEXT_URL
+                })
+            });
+
+            const data = await resp.json();
+
+            if (data.estado === '2fa_requerido') {
+                // Guardar el session_id y mostrar el paso 2
+                sessionId = data.session_id;
+                mostrarPaso('paso-2');
+                document.getElementById('codigo-2fa').focus();
+
+            } else if (data.estado === 'ok') {
+                // Login sin 2FA (raro pero posible), redirigir directo
+                document.getElementById('msg-cargando').textContent = '✓ Conectado. Redirigiendo...';
+                mostrarPaso('cargando');
+                setTimeout(() => { window.location.href = data.next || NEXT_URL; }, 1000);
+
+            } else {
+                // Error
+                mostrarPaso('paso-1');
+                mostrarError('error-paso1', data.mensaje || 'Error al conectar. Intentá de nuevo.');
+            }
+
+        } catch (err) {
+            mostrarPaso('paso-1');
+            mostrarError('error-paso1', 'Error de conexión. Verificá tu internet.');
+        }
+    });
+
+    // ── Paso 2: enviar código 2FA ─────────────────────────────────────────────
+
+    document.getElementById('form-2fa').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        ocultarError('error-paso2');
+
+        const codigo = document.getElementById('codigo-2fa').value.trim();
+
+        if (codigo.length !== 6) {
+            mostrarError('error-paso2', 'El código debe tener 6 dígitos');
+            return;
+        }
+
+        // Mostrar spinner
+        mostrarPaso('cargando');
+        document.getElementById('msg-cargando').textContent = 'Verificando código...';
+
+        try {
+            const resp = await fetch('/auth/mv-2fa', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    codigo: codigo,
+                    next: NEXT_URL
+                })
+            });
+
+            const data = await resp.json();
+
+            if (data.estado === 'ok') {
+                // Login completo, redirigir
+                document.getElementById('msg-cargando').textContent = '✓ Conectado. Redirigiendo...';
+                mostrarPaso('cargando');
+                setTimeout(() => { window.location.href = data.next || NEXT_URL; }, 1000);
+
+            } else {
+                // Código incorrecto — volver al paso 2 para reintentar
+                mostrarPaso('paso-2');
+                document.getElementById('codigo-2fa').value = '';
+                mostrarError('error-paso2', data.mensaje || 'Código incorrecto. Intentá de nuevo.');
+                document.getElementById('codigo-2fa').focus();
+            }
+
+        } catch (err) {
+            mostrarPaso('paso-2');
+            mostrarError('error-paso2', 'Error de conexión. Verificá tu internet.');
+        }
+    });
+
+    // ── Botón volver al paso 1 ────────────────────────────────────────────────
+
+    document.getElementById('btn-volver').addEventListener('click', function() {
+        sessionId = null;
+        document.getElementById('mv-password').value = '';
+        document.getElementById('codigo-2fa').value = '';
+        ocultarError('error-paso1');
+        ocultarError('error-paso2');
+        mostrarPaso('paso-1');
+    });
+
+    // Solo aceptar números en el campo 2FA
+    document.getElementById('codigo-2fa').addEventListener('input', function() {
+        this.value = this.value.replace(/\D/g, '').slice(0, 6);
+    });
+</script>
+{% endblock %}

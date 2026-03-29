@@ -24,7 +24,8 @@ from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
 from modulos.database import db
-from modulos.models import ExpedienteDescargado
+from modulos.models import ExpedienteDescargado, SesionUsuarioMV
+from modulos.auth_mv import obtener_cookies_usuario
 import config
 
 logger = logging.getLogger(__name__)
@@ -109,8 +110,14 @@ def descargar_expediente_sync():
     """
     # Si es GET, mostrar formulario
     if request.method == 'GET':
-        return render_template('descargar_expediente.html',
-                             creditos=current_user.creditos_disponibles)
+        # Verificar si el usuario tiene sesión de Mesa Virtual guardada
+        sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
+        return render_template(
+            'descargar_expediente.html',
+            creditos=current_user.creditos_disponibles,
+            tiene_sesion_mv=sesion_mv is not None,
+            mv_usuario=sesion_mv.mv_usuario if sesion_mv else None
+        )
 
     # Si es POST, procesar descarga
     try:
@@ -139,14 +146,26 @@ def descargar_expediente_sync():
                 'creditos_disponibles': current_user.creditos_disponibles
             }), 402
 
-        # 4. EJECUTAR PIPELINE SINCRÓNICO (BLOQUEANTE)
+        # 4. VERIFICAR SESIÓN DE MESA VIRTUAL DEL USUARIO
+        cookies_mv = obtener_cookies_usuario(current_user.id)
+        if not cookies_mv:
+            logger.info(f"Usuario {current_user.id} no tiene sesión MV → redirigir a login")
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'sesion_mv_requerida',
+                'mensaje': 'Necesitás conectar tu cuenta de Mesa Virtual primero.',
+                'login_url': f'/auth/mv-login?next=/descargas/expediente'
+            }), 401
+
+        # 5. EJECUTAR PIPELINE SINCRÓNICO (BLOQUEANTE)
         logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}, Índice {indice_expediente}")
 
         pipeline = PipelineDescargador()
         resultado = pipeline.ejecutar(
             numero_expediente=numero_expediente,
             limpiar_temp=config.LIMPIAR_TEMP,
-            indice_expediente=indice_expediente
+            indice_expediente=indice_expediente,
+            cookies_mv=cookies_mv  # Pasamos las cookies del usuario
         )
 
         # 5. PROCESAR RESULTADO DEL PIPELINE
@@ -191,6 +210,16 @@ def descargar_expediente_sync():
             }), 200
 
         else:
+            # Si el pipeline falló por sesión expirada, informar para reconectar
+            if resultado.tipo_error == 'auth_failed':
+                logger.warning(f"Sesión MV expirada durante descarga para user {current_user.id}")
+                return jsonify({
+                    'exito': False,
+                    'tipo_error': 'sesion_mv_requerida',
+                    'mensaje': 'Tu sesión de Mesa Virtual expiró. Necesitás reconectarla.',
+                    'login_url': f'/auth/mv-login?next=/descargas/expediente'
+                }), 401
+
             # Error real en pipeline
             logger.error(f"Error en descarga: {numero_expediente} - {resultado.error}")
 

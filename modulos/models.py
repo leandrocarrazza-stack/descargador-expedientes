@@ -140,6 +140,34 @@ class ExpedienteDescargado(db.Model):
         }
 
 
+class SesionUsuarioMV(db.Model):
+    """
+    Sesión de Mesa Virtual por usuario.
+
+    Cada usuario tiene su propia cuenta de Mesa Virtual.
+    Cuando hace login en la app (con su usuario+contraseña+2FA de MV),
+    guardamos las cookies aquí para reutilizarlas mientras duren.
+
+    Cuando expiran (horas después), el usuario hace login de nuevo.
+    La contraseña NUNCA se guarda — solo las cookies de sesión.
+    """
+
+    __tablename__ = 'sesion_usuario_mv'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Relación 1:1 con el usuario de la app
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=False, index=True)
+    # Cookies de sesión de Mesa Virtual + Keycloak (JSON)
+    cookies_json = db.Column(db.Text, nullable=False)
+    # Cuándo se guardaron (para detectar expiración)
+    actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Usuario de Mesa Virtual (para mostrarlo en la UI, no es sensible)
+    mv_usuario = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return f'<SesionUsuarioMV user_id={self.user_id} actualizado={self.actualizado_en}>'
+
+
 class CompraCreditos(db.Model):
     """Modelo de compra de créditos (historial de pago con Stripe)."""
 

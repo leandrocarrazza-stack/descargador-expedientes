@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
 from modulos.login import ClienteSelenium, crear_cliente_sesion
+from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
 from modulos.conversion import ConversorRTF
@@ -53,7 +54,7 @@ class PipelineDescargador:
         self.unificador: Optional[UnificadorPDF] = None
         self.carpeta_temp: Optional[Path] = None
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -69,13 +70,27 @@ class PipelineDescargador:
 
             # PASO 1: AUTENTICACIÓN
             logger.info("[PASO 1/5] Autenticación en Mesa Virtual")
-            self.cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
-            if not self.cliente:
-                return ResultadoPipeline(
-                    exito=False,
-                    error="No se pudo crear sesión. Intenta nuevamente.",
-                    tipo_error="auth_failed"
-                )
+
+            if cookies_mv:
+                # Usar las cookies del usuario (Login Relay) — camino normal en producción
+                logger.info("[PASO 1/5] Usando cookies del usuario (Login Relay)")
+                self.cliente = crear_cliente_desde_cookies(cookies_mv)
+                if not self.cliente:
+                    return ResultadoPipeline(
+                        exito=False,
+                        error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.",
+                        tipo_error="auth_failed"
+                    )
+            else:
+                # Fallback: sesión local (solo para desarrollo/testing)
+                logger.info("[PASO 1/5] Sin cookies_mv, usando sesión local (modo desarrollo)")
+                self.cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+                if not self.cliente:
+                    return ResultadoPipeline(
+                        exito=False,
+                        error="No se pudo crear sesión. Intenta nuevamente.",
+                        tipo_error="auth_failed"
+                    )
 
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
