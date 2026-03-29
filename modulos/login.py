@@ -16,8 +16,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# Selenium 4.6+ incluye Selenium Manager que descarga el driver correcto automáticamente.
+# NO usar webdriver_manager porque falla con versiones nuevas de Chrome (ej: Chrome 146).
 import time
 from modulos.logger import crear_logger
 
@@ -51,7 +51,7 @@ class ClienteSelenium:
         try:
             options = webdriver.ChromeOptions()
             self.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
+                # Selenium Manager elige el driver correcto automáticamente
                 options=options
             )
             print("[NET] Abriendo navegador Chrome...")
@@ -369,7 +369,7 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
             options.add_argument('--js-flags=--max-old-space-size=256')
 
             cliente.driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()),
+                # Selenium Manager elige el driver correcto automáticamente
                 options=options
             )
             print("[SILENT] Navegador en modo silencioso (headless)...")

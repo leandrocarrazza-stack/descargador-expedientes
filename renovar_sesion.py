@@ -29,8 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# Selenium 4.6+ incluye Selenium Manager: no necesitamos webdriver_manager.
 
 URL_MESA_VIRTUAL = "https://mesavirtual.jusentrerios.gov.ar/"
 ARCHIVO_SESION = Path.home() / ".mesa_virtual_sesion.pkl"
@@ -51,10 +50,7 @@ def renovar_sesion():
     options = webdriver.ChromeOptions()
     options.add_argument('--window-size=1200,800')
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
+    driver = webdriver.Chrome(options=options)  # Selenium Manager elige el driver automáticamente
 
     try:
         # Habilitar CDP Network para poder acceder a todas las cookies
