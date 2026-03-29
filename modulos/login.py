@@ -273,6 +273,116 @@ class ClienteSelenium:
             self.driver.quit()
 
 
+def _guardar_cookies_en_db(cookies, info=None):
+    """
+    Guarda las cookies de Mesa Virtual en la base de datos.
+    Solo funciona dentro de un contexto Flask activo.
+
+    Args:
+        cookies: Lista de dicts con las cookies del navegador
+        info: Texto opcional (ej: "subidas por admin el 2026-03-29")
+    """
+    try:
+        import json
+        from modulos.models import SesionMesaVirtual
+        from modulos.database import db
+
+        # Borrar sesiones anteriores e insertar la nueva
+        SesionMesaVirtual.query.delete()
+        nueva_sesion = SesionMesaVirtual(
+            cookies_json=json.dumps(cookies),
+            info=info or f"subidas el {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        )
+        db.session.add(nueva_sesion)
+        db.session.commit()
+        logger.info(f"[DB] Cookies guardadas en BD ({len(cookies)} cookies)")
+        return True
+    except Exception as e:
+        logger.warning(f"[DB] No se pudieron guardar cookies en BD: {e}")
+        return False
+
+
+def _cargar_cookies_desde_db():
+    """
+    Carga las cookies de Mesa Virtual desde la base de datos.
+    Solo funciona dentro de un contexto Flask activo.
+
+    Returns:
+        list: Lista de dicts con las cookies, o None si no hay sesión guardada
+    """
+    try:
+        import json
+        from modulos.models import SesionMesaVirtual
+
+        sesion = SesionMesaVirtual.query.order_by(
+            SesionMesaVirtual.actualizado_en.desc()
+        ).first()
+
+        if sesion:
+            cookies = json.loads(sesion.cookies_json)
+            logger.info(f"[DB] {len(cookies)} cookies cargadas desde BD (subidas: {sesion.actualizado_en})")
+            return cookies
+        else:
+            logger.info("[DB] No hay cookies guardadas en BD")
+            return None
+    except Exception as e:
+        logger.warning(f"[DB] No se pudieron cargar cookies desde BD: {e}")
+        return None
+
+
+def _inyectar_cookies_en_driver(driver, cookies, url_base):
+    """
+    Inyecta una lista de cookies en un webdriver de Selenium.
+
+    Args:
+        driver: WebDriver de Selenium
+        cookies: Lista de dicts con las cookies
+        url_base: URL del dominio (para que las cookies apliquen)
+
+    Returns:
+        bool: True si las cookies se inyectaron y la sesión es válida
+    """
+    try:
+        # Navegar al dominio primero (requerido por Selenium para agregar cookies)
+        driver.get(url_base)
+        import time
+        time.sleep(2)
+
+        # Inyectar cada cookie
+        cargadas = 0
+        for cookie in cookies:
+            try:
+                # Selenium no acepta el campo 'expiry' en algunos casos
+                cookie_limpia = {k: v for k, v in cookie.items() if k != 'expiry'}
+                driver.add_cookie(cookie_limpia)
+                cargadas += 1
+            except Exception:
+                pass
+
+        logger.info(f"[COOKIES] {cargadas}/{len(cookies)} cookies inyectadas")
+
+        # Recargar para que las cookies tomen efecto
+        driver.get(url_base)
+        time.sleep(3)
+
+        # Verificar que la sesión sea válida (no redirigió a login)
+        url_actual = driver.current_url
+        if "ol-sso" in url_actual or "login" in url_actual or "keycloak" in url_actual.lower():
+            logger.warning("[COOKIES] Sesión expirada - redirigió a login")
+            return False
+
+        if "mesavirtual.jusentrerios.gov.ar" in url_actual:
+            logger.info("[COOKIES] Sesión válida")
+            return True
+
+        logger.warning(f"[COOKIES] URL inesperada: {url_actual[:80]}")
+        return False
+
+    except Exception as e:
+        logger.warning(f"[COOKIES] Error inyectando cookies: {e}")
+        return False
+
+
 def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True, headless=True):
     """
     Crea un cliente Selenium para acceso autenticado.
@@ -299,37 +409,72 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
         url_mesa_virtual = "https://mesavirtual.jusentrerios.gov.ar/"
 
     print("\n" + "=" * 70)
-    print("  [WARN] SESION REQUERIDA")
+    print("  [AUTH] INICIANDO SESION EN MESA VIRTUAL")
     print("=" * 70)
 
     cliente = ClienteSelenium(url_mesa_virtual)
 
-    # Intentar cargar sesión guardada primero
-    sesion_cargada = False
-    if usar_sesion_guardada and cliente.sesion_existe():
-        print("\n[OK] Sesión guardada detectada, intentando cargar...")
-        try:
-            # Crear navegador en headless mode (sin interfaz visible)
-            options = webdriver.ChromeOptions()
-            if headless:
-                options.add_argument('--headless')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--disable-blink-features=AutomationControlled')
+    # Opciones de Chrome (headless para servidor)
+    options = webdriver.ChromeOptions()
+    if headless:
+        options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-blink-features=AutomationControlled')
 
+    sesion_cargada = False
+
+    # ── OPCIÓN 1: Archivo de cookies local (para desarrollo en tu PC) ──────
+    if usar_sesion_guardada and cliente.sesion_existe():
+        print("\n[ARCHIVO] Sesión local detectada, intentando...")
+        try:
             cliente.driver = webdriver.Chrome(
                 service=Service(ChromeDriverManager().install()),
                 options=options
             )
-            print("[SILENT] Navegador en modo silencioso (headless)...")
-
-            # CARGAR la sesión guardada
             if cliente.cargar_sesion():
                 sesion_cargada = True
-                print("[OK] Usando sesión guardada (sin navegador visible)\n")
+                print("[OK] Sesión desde archivo local\n")
             else:
-                # No se pudo cargar, requiere nuevo login
-                print("[WARN] Sesión expirada, se requiere nuevo login")
+                print("[WARN] Archivo de sesión expirado")
+                if cliente.driver:
+                    try:
+                        cliente.driver.quit()
+                    except:
+                        pass
+                cliente.driver = None
+        except Exception as e:
+            print(f"[WARN] Error cargando sesión local: {e}")
+            if cliente.driver:
+                try:
+                    cliente.driver.quit()
+                except:
+                    pass
+            cliente.driver = None
+
+    # ── OPCIÓN 2: Cookies en BD (para servidor Render con 2FA) ────────────
+    if not sesion_cargada:
+        print("\n[DB] Buscando cookies en base de datos...")
+        cookies_db = _cargar_cookies_desde_db()
+        if cookies_db:
+            try:
+                cliente.driver = webdriver.Chrome(
+                    service=Service(ChromeDriverManager().install()),
+                    options=options
+                )
+                if _inyectar_cookies_en_driver(cliente.driver, cookies_db, url_mesa_virtual):
+                    sesion_cargada = True
+                    print("[OK] Sesión desde BD (cookies subidas por admin)\n")
+                else:
+                    print("[WARN] Cookies de BD expiradas")
+                    if cliente.driver:
+                        try:
+                            cliente.driver.quit()
+                        except:
+                            pass
+                    cliente.driver = None
+            except Exception as e:
+                print(f"[WARN] Error usando cookies de BD: {e}")
                 if cliente.driver:
                     try:
                         cliente.driver.quit()
@@ -337,28 +482,27 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
                         pass
                 cliente.driver = None
 
-        except Exception as e:
-            print(f"[WARN] No se pudo usar sesión guardada: {e}")
-            if cliente.driver:
-                try:
-                    cliente.driver.quit()
-                except:
-                    pass
-            cliente.driver = None
-            sesion_cargada = False
-
-    # Si no se cargó sesión, hacer login manual
+    # ── OPCIÓN 3: Login manual (solo para uso local, requiere pantalla) ────
     if not sesion_cargada:
+        # En servidor Render no hay pantalla ni usuario → falla con mensaje claro
+        import os
+        en_servidor = os.getenv('FLASK_ENV') == 'production' or os.getenv('RENDER')
+        if en_servidor:
+            raise Exception(
+                "Sesión de Mesa Virtual no disponible. "
+                "Ejecutá 'python subir_cookies.py' en tu PC para subir las cookies al servidor."
+            )
+
         print("\n[NET] Requiere login manual...")
         print("[NET] Abriendo navegador Chrome (visible para 2FA)...\n")
 
         if not cliente.abrir_navegador_y_loguearse():
             raise Exception("[ERROR] No se completó el login a tiempo")
 
-        # Guardar la sesión para próximas veces
+        # Guardar sesión localmente para próximas veces
         print("\n[SAVE] Guardando sesión para próximas descargas...")
         if cliente.guardar_sesion():
-            print("[OK] Sesión guardada - próximas descargas serán silenciosas\n")
+            print("[OK] Sesión guardada localmente\n")
         else:
             print("[WARN] No se pudo guardar sesión\n")
 

@@ -140,6 +140,28 @@ class ExpedienteDescargado(db.Model):
         }
 
 
+class SesionMesaVirtual(db.Model):
+    """
+    Cookies de sesión de Mesa Virtual guardadas en BD.
+
+    Permite que el servidor (Render) use una sesión autenticada
+    que el admin subió desde su máquina local (donde hizo login + 2FA).
+    """
+
+    __tablename__ = 'sesion_mesa_virtual'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Las cookies como JSON (lista de dicts con name, value, domain, etc.)
+    cookies_json = db.Column(db.Text, nullable=False)
+    # Cuándo se subieron (para saber si están frescas)
+    actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Info opcional de quién/cuándo las subió
+    info = db.Column(db.String(255), nullable=True)
+
+    def __repr__(self):
+        return f'<SesionMesaVirtual actualizado={self.actualizado_en}>'
+
+
 class CompraCreditos(db.Model):
     """Modelo de compra de créditos (historial de pago con Stripe)."""
 
