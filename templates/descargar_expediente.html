@@ -8,7 +8,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f4f6f8;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -23,11 +23,11 @@
             max-width: 560px;
             width: 100%;
         }
-        h1 { color: #333; margin-bottom: 20px; font-size: 24px; }
+        h1 { color: #0f2744; margin-bottom: 20px; font-size: 24px; }
 
         /* CREDITOS */
         .creditos-info {
-            background: #f0f4ff;
+            background: #eef5f4;
             padding: 14px 18px;
             border-radius: 10px;
             margin-bottom: 24px;
@@ -37,7 +37,7 @@
             font-size: 14px;
             color: #555;
         }
-        .creditos-num { color: #667eea; font-weight: bold; font-size: 16px; }
+        .creditos-num { color: #1e6b5e; font-weight: bold; font-size: 16px; }
 
         /* FORMULARIO */
         #panel-form label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
@@ -50,12 +50,12 @@
             transition: border-color 0.3s;
             margin-bottom: 6px;
         }
-        #panel-form input[type="text"]:focus { outline: none; border-color: #667eea; }
+        #panel-form input[type="text"]:focus { outline: none; border-color: #1e6b5e; }
         .hint { font-size: 12px; color: #999; margin-bottom: 20px; }
         .btn-primary {
             width: 100%;
             padding: 13px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e6b5e 0%, #2a7c6f 100%);
             color: white;
             border: none;
             border-radius: 8px;
@@ -93,7 +93,7 @@
             transition: all 0.4s;
         }
         .etapa-badge.activa {
-            background: #667eea;
+            background: #1e6b5e;
             color: white;
             animation: pulsar 1.2s ease-in-out infinite;
         }
@@ -123,7 +123,7 @@
         }
         .barra-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: linear-gradient(90deg, #1e6b5e, #2a7c6f);
             border-radius: 8px;
             transition: width 1.5s ease;
             width: 0%;
@@ -142,14 +142,14 @@
             cursor: pointer;
             transition: border-color 0.2s, background 0.2s;
         }
-        .opcion-card:hover { border-color: #667eea; background: #f8f9ff; }
+        .opcion-card:hover { border-color: #1e6b5e; background: #f0f9f7; }
         .opcion-caratula { font-weight: 600; font-size: 14px; color: #333; margin-bottom: 4px; }
         .opcion-meta { font-size: 12px; color: #888; }
         .opcion-meta span { margin-right: 12px; }
         .btn-opcion {
             margin-top: 8px;
             padding: 7px 16px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #1e6b5e, #2a7c6f);
             color: white;
             border: none;
             border-radius: 6px;
@@ -204,7 +204,7 @@
 
         /* LINKS */
         .back-link { text-align: center; margin-top: 20px; }
-        .back-link a { color: #667eea; text-decoration: none; font-size: 14px; }
+        .back-link a { color: #1e6b5e; text-decoration: none; font-size: 14px; }
         .back-link a:hover { text-decoration: underline; }
         .btn-reintentar {
             width: 100%;
@@ -236,7 +236,7 @@
         <div style="background:#f0fff4;border:1px solid #b2dfdb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#2e7d32;display:flex;align-items:center;gap:10px;">
             <span style="font-size:18px">✅</span>
             <span>Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}</span>
-            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:#667eea;font-size:12px;">Reconectar</a>
+            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:#1e6b5e;font-size:12px;">Reconectar</a>
         </div>
         {% else %}
         <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#f57f17;display:flex;align-items:center;gap:10px;">
