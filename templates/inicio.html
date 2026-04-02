@@ -1,49 +1,556 @@
 {% extends "base.html" %}
 
+{% block titulo %}Entre Expedientes — Expedientes judiciales unificados{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    /* Overrides para la landing — sin el container-main blanco */
+    .container-main {
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+    }
+
+    /* ── HERO ─────────────────────────────────── */
+    .hero {
+        background: #ffffff;
+        padding: 80px 0 60px;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: #edf7f5;
+        color: var(--primary);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        margin-bottom: 24px;
+    }
+
+    .hero-badge .dot {
+        width: 7px;
+        height: 7px;
+        background: var(--primary);
+        border-radius: 50%;
+    }
+
+    .hero h1 {
+        font-size: clamp(2.4rem, 5vw, 3.6rem);
+        line-height: 1.1;
+        color: var(--navy);
+        margin-bottom: 20px;
+        font-weight: 800;
+    }
+
+    .hero h1 .accent {
+        color: var(--primary);
+    }
+
+    .hero p.lead {
+        font-size: 1.05rem;
+        color: #555;
+        line-height: 1.7;
+        max-width: 480px;
+        margin-bottom: 32px;
+    }
+
+    .hero-ctas {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .btn-hero-primary {
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 13px 28px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: 'Inter', sans-serif;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.2s, transform 0.15s;
+    }
+
+    .btn-hero-primary:hover {
+        background: var(--teal-light);
+        color: white;
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+
+    .btn-hero-secondary {
+        color: #555;
+        font-size: 14px;
+        font-weight: 500;
+        font-family: 'Inter', sans-serif;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .btn-hero-secondary:hover {
+        color: var(--primary);
+        text-decoration: none;
+    }
+
+    /* Mockup PDF card */
+    .pdf-card-mock {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 40px rgba(15,39,68,0.14);
+        overflow: hidden;
+        max-width: 320px;
+        margin-left: auto;
+    }
+
+    .pdf-card-header {
+        background: var(--navy);
+        color: white;
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .pdf-badge {
+        background: rgba(255,255,255,0.2);
+        border-radius: 4px;
+        padding: 2px 7px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+
+    .pdf-card-title {
+        font-size: 14px;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+        margin: 0;
+    }
+
+    .pdf-card-sub {
+        font-size: 12px;
+        opacity: 0.7;
+        font-family: 'Inter', sans-serif;
+        margin: 0;
+    }
+
+    .pdf-card-body {
+        padding: 16px 20px;
+    }
+
+    .pdf-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 9px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+        color: #333;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .pdf-item:last-child { border-bottom: none; }
+
+    .pdf-page {
+        color: #999;
+        font-size: 12px;
+    }
+
+    .pdf-card-footer {
+        background: #edf7f5;
+        padding: 10px 20px;
+        font-size: 12px;
+        color: var(--primary);
+        font-weight: 600;
+        font-family: 'Inter', sans-serif;
+        text-align: center;
+    }
+
+    /* ── STATS ────────────────────────────────── */
+    .stats-bar {
+        background: #f4f6f8;
+        padding: 36px 0;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .stat-item {
+        text-align: center;
+        padding: 0 24px;
+    }
+
+    .stat-value {
+        font-family: 'Playfair Display', serif;
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--navy);
+        line-height: 1;
+        margin-bottom: 4px;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: #666;
+        font-weight: 500;
+    }
+
+    .stat-divider {
+        width: 1px;
+        height: 48px;
+        background: #d8dde5;
+    }
+
+    /* ── CÓMO FUNCIONA ───────────────────────── */
+    .section {
+        padding: 72px 0;
+    }
+
+    .section-label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--primary);
+        margin-bottom: 12px;
+        font-family: 'Inter', sans-serif;
+    }
+
+    .section h2 {
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+        color: var(--navy);
+        margin-bottom: 48px;
+    }
+
+    .step-number {
+        width: 44px;
+        height: 44px;
+        background: var(--navy);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 18px;
+        font-family: 'Playfair Display', serif;
+        flex-shrink: 0;
+        margin-bottom: 16px;
+    }
+
+    .step-card {
+        padding: 28px 24px;
+        background: white;
+        border-radius: 14px;
+        border: 1px solid #e8edf3;
+        height: 100%;
+        transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .step-card:hover {
+        box-shadow: 0 8px 28px rgba(15,39,68,0.1);
+        transform: translateY(-3px);
+    }
+
+    .step-card h5 {
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--navy);
+        margin-bottom: 8px;
+    }
+
+    .step-card p {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    /* ── BENEFICIOS ──────────────────────────── */
+    .benefits-section {
+        background: white;
+        padding: 72px 0;
+        border-top: 1px solid #e8edf3;
+        border-bottom: 1px solid #e8edf3;
+    }
+
+    .benefit-card {
+        padding: 28px;
+        border-radius: 14px;
+        border: 1px solid #e8edf3;
+        height: 100%;
+        transition: box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .benefit-card:hover {
+        box-shadow: 0 6px 24px rgba(15,39,68,0.08);
+        border-color: #c8ddd9;
+    }
+
+    .benefit-icon {
+        width: 44px;
+        height: 44px;
+        background: #edf7f5;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        margin-bottom: 16px;
+        color: var(--primary);
+    }
+
+    .benefit-card h5 {
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--navy);
+        margin-bottom: 8px;
+    }
+
+    .benefit-card p {
+        font-size: 14px;
+        color: #666;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    /* ── CTA FINAL ───────────────────────────── */
+    .cta-section {
+        padding: 80px 0;
+        background: var(--navy);
+        text-align: center;
+    }
+
+    .cta-section h2 {
+        color: white;
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
+        margin-bottom: 16px;
+    }
+
+    .cta-section p {
+        color: rgba(255,255,255,0.7);
+        font-size: 15px;
+        max-width: 480px;
+        margin: 0 auto 36px;
+        line-height: 1.7;
+    }
+
+    .btn-cta {
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 14px 36px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: 'Inter', sans-serif;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.2s, transform 0.15s;
+    }
+
+    .btn-cta:hover {
+        background: var(--teal-light);
+        color: white;
+        transform: translateY(-2px);
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
 {% block contenido %}
-<div class="row justify-content-center align-items-center" style="min-height: 400px;">
-    <div class="col-md-8 text-center">
-        <h1 class="mb-4">🏛️ Descargador de Expedientes</h1>
-        <p class="lead mb-5">
-            Automatiza la descarga de expedientes de la Mesa Virtual de Entre Ríos
-        </p>
 
-        <div class="row mb-5">
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">⚡ Rápido</h5>
-                        <p class="card-text">Descarga expedientes en segundos</p>
+<!-- ── HERO ─────────────────────────────────────────────── -->
+<section class="hero">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    Para abogados de Entre Ríos
+                </div>
+                <h1>
+                    Descargá tu expediente completo en <span class="accent">un solo PDF</span>
+                </h1>
+                <p class="lead">
+                    Ingresá el número de expediente, conectate a Mesa Virtual STJER y obtenés todas las actuaciones unificadas, ordenadas cronológicamente y listas para trabajar.
+                </p>
+                <div class="hero-ctas">
+                    <a href="/auth/login" class="btn-hero-primary">
+                        Empezar ahora <i class="bi bi-arrow-right"></i>
+                    </a>
+                    <a href="#como-funciona" class="btn-hero-secondary">
+                        <i class="bi bi-play-circle"></i> Ver cómo funciona
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6 d-none d-lg-block">
+                <div class="pdf-card-mock">
+                    <div class="pdf-card-header">
+                        <span class="pdf-badge">PDF</span>
+                        <div>
+                            <p class="pdf-card-title">Expediente Unificado</p>
+                            <p class="pdf-card-sub">Causa N° 12345/2025</p>
+                        </div>
+                    </div>
+                    <div class="pdf-card-body">
+                        <div class="pdf-item">
+                            <span>1. Carátula del expediente</span>
+                            <span class="pdf-page">p.1</span>
+                        </div>
+                        <div class="pdf-item">
+                            <span>2. Acto procesal 1</span>
+                            <span class="pdf-page">p.13</span>
+                        </div>
+                        <div class="pdf-item">
+                            <span>3. Acto procesal 2</span>
+                            <span class="pdf-page">p.25</span>
+                        </div>
+                        <div class="pdf-item">
+                            <span>4. Acto procesal 3</span>
+                            <span class="pdf-page">p.37</span>
+                        </div>
+                        <div class="pdf-item">
+                            <span>5. Sentencia definitiva</span>
+                            <span class="pdf-page">p.49</span>
+                        </div>
+                    </div>
+                    <div class="pdf-card-footer">
+                        ✓ 5 actuaciones · 61 páginas · 1 PDF
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">🔒 Seguro</h5>
-                        <p class="card-text">Encriptado y privado</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <h5 class="card-title">📦 Flexible</h5>
-                        <p class="card-text">Planes que se ajustan a ti</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="mt-5">
-            <h3 class="mb-4">¿Listo para empezar?</h3>
-            <a href="/auth/signup" class="btn btn-primary btn-lg me-3">
-                📝 Crear Cuenta Gratis
-            </a>
-            <a href="/auth/login" class="btn btn-outline-primary btn-lg">
-                🔐 Ya tengo cuenta
-            </a>
         </div>
     </div>
-</div>
+</section>
+
+<!-- ── STATS ─────────────────────────────────────────────── -->
+<section class="stats-bar">
+    <div class="container">
+        <div class="d-flex justify-content-center align-items-center flex-wrap gap-4">
+            <div class="stat-item">
+                <div class="stat-value">1 PDF</div>
+                <div class="stat-label">Resultado final</div>
+            </div>
+            <div class="stat-divider d-none d-md-block"></div>
+            <div class="stat-item">
+                <div class="stat-value">Automático</div>
+                <div class="stat-label">Sin descargas manuales</div>
+            </div>
+            <div class="stat-divider d-none d-md-block"></div>
+            <div class="stat-item">
+                <div class="stat-value">STJER</div>
+                <div class="stat-label">Mesa Virtual oficial</div>
+            </div>
+            <div class="stat-divider d-none d-md-block"></div>
+            <div class="stat-item">
+                <div class="stat-value">Cronológico</div>
+                <div class="stat-label">Ordenado automáticamente</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── CÓMO FUNCIONA ─────────────────────────────────────── -->
+<section class="section" id="como-funciona">
+    <div class="container">
+        <div class="text-center mb-5">
+            <p class="section-label">Proceso</p>
+            <h2>Cómo funciona</h2>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h5>Creá tu cuenta</h5>
+                    <p>Registrate con tu email y comprá créditos. Cada crédito equivale a una descarga completa.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h5>Conectate a Mesa Virtual</h5>
+                    <p>Ingresá tus credenciales de Mesa Virtual STJER. Tu contraseña nunca se almacena en nuestros servidores.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h5>Descargá el PDF unificado</h5>
+                    <p>Ingresá el número de expediente y en minutos tenés todas las actuaciones en un solo PDF ordenado.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── BENEFICIOS ────────────────────────────────────────── -->
+<section class="benefits-section" id="beneficios">
+    <div class="container">
+        <div class="text-center mb-5">
+            <p class="section-label">Ventajas</p>
+            <h2>Por qué usar Entre Expedientes</h2>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="benefit-card">
+                    <div class="benefit-icon"><i class="bi bi-file-earmark-pdf"></i></div>
+                    <h5>Un solo archivo</h5>
+                    <p>Todo el expediente consolidado en un único PDF listo para imprimir o compartir.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="benefit-card">
+                    <div class="benefit-icon"><i class="bi bi-sort-numeric-down"></i></div>
+                    <h5>Orden cronológico</h5>
+                    <p>Las actuaciones se ordenan automáticamente por fecha, sin trabajo manual de tu parte.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="benefit-card">
+                    <div class="benefit-icon"><i class="bi bi-clock"></i></div>
+                    <h5>Ahorrá tiempo</h5>
+                    <p>Evitá descargar foja por foja desde Mesa Virtual. En minutos tenés el expediente completo.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="benefit-card">
+                    <div class="benefit-icon"><i class="bi bi-shield-check"></i></div>
+                    <h5>Seguro y privado</h5>
+                    <p>Tus credenciales no se guardan. La conexión con STJER es directa y encriptada.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ── CTA FINAL ─────────────────────────────────────────── -->
+<section class="cta-section">
+    <div class="container">
+        <h2>Comenzá a trabajar hoy</h2>
+        <p>Registrate gratis y descargá tu primer expediente en minutos.</p>
+        <a href="/auth/signup" class="btn-cta">
+            Crear cuenta <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+</section>
+
 {% endblock %}

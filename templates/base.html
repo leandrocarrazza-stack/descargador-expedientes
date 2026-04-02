@@ -3,18 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block titulo %}Descargador de Expedientes{% endblock %}</title>
+    <title>{% block titulo %}Entre Expedientes{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
-            --primary: #1e6b5e;       /* teal/verde oscuro — botones y acento */
-            --navy: #0f2744;          /* navy oscuro — headings y card headers */
-            --teal-light: #2a7c6f;    /* teal más claro — hover y acento secundario */
+            --primary: #1e6b5e;
+            --navy: #0f2744;
+            --teal-light: #2a7c6f;
             --success: #4caf50;
             --danger: #f44336;
             --warning: #ff9800;
 
-            /* Sobrescribir Bootstrap primary */
             --bs-primary: #1e6b5e;
             --bs-primary-rgb: 30, 107, 94;
             --bs-link-color: #1e6b5e;
@@ -24,97 +27,224 @@
         body {
             background: #f4f6f8;
             min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
             color: #1a1a2e;
+            font-size: 15px;
+            line-height: 1.6;
         }
 
+        /* Tipografía: headings en serif */
+        h1, h2, h3 {
+            font-family: 'Playfair Display', Georgia, serif;
+            color: var(--navy);
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        h4, h5, h6 {
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            color: var(--navy);
+            font-weight: 600;
+        }
+
+        /* ── NAVBAR ─────────────────────────────────────── */
         .navbar {
             background: #ffffff !important;
-            box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+            padding-top: 14px;
+            padding-bottom: 14px;
         }
 
         .navbar-brand {
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .navbar-brand .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--navy);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .navbar-brand .brand-text {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+
+        .navbar-brand .brand-name {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
             color: var(--navy) !important;
+            letter-spacing: -0.3px;
+        }
+
+        .navbar-brand .brand-sub {
+            font-family: 'Inter', sans-serif;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: #888;
         }
 
         .navbar .nav-link {
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 500;
             color: #444 !important;
+            padding: 6px 14px !important;
         }
 
         .navbar .nav-link:hover {
             color: var(--primary) !important;
         }
 
+        .navbar .btn-ingresar {
+            background: var(--primary);
+            color: white !important;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 20px !important;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .navbar .btn-ingresar:hover {
+            background: var(--teal-light);
+            color: white !important;
+            transform: translateY(-1px);
+        }
+
+        /* ── CONTENEDOR PRINCIPAL ───────────────────────── */
         .container-main {
             background: white;
             border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(15,39,68,0.1);
+            box-shadow: 0 2px 16px rgba(15,39,68,0.08);
             padding: 40px;
             margin-top: 40px;
             margin-bottom: 40px;
         }
 
-        h1, h2, h3, h4, h5 {
-            color: var(--navy);
+        /* ── BOTONES ────────────────────────────────────── */
+        .btn {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.2s;
         }
 
         .btn-primary {
             background: var(--primary);
             border: none;
-            padding: 10px 30px;
-            font-weight: 500;
+            padding: 10px 28px;
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover, .btn-primary:focus {
             background: var(--teal-light);
             color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(30, 107, 94, 0.35);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(30, 107, 94, 0.3);
         }
 
         .btn-outline-primary {
             color: var(--primary);
             border-color: var(--primary);
+            border-width: 1.5px;
         }
 
         .btn-outline-primary:hover {
             background: var(--primary);
             border-color: var(--primary);
+            color: white;
+        }
+
+        /* ── FORMULARIOS ────────────────────────────────── */
+        .form-control {
+            border-radius: 8px;
+            border: 1.5px solid #e0e4ea;
+            font-size: 15px;
+            padding: 10px 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         .form-control:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 0.2rem rgba(30, 107, 94, 0.2);
+            box-shadow: 0 0 0 3px rgba(30, 107, 94, 0.12);
         }
 
+        .form-label {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 6px;
+        }
+
+        /* ── CARDS ──────────────────────────────────────── */
+        .card {
+            border: 1px solid #e8edf3;
+            border-radius: 12px;
+        }
+
+        .card.shadow-sm {
+            box-shadow: 0 2px 12px rgba(15,39,68,0.07) !important;
+        }
+
+        /* ── ALERTAS ────────────────────────────────────── */
         .alert {
-            border-radius: 8px;
+            border-radius: 10px;
             border: none;
+            font-size: 14px;
         }
 
+        /* ── BADGES ─────────────────────────────────────── */
+        .badge {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            border-radius: 6px;
+        }
+
+        /* ── FOOTER ─────────────────────────────────────── */
         .footer {
-            text-align: center;
-            padding: 20px;
             background: var(--navy);
-            color: rgba(255,255,255,0.75);
-            margin-top: 40px;
+            color: rgba(255,255,255,0.65);
+            padding: 32px 20px;
+            margin-top: 60px;
+            font-size: 13px;
+            text-align: center;
         }
 
-        /* Links con color de acento */
+        .footer p { margin: 0; }
+
+        /* ── LINKS ──────────────────────────────────────── */
         a:not(.btn):not(.nav-link):not(.navbar-brand) {
             color: var(--primary);
+            text-decoration: none;
         }
 
         a:not(.btn):not(.nav-link):not(.navbar-brand):hover {
             color: var(--teal-light);
+            text-decoration: underline;
         }
 
+        /* ── RESPONSIVE ─────────────────────────────────── */
         @media (max-width: 768px) {
             .container-main {
-                padding: 20px;
-                margin-top: 20px;
+                padding: 24px 16px;
+                margin-top: 16px;
+                border-radius: 12px;
             }
         }
     </style>
@@ -123,36 +253,42 @@
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top">
-        <div class="container-fluid">
+        <div class="container">
             <a class="navbar-brand" href="/">
-                🏛️ Descargador de Expedientes
+                <div class="brand-icon">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">Entre Expedientes</span>
+                    <span class="brand-sub">Expedientes Judiciales Unificados</span>
+                </div>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto align-items-center gap-1">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item">
-                            <span class="nav-link">👤 {{ current_user.email }}</span>
+                            <span class="nav-link text-muted" style="font-size:13px;">{{ current_user.email }}</span>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/dashboard">📊 Dashboard</a>
+                            <a class="nav-link" href="/dashboard">Dashboard</a>
                         </li>
                         {% if current_user.is_admin %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/" style="color: #e53935; font-weight: bold;">🛡️ Admin</a>
+                            <a class="nav-link" href="/admin/" style="color: #e53935; font-weight: 600;">Admin</a>
                         </li>
                         {% endif %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/auth/logout">🚪 Logout</a>
+                            <a class="nav-link btn-ingresar ms-2" href="/auth/logout">Salir</a>
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/auth/login">🔐 Login</a>
+                            <a class="nav-link" href="/auth/signup">Registrarse</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/auth/signup">📝 Signup</a>
+                            <a class="nav-link btn-ingresar ms-2" href="/auth/login">Ingresar</a>
                         </li>
                     {% endif %}
                 </ul>
@@ -178,7 +314,16 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <p>🏛️ Descargador de Expedientes © 2026 | Entre Ríos, Argentina</p>
+        <div class="container">
+            <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                <div style="width:28px;height:28px;background:rgba(255,255,255,0.15);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+                    <i class="bi bi-file-earmark-text" style="font-size:14px;color:white;"></i>
+                </div>
+                <span style="color:white;font-weight:600;font-size:15px;">Entre Expedientes</span>
+            </div>
+            <p>Expedientes judiciales unificados para abogados de Entre Ríos</p>
+            <p class="mt-2" style="font-size:12px;">© 2026 Entre Expedientes · Entre Ríos, Argentina</p>
+        </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
