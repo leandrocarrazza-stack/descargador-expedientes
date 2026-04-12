@@ -1,25 +1,27 @@
 # rutas/descargas.py
 """
-Rutas para descarga de expedientes (FASE 3 v2 - Sincrónico).
+Rutas para descarga de expedientes (con polling asincrónico).
 
-Arquitectura simplificada: ejecución sincrónica sin Celery.
-- Usuario solicita descarga
-- Flask ejecuta pipeline bloqueante (~30-120 segundos)
-- Retorna JSON con ruta del PDF o error
+Arquitectura: el pipeline corre en un thread background.
+- POST /descargas/expediente  → valida, lanza thread, devuelve job_id (respuesta inmediata)
+- GET  /descargas/estado/<id> → el frontend consulta el estado cada 3s (polling)
 
-Modelo: Cada descarga cuesta $3.000 ARS de créditos prepagados
+Esto evita el timeout de ~60s del proxy de Render en expedientes extensos.
+
+Modelo: Cada descarga cuesta 1 crédito prepagado.
 
 LIMPIEZA: El PDF final se borra del servidor después de que el usuario
-lo descarga (after_this_request). Además, al iniciar la app se borran
-PDFs con más de PDF_TTL_HOURS horas de antigüedad.
+lo descarga. Además, al iniciar la app se borran PDFs con más de
+PDF_TTL_HOURS horas de antigüedad.
 """
 
 import logging
 import os
 import time
 import threading
+import uuid
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_file, render_template, after_this_request
+from flask import Blueprint, request, jsonify, send_file, render_template, current_app
 from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
@@ -27,6 +29,98 @@ from modulos.database import db
 from modulos.models import ExpedienteDescargado, SesionUsuarioMV
 from modulos.auth_mv import obtener_cookies_usuario
 import config
+
+# ── Jobs en memoria ───────────────────────────────────────────────────────────
+# Guarda el estado de cada descarga en curso.
+# Como Gunicorn corre con 1 worker, este dict es compartido por todos los requests.
+# Estructura: { job_id: { estado, user_id, timestamp, ... } }
+_jobs: dict = {}
+JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo para que un job viva en memoria
+
+
+def _limpiar_jobs_viejos():
+    """Elimina jobs de más de 10 minutos para no acumular memoria."""
+    ahora = time.time()
+    ids_viejos = [jid for jid, j in list(_jobs.items()) if ahora - j.get('timestamp', 0) > JOB_TTL_SEGUNDOS]
+    for jid in ids_viejos:
+        _jobs.pop(jid, None)
+
+
+def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv):
+    """
+    Ejecuta el pipeline completo en un thread separado.
+    Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
+    fuera del hilo principal.
+    """
+    with app.app_context():
+        try:
+            pipeline = PipelineDescargador()
+            resultado = pipeline.ejecutar(
+                numero_expediente=numero_expediente,
+                limpiar_temp=config.LIMPIAR_TEMP,
+                indice_expediente=indice_expediente,
+                cookies_mv=cookies_mv
+            )
+
+            if resultado.exito:
+                # Guardar en BD y descontar crédito
+                from modulos.models import User
+                user = User.query.get(user_id)
+
+                expediente_db = ExpedienteDescargado(
+                    user_id=user_id,
+                    numero=numero_expediente,
+                    caratula=resultado.expediente.get('caratula') if resultado.expediente else None,
+                    tribunal=resultado.expediente.get('tribunal') if resultado.expediente else None,
+                    pdf_ruta_temporal=str(resultado.pdf_final) if resultado.pdf_final else None,
+                    estado='completed',
+                    error_msg=None
+                )
+                db.session.add(expediente_db)
+
+                if user and not user.is_admin:
+                    user.creditos_disponibles -= 1
+                db.session.commit()
+
+                creditos_restantes = user.creditos_disponibles if user else 0
+                logging.getLogger(__name__).info(
+                    f"[JOB {job_id[:8]}] Descarga OK: {numero_expediente}, créditos restantes: {creditos_restantes}"
+                )
+                _jobs[job_id].update({
+                    'estado': 'completo',
+                    'expediente_id': expediente_db.id,
+                    'pdf_url': f'/descargas/expediente/{expediente_db.id}/descargar',
+                    'creditos_restantes': creditos_restantes,
+                })
+
+            elif resultado.tipo_error == 'multiples_opciones':
+                _jobs[job_id].update({
+                    'estado': 'multiples_opciones',
+                    'opciones': resultado.opciones,
+                })
+
+            elif resultado.tipo_error == 'auth_failed':
+                _jobs[job_id].update({
+                    'estado': 'error',
+                    'tipo_error': 'sesion_mv_requerida',
+                    'mensaje': 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.',
+                    'login_url': '/auth/mv-login?next=/descargas/expediente',
+                })
+
+            else:
+                _jobs[job_id].update({
+                    'estado': 'error',
+                    'tipo_error': resultado.tipo_error or 'unknown',
+                    'mensaje': resultado.error or 'Error desconocido en la descarga',
+                })
+
+        except Exception as e:
+            logging.getLogger(__name__).error(f"[JOB {job_id[:8]}] Excepción: {e}", exc_info=True)
+            _jobs[job_id].update({
+                'estado': 'error',
+                'tipo_error': 'exception',
+                'mensaje': 'Error interno del servidor',
+            })
 
 logger = logging.getLogger(__name__)
 
@@ -84,33 +178,15 @@ def _borrar_diferido(ruta: str, delay: int = 10):
 @login_required
 def descargar_expediente_sync():
     """
-    Descarga sincrónica de expediente.
+    GET:  Muestra el formulario de descarga.
+    POST: Valida la solicitud, lanza el pipeline en un thread y devuelve
+          un job_id de forma inmediata (HTTP 202). El cliente hace polling
+          a /descargas/estado/<job_id> para saber cuándo terminó.
 
-    GET: Retorna formulario HTML para ingresar número de expediente
-    POST: Ejecuta la descarga del expediente
-
-    Request JSON (POST):
-        {
-            "numero_expediente": "21/24"
-        }
-
-    Response JSON (POST):
-        {
-            "exito": true,
-            "expediente_id": 123,
-            "pdf_url": "/descargas/expediente/123/descargar",
-            "creditos_restantes": 4,
-            "mensaje": "Expediente descargado exitosamente"
-        }
-
-    Errores posibles:
-        - 400: Parámetros inválidos
-        - 402: Créditos insuficientes
-        - 500: Error en descarga (sesión expirada, expediente no encontrado, etc)
+    Esto evita el timeout de ~60s del proxy de Render en expedientes extensos.
     """
-    # Si es GET, mostrar formulario
+    # GET → mostrar formulario
     if request.method == 'GET':
-        # Verificar si el usuario tiene sesión de Mesa Virtual guardada
         sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
         return render_template(
             'descargar_expediente.html',
@@ -119,137 +195,83 @@ def descargar_expediente_sync():
             mv_usuario=sesion_mv.mv_usuario if sesion_mv else None
         )
 
-    # Si es POST, procesar descarga
+    # POST → iniciar descarga asincrónica
     try:
-        # 1. PARSEAR REQUEST
+        _limpiar_jobs_viejos()
+
         data = request.get_json() or {}
         numero_expediente = data.get('numero_expediente', '').strip()
-        indice_expediente = data.get('indice_expediente')  # Opcional: cuál elegir si hay múltiples
+        indice_expediente = data.get('indice_expediente')
         if indice_expediente is not None:
             indice_expediente = int(indice_expediente)
 
-        # 2. VALIDAR ENTRADA
         if not numero_expediente:
-            logger.warning(f"Usuario {current_user.id} intentó descargar sin número")
-            return jsonify({
-                'exito': False,
-                'mensaje': 'Número de expediente requerido'
-            }), 400
+            return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
 
-        # 3. VALIDAR CRÉDITOS (los admins están exentos del límite)
         if not current_user.is_admin and current_user.creditos_disponibles < 1:
-            logger.warning(f"Usuario {current_user.id} sin créditos (tiene {current_user.creditos_disponibles})")
             return jsonify({
                 'exito': False,
-                'mensaje': 'Créditos insuficientes. Compra créditos para continuar.',
-                'creditos_necesarios': 1,
-                'creditos_disponibles': current_user.creditos_disponibles
+                'tipo_error': 'creditos_insuficientes',
+                'mensaje': 'Créditos insuficientes. Comprá créditos para continuar.',
             }), 402
 
-        # 4. VERIFICAR SESIÓN DE MESA VIRTUAL DEL USUARIO
         cookies_mv = obtener_cookies_usuario(current_user.id)
         if not cookies_mv:
-            logger.info(f"Usuario {current_user.id} no tiene sesión MV → redirigir a login")
             return jsonify({
                 'exito': False,
                 'tipo_error': 'sesion_mv_requerida',
                 'mensaje': 'Necesitás conectar tu cuenta de Mesa Virtual primero.',
-                'login_url': f'/auth/mv-login?next=/descargas/expediente'
+                'login_url': '/auth/mv-login?next=/descargas/expediente'
             }), 401
 
-        # 5. EJECUTAR PIPELINE SINCRÓNICO (BLOQUEANTE)
-        logger.info(f"Iniciando descarga sincrónica: Usuario {current_user.id}, Expediente {numero_expediente}, Índice {indice_expediente}")
+        # Registrar job y lanzar thread
+        job_id = str(uuid.uuid4())
+        _jobs[job_id] = {
+            'estado': 'procesando',
+            'user_id': current_user.id,
+            'timestamp': time.time(),
+        }
 
-        pipeline = PipelineDescargador()
-        resultado = pipeline.ejecutar(
-            numero_expediente=numero_expediente,
-            limpiar_temp=config.LIMPIAR_TEMP,
-            indice_expediente=indice_expediente,
-            cookies_mv=cookies_mv  # Pasamos las cookies del usuario
+        app = current_app._get_current_object()
+        t = threading.Thread(
+            target=_run_pipeline,
+            args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv),
+            daemon=True
         )
+        t.start()
 
-        # 5. PROCESAR RESULTADO DEL PIPELINE
-        if resultado.exito:
-            logger.info(f"Descarga exitosa: {numero_expediente}, PDF: {resultado.pdf_final}")
-
-            # Guardar en base de datos
-            expediente_db = ExpedienteDescargado(
-                user_id=current_user.id,
-                numero=numero_expediente,
-                caratula=resultado.expediente.get('caratula') if resultado.expediente else None,
-                tribunal=resultado.expediente.get('tribunal') if resultado.expediente else None,
-                pdf_ruta_temporal=str(resultado.pdf_final) if resultado.pdf_final else None,
-                estado='completed',
-                error_msg=None
-            )
-            db.session.add(expediente_db)
-
-            # Deducir créditos (los admins no gastan)
-            if not current_user.is_admin:
-                current_user.creditos_disponibles -= 1
-            db.session.commit()
-
-            logger.info(f"Descarga registrada: Usuario {current_user.id} (admin={current_user.is_admin}), créditos restantes: {current_user.creditos_disponibles}")
-
-            return jsonify({
-                'exito': True,
-                'expediente_id': expediente_db.id,
-                'pdf_url': f'/descargas/expediente/{expediente_db.id}/descargar',
-                'creditos_restantes': current_user.creditos_disponibles,
-                'mensaje': 'Expediente descargado exitosamente'
-            }), 200
-
-        elif resultado.tipo_error == 'multiples_opciones':
-            # Hay múltiples expedientes: no se descuenta crédito, se devuelven las opciones
-            logger.info(f"Múltiples resultados para {numero_expediente}: {len(resultado.opciones)} opciones")
-            return jsonify({
-                'exito': False,
-                'tipo_error': 'multiples_opciones',
-                'opciones': resultado.opciones,
-                'mensaje': f'Se encontraron {len(resultado.opciones)} expedientes con ese número. Seleccioná cuál descargar.'
-            }), 200
-
-        else:
-            # Si el pipeline falló por sesión expirada, informar para reconectar
-            if resultado.tipo_error == 'auth_failed':
-                logger.warning(f"Sesión MV expirada durante descarga para user {current_user.id}")
-                return jsonify({
-                    'exito': False,
-                    'tipo_error': 'sesion_mv_requerida',
-                    'mensaje': 'Tu sesión de Mesa Virtual expiró. Necesitás reconectarla.',
-                    'login_url': f'/auth/mv-login?next=/descargas/expediente'
-                }), 401
-
-            # Error real en pipeline
-            logger.error(f"Error en descarga: {numero_expediente} - {resultado.error}")
-
-            # Guardar intento fallido en BD (sin deducir créditos)
-            expediente_db = ExpedienteDescargado(
-                user_id=current_user.id,
-                numero=numero_expediente,
-                estado='failed',
-                error_msg=resultado.error,
-                caratula=None,
-                tribunal=None,
-                pdf_ruta_temporal=None
-            )
-            db.session.add(expediente_db)
-            db.session.commit()
-
-            return jsonify({
-                'exito': False,
-                'mensaje': f'Error en descarga: {resultado.error}',
-                'tipo_error': resultado.tipo_error or 'unknown',
-                'creditos_disponibles': current_user.creditos_disponibles
-            }), 500
+        logger.info(f"[JOB {job_id[:8]}] Lanzado para user {current_user.id}, expediente {numero_expediente}")
+        return jsonify({'job_id': job_id}), 202
 
     except Exception as e:
-        logger.error(f"Excepción no manejada en descarga: {str(e)}", exc_info=True)
-        return jsonify({
-            'exito': False,
-            'mensaje': 'Error interno del servidor',
-            'error_tipo': type(e).__name__
-        }), 500
+        logger.error(f"Error iniciando descarga: {e}", exc_info=True)
+        return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
+
+
+@descargas_bp.route('/estado/<job_id>', methods=['GET'])
+@login_required
+def estado_descarga(job_id):
+    """
+    Polling endpoint: el frontend consulta esto cada ~3 segundos para saber
+    si el pipeline terminó.
+
+    Respuestas posibles:
+      { estado: 'procesando' }                          → seguir esperando
+      { estado: 'completo', pdf_url, creditos_restantes } → éxito
+      { estado: 'multiples_opciones', opciones: [...] }  → pedir selección
+      { estado: 'error', tipo_error, mensaje }           → mostrar error
+      { estado: 'no_encontrado' }                        → job inválido/expirado
+    """
+    job = _jobs.get(job_id)
+
+    if not job:
+        return jsonify({'estado': 'no_encontrado'}), 404
+
+    # Sólo el dueño del job puede consultarlo
+    if job.get('user_id') != current_user.id:
+        return jsonify({'estado': 'no_encontrado'}), 404
+
+    return jsonify(job), 200
 
 
 @descargas_bp.route('/expediente/<int:expediente_id>/descargar', methods=['GET'])

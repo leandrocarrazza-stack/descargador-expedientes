@@ -429,6 +429,7 @@
             if (indice !== null) body.indice_expediente = indice;
 
             try {
+                // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
                 const resp = await fetch('/descargas/expediente', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -437,37 +438,23 @@
 
                 const data = await resp.json();
 
-                if (data.exito) {
-                    // Éxito: mostrar panel con botón de descarga
-                    animarExito();
-                    setTimeout(() => {
-                        detenerAnimacion();
-                        document.getElementById('exito-creditos').textContent =
-                            `Créditos restantes: ${data.creditos_restantes}`;
-                        document.getElementById('btn-descargar-pdf').href = data.pdf_url;
-                        mostrarSolo('panel-exito');
-                        // También descargar automáticamente
-                        window.location.href = data.pdf_url;
-                    }, 800);
-
-                } else if (data.tipo_error === 'multiples_opciones') {
-                    // Múltiples resultados: mostrar panel de selección
-                    detenerAnimacion();
-                    mostrarOpciones(data.opciones);
-
-                } else if (data.tipo_error === 'sesion_mv_requerida') {
-                    // No hay sesión de Mesa Virtual → redirigir al login de MV
+                // Errores de validación inmediatos (sin créditos, sin sesión MV, etc.)
+                if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
                     detenerAnimacion();
                     window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
-
-                } else {
-                    // Error real
+                    return;
+                }
+                if (!resp.ok || !data.job_id) {
                     animarError();
                     setTimeout(() => {
-                        document.getElementById('error-detalle').textContent = data.mensaje || 'Error desconocido';
+                        document.getElementById('error-detalle').textContent = data.mensaje || 'Error al iniciar la descarga';
                         mostrarSolo('panel-error');
                     }, 800);
+                    return;
                 }
+
+                // 2. Hacer polling hasta que el job termine
+                await esperarJob(data.job_id);
 
             } catch (err) {
                 animarError();
@@ -476,6 +463,72 @@
                     mostrarSolo('panel-error');
                 }, 800);
             }
+        }
+
+        // Consulta el estado del job cada 3 segundos hasta que termine (máx 5 minutos)
+        async function esperarJob(jobId) {
+            const INTERVALO_MS = 3000;
+            const MAX_INTENTOS = 100; // 100 × 3s = 5 minutos
+
+            for (let i = 0; i < MAX_INTENTOS; i++) {
+                await new Promise(r => setTimeout(r, INTERVALO_MS));
+
+                let data;
+                try {
+                    const resp = await fetch(`/descargas/estado/${jobId}`);
+                    data = await resp.json();
+                } catch (err) {
+                    // Error de red puntual, seguir intentando
+                    continue;
+                }
+
+                if (data.estado === 'completo') {
+                    animarExito();
+                    setTimeout(() => {
+                        document.getElementById('exito-creditos').textContent =
+                            `Créditos restantes: ${data.creditos_restantes}`;
+                        document.getElementById('btn-descargar-pdf').href = data.pdf_url;
+                        mostrarSolo('panel-exito');
+                        window.location.href = data.pdf_url;
+                    }, 800);
+                    return;
+
+                } else if (data.estado === 'multiples_opciones') {
+                    detenerAnimacion();
+                    mostrarOpciones(data.opciones);
+                    return;
+
+                } else if (data.estado === 'error') {
+                    if (data.tipo_error === 'sesion_mv_requerida') {
+                        detenerAnimacion();
+                        window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
+                        return;
+                    }
+                    animarError();
+                    setTimeout(() => {
+                        document.getElementById('error-detalle').textContent = data.mensaje || 'Error desconocido';
+                        mostrarSolo('panel-error');
+                    }, 800);
+                    return;
+
+                } else if (data.estado === 'no_encontrado') {
+                    animarError();
+                    setTimeout(() => {
+                        document.getElementById('error-detalle').textContent = 'La sesión expiró. Intentá de nuevo.';
+                        mostrarSolo('panel-error');
+                    }, 800);
+                    return;
+                }
+                // estado === 'procesando' → seguir esperando
+            }
+
+            // Timeout del polling (5 minutos sin respuesta)
+            animarError();
+            setTimeout(() => {
+                document.getElementById('error-detalle').textContent =
+                    'La descarga tardó demasiado. Por favor intentá de nuevo.';
+                mostrarSolo('panel-error');
+            }, 800);
         }
 
         // ─── PANEL DE SELECCIÓN MÚLTIPLE ──────────────────────────────────────
