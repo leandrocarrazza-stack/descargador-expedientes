@@ -453,8 +453,8 @@
                     return;
                 }
 
-                // 2. Hacer polling hasta que el job termine
-                await esperarJob(data.job_id);
+                // 2. Long-polling: esperar a que el job termine (el servidor retiene el request)
+                await longPolling(data.job_id);
 
             } catch (err) {
                 animarError();
@@ -465,22 +465,16 @@
             }
         }
 
-        // Consulta el estado del job cada 3 segundos hasta que termine (máx 30 minutos)
-        async function esperarJob(jobId) {
-            const INTERVALO_MS = 3000;
-            const MAX_INTENTOS = 600; // 600 × 3s = 30 minutos
+        // Long-polling: un único request que espera en el servidor hasta que el job complete
+        // (el servidor lo despierta apenas termina el pipeline, máx 5 minutos)
+        async function longPolling(jobId) {
+            try {
+                console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
 
-            for (let i = 0; i < MAX_INTENTOS; i++) {
-                await new Promise(r => setTimeout(r, INTERVALO_MS));
+                const resp = await fetch(`/descargas/estado/${jobId}`);
+                const data = await resp.json();
 
-                let data;
-                try {
-                    const resp = await fetch(`/descargas/estado/${jobId}`);
-                    data = await resp.json();
-                } catch (err) {
-                    // Error de red puntual, seguir intentando
-                    continue;
-                }
+                console.log(`[LONG-POLL] Respuesta recibida:`, data);
 
                 if (data.estado === 'completo') {
                     animarExito();
@@ -518,17 +512,22 @@
                         mostrarSolo('panel-error');
                     }, 800);
                     return;
-                }
-                // estado === 'procesando' → seguir esperando
-            }
 
-            // Timeout del polling (5 minutos sin respuesta)
-            animarError();
-            setTimeout(() => {
-                document.getElementById('error-detalle').textContent =
-                    'La descarga tardó demasiado. Por favor intentá de nuevo.';
-                mostrarSolo('panel-error');
-            }, 800);
+                } else if (data.estado === 'procesando') {
+                    // Timeout del server (5 minutos): el job sigue en progreso
+                    // Reintentar con long-polling nuevamente
+                    console.log('[LONG-POLL] Timeout del servidor, reintentando...');
+                    await longPolling(jobId);
+                    return;
+                }
+
+            } catch (err) {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                    mostrarSolo('panel-error');
+                }, 800);
+            }
         }
 
         // ─── PANEL DE SELECCIÓN MÚLTIPLE ──────────────────────────────────────

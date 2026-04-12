@@ -35,6 +35,7 @@ import config
 # Como Gunicorn corre con 1 worker, este dict es compartido por todos los requests.
 # Estructura: { job_id: { estado, user_id, timestamp, ... } }
 _jobs: dict = {}
+_job_events: dict = {}  # { job_id: threading.Event() } para long-polling
 JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo para que un job viva en memoria
 
 
@@ -44,6 +45,7 @@ def _limpiar_jobs_viejos():
     ids_viejos = [jid for jid, j in list(_jobs.items()) if ahora - j.get('timestamp', 0) > JOB_TTL_SEGUNDOS]
     for jid in ids_viejos:
         _jobs.pop(jid, None)
+        _job_events.pop(jid, None)
 
 
 def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv):
@@ -133,6 +135,12 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 'tipo_error': 'exception',
                 'mensaje': f'Error: {type(e).__name__}',
             })
+
+        finally:
+            # Despertar cualquier request de long-polling que esté esperando este job
+            if job_id in _job_events:
+                log.info(f"[JOB {job_id[:8]}] Despertando long-polling")
+                _job_events[job_id].set()
 
 logger = logging.getLogger(__name__)
 
@@ -264,14 +272,19 @@ def descargar_expediente_sync():
 @login_required
 def estado_descarga(job_id):
     """
-    Polling endpoint: el frontend consulta esto cada ~3 segundos para saber
-    si el pipeline terminó.
+    Long-polling endpoint: el frontend hace UN request que espera hasta que
+    el job complete (máx 5 minutos).
+
+    El servidor retiene la request hasta que:
+    - El job complete (devuelve el estado final)
+    - Pasen 5 minutos (devuelve estado actual)
+    - El job sea inválido/expirado (devuelve 404)
 
     Respuestas posibles:
-      { estado: 'procesando' }                          → seguir esperando
       { estado: 'completo', pdf_url, creditos_restantes } → éxito
       { estado: 'multiples_opciones', opciones: [...] }  → pedir selección
       { estado: 'error', tipo_error, mensaje }           → mostrar error
+      { estado: 'procesando' }                           → timeout (seguir esperando)
       { estado: 'no_encontrado' }                        → job inválido/expirado
     """
     job = _jobs.get(job_id)
@@ -283,7 +296,24 @@ def estado_descarga(job_id):
     if job.get('user_id') != current_user.id:
         return jsonify({'estado': 'no_encontrado'}), 404
 
-    return jsonify(job), 200
+    # Si el job ya terminó (no está en "procesando"), devolver inmediatamente
+    if job['estado'] != 'procesando':
+        return jsonify(job), 200
+
+    # Job sigue procesando: esperar con long-polling (máx 5 minutos)
+    # Crear o reutilizar el evento para este job
+    event = _job_events.get(job_id)
+    if not event:
+        event = threading.Event()
+        _job_events[job_id] = event
+
+    # Esperar 5 minutos a que el job complete (el thread lo despierta con .set())
+    logger.info(f"[LONG-POLL] Request esperando el job {job_id[:8]}")
+    event.wait(timeout=300)  # 5 minutos máximo
+    logger.info(f"[LONG-POLL] Request despertado o timeout para {job_id[:8]}")
+
+    # Devolver el estado actual (puede ser completo o sigue procesando si hubo timeout)
+    return jsonify(_jobs[job_id]), 200
 
 
 @descargas_bp.route('/expediente/<int:expediente_id>/descargar', methods=['GET'])
