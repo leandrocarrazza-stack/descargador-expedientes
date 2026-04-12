@@ -465,10 +465,10 @@
             }
         }
 
-        // Consulta el estado del job cada 3 segundos hasta que termine (máx 10 minutos)
+        // Consulta el estado del job cada 3 segundos hasta que termine (máx 30 minutos)
         async function esperarJob(jobId) {
             const INTERVALO_MS = 3000;
-            const MAX_INTENTOS = 200; // 200 × 3s = 10 minutos
+            const MAX_INTENTOS = 600; // 600 × 3s = 30 minutos
 
             for (let i = 0; i < MAX_INTENTOS; i++) {
                 await new Promise(r => setTimeout(r, INTERVALO_MS));
