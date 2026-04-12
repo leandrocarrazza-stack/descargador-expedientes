@@ -52,9 +52,15 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
     fuera del hilo principal.
     """
+    log = logging.getLogger(__name__)
+
     with app.app_context():
         try:
+            log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
+
             pipeline = PipelineDescargador()
+            log.info(f"[JOB {job_id[:8]}] Pipeline creado, llamando a ejecutar()...")
+
             resultado = pipeline.ejecutar(
                 numero_expediente=numero_expediente,
                 limpiar_temp=config.LIMPIAR_TEMP,
@@ -62,8 +68,11 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 cookies_mv=cookies_mv
             )
 
+            log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
+
             if resultado.exito:
                 # Guardar en BD y descontar crédito
+                log.info(f"[JOB {job_id[:8]}] Guardando en BD...")
                 from modulos.models import User
                 user = User.query.get(user_id)
 
@@ -83,7 +92,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 db.session.commit()
 
                 creditos_restantes = user.creditos_disponibles if user else 0
-                logging.getLogger(__name__).info(
+                log.info(
                     f"[JOB {job_id[:8]}] Descarga OK: {numero_expediente}, créditos restantes: {creditos_restantes}"
                 )
                 _jobs[job_id].update({
@@ -94,12 +103,14 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 })
 
             elif resultado.tipo_error == 'multiples_opciones':
+                log.info(f"[JOB {job_id[:8]}] Múltiples opciones encontradas")
                 _jobs[job_id].update({
                     'estado': 'multiples_opciones',
                     'opciones': resultado.opciones,
                 })
 
             elif resultado.tipo_error == 'auth_failed':
+                log.warning(f"[JOB {job_id[:8]}] Sesión MV expirada")
                 _jobs[job_id].update({
                     'estado': 'error',
                     'tipo_error': 'sesion_mv_requerida',
@@ -108,6 +119,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 })
 
             else:
+                log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
                 _jobs[job_id].update({
                     'estado': 'error',
                     'tipo_error': resultado.tipo_error or 'unknown',
@@ -115,11 +127,11 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 })
 
         except Exception as e:
-            logging.getLogger(__name__).error(f"[JOB {job_id[:8]}] Excepción: {e}", exc_info=True)
+            log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
             _jobs[job_id].update({
                 'estado': 'error',
                 'tipo_error': 'exception',
-                'mensaje': 'Error interno del servidor',
+                'mensaje': f'Error: {type(e).__name__}',
             })
 
 logger = logging.getLogger(__name__)
