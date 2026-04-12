@@ -121,7 +121,7 @@ def crear_usuario(email, nombre, password, plan='free'):
             email=email_normalizado,
             nombre=nombre,
             plan=plan,
-            creditos_disponibles=5 if plan == 'free' else 0  # Free tier: 5 descargas
+            creditos_disponibles=2 if plan == 'free' else 0  # Free tier: 2 descargas
         )
         usuario.establecer_password(password)
 

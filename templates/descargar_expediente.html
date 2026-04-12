@@ -441,6 +441,7 @@
                 // Errores de validación inmediatos (sin créditos, sin sesión MV, etc.)
                 if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
                     detenerAnimacion();
+                    if (numeroActual) sessionStorage.setItem('expediente_pendiente', numeroActual);
                     window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
                     return;
                 }
@@ -495,6 +496,7 @@
                 } else if (data.estado === 'error') {
                     if (data.tipo_error === 'sesion_mv_requerida') {
                         detenerAnimacion();
+                        if (numeroActual) sessionStorage.setItem('expediente_pendiente', numeroActual);
                         window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
                         return;
                     }
@@ -574,6 +576,14 @@
             document.getElementById('numero_expediente').addEventListener('keydown', e => {
                 if (e.key === 'Enter') iniciarDescarga();
             });
+
+            // Si el usuario venía de un redirect por sesión MV, retomar la descarga automáticamente
+            const pendiente = sessionStorage.getItem('expediente_pendiente');
+            if (pendiente) {
+                sessionStorage.removeItem('expediente_pendiente');
+                document.getElementById('numero_expediente').value = pendiente;
+                iniciarDescarga();
+            }
         });
     </script>
 </body>
