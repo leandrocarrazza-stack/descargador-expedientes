@@ -6,41 +6,41 @@
     <title>{% block titulo %}Entre Expedientes{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Fuentes exactas de Base44: Instrument Serif + Plus Jakarta Sans -->
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+    <!-- Fuentes de Foja: Playfair Display + Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        /* ── TOKENS EXACTOS de globals.css de Base44 ──────────────────── */
+        /* ── TOKENS EXACTOS de globals.css de Foja ──────────────────── */
         :root {
-            --background:        hsl(40, 20%, 97%);    /* fondo cálido #f9f7f4  */
-            --foreground:        hsl(216, 60%, 15%);   /* navy oscuro  #0d1f3c  */
-            --card:              hsl(40, 20%, 99%);    /* blanco cálido         */
-            --card-foreground:   hsl(216, 60%, 15%);
-            --accent:            hsl(168, 100%, 21%);  /* teal oscuro  #006b55  */
-            --accent-hover:      hsl(168, 100%, 25%);
-            --accent-subtle:     hsl(168, 40%, 94%);   /* fondo sutil accent    */
-            --muted:             hsl(40, 10%, 93%);    /* gris cálido claro     */
-            --muted-foreground:  hsl(216, 20%, 46%);   /* texto secundario      */
-            --border:            hsl(40, 10%, 88%);    /* borde cálido          */
-            --input:             hsl(40, 10%, 88%);
-            --radius:            0.5rem;               /* 8px                   */
+            --background:        hsl(40, 33%, 98%);    /* off-white cálido              */
+            --foreground:        hsl(220, 30%, 6%);    /* navy oscuro (casi negro)      */
+            --card:              hsl(40, 33%, 98%);    /* igual que background          */
+            --card-foreground:   hsl(220, 30%, 6%);
+            --accent:            hsl(37, 30%, 52%);    /* oro dorado #C9963A            */
+            --accent-hover:      hsl(37, 30%, 47%);    /* oro oscuro para hover         */
+            --accent-subtle:     hsl(37, 30%, 90%);    /* fondo sutil oro               */
+            --muted:             hsl(38, 18%, 92%);    /* gris cálido claro             */
+            --muted-foreground:  hsl(218, 14%, 29%);   /* gris oscuro para texto        */
+            --border:            hsl(38, 18%, 82%);    /* borde cálido                  */
+            --input:             hsl(38, 18%, 82%);
+            --radius:            0.375rem;             /* 6px (más pequeño que antes)   */
 
             /* Bootstrap overrides */
-            --bs-body-bg:           hsl(40, 20%, 97%);
-            --bs-body-color:        hsl(216, 60%, 15%);
-            --bs-primary:           hsl(168, 100%, 21%);
-            --bs-primary-rgb:       0, 107, 85;
-            --bs-link-color:        hsl(168, 100%, 21%);
-            --bs-link-hover-color:  hsl(168, 100%, 25%);
-            --bs-border-color:      hsl(40, 10%, 88%);
+            --bs-body-bg:           hsl(40, 33%, 98%);
+            --bs-body-color:        hsl(220, 30%, 6%);
+            --bs-primary:           hsl(37, 30%, 52%);
+            --bs-primary-rgb:       201, 150, 58;
+            --bs-link-color:        hsl(37, 30%, 52%);
+            --bs-link-hover-color:  hsl(37, 30%, 47%);
+            --bs-border-color:      hsl(38, 18%, 82%);
         }
 
         /* ── BODY ─────────────────────────────────────────────────────── */
         body {
             background: var(--background);
             min-height: 100vh;
-            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             color: var(--foreground);
             font-size: 15px;
             line-height: 1.6;
@@ -48,14 +48,14 @@
 
         /* ── TIPOGRAFÍA ───────────────────────────────────────────────── */
         h1, h2, h3 {
-            font-family: 'Instrument Serif', Georgia, serif;
+            font-family: 'Playfair Display', Georgia, serif;
             color: var(--foreground);
-            font-weight: 400;
+            font-weight: 600;
             line-height: 1.15;
         }
 
         h4, h5, h6 {
-            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             color: var(--foreground);
             font-weight: 600;
         }
@@ -96,7 +96,7 @@
         }
 
         .navbar-brand .brand-name {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-weight: 700;
             font-size: 15px;
             color: var(--foreground) !important;
@@ -104,7 +104,7 @@
         }
 
         .navbar-brand .brand-sub {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 9px;
             font-weight: 600;
             letter-spacing: 1.2px;
@@ -113,7 +113,7 @@
         }
 
         .navbar .nav-link {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 14px;
             font-weight: 500;
             color: var(--muted-foreground) !important;
@@ -131,7 +131,7 @@
             border: none;
             border-radius: var(--radius);
             padding: 8px 20px !important;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 14px;
             font-weight: 600;
             transition: background 0.2s, transform 0.15s;
@@ -156,7 +156,7 @@
 
         /* ── BOTONES ──────────────────────────────────────────────────── */
         .btn {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-weight: 600;
             border-radius: var(--radius);
             transition: all 0.2s;
@@ -204,7 +204,7 @@
             background: var(--card);
             border: 1px solid var(--input);
             border-radius: var(--radius);
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 14px;
             padding: 10px 14px;
             color: var(--foreground);
@@ -213,13 +213,13 @@
 
         .form-control:focus, .form-select:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px hsl(168, 100%, 21%, 0.12);
+            box-shadow: 0 0 0 3px hsl(37, 30%, 52%, 0.12);
             background: var(--card);
             color: var(--foreground);
         }
 
         .form-label {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-weight: 600;
             font-size: 13px;
             color: var(--foreground);
@@ -245,7 +245,7 @@
 
         /* ── TABLAS ───────────────────────────────────────────────────── */
         .table {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-size: 14px;
             color: var(--foreground);
         }
@@ -267,7 +267,7 @@
 
         /* ── BADGES ───────────────────────────────────────────────────── */
         .badge {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-weight: 600;
             font-size: 11px;
             border-radius: calc(var(--radius) - 2px);
@@ -279,12 +279,12 @@
             border-radius: var(--radius);
             border: 1px solid var(--border);
             font-size: 14px;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
         }
 
         /* ── ACCORDION (FAQ) ──────────────────────────────────────────── */
         .accordion-button {
-            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-family: 'Inter', sans-serif;
             font-weight: 600;
             font-size: 14px;
             color: var(--foreground);
