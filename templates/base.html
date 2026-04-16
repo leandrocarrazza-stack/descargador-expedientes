@@ -6,51 +6,65 @@
     <title>{% block titulo %}Entre Expedientes{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Fuentes exactas de Base44: Instrument Serif + Plus Jakarta Sans -->
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
+        /* ── TOKENS EXACTOS de globals.css de Base44 ──────────────────── */
         :root {
-            --primary: #1e6b5e;
-            --navy: #0f2744;
-            --teal-light: #2a7c6f;
-            --success: #4caf50;
-            --danger: #f44336;
-            --warning: #ff9800;
+            --background:        hsl(40, 20%, 97%);    /* fondo cálido #f9f7f4  */
+            --foreground:        hsl(216, 60%, 15%);   /* navy oscuro  #0d1f3c  */
+            --card:              hsl(40, 20%, 99%);    /* blanco cálido         */
+            --card-foreground:   hsl(216, 60%, 15%);
+            --accent:            hsl(168, 100%, 21%);  /* teal oscuro  #006b55  */
+            --accent-hover:      hsl(168, 100%, 25%);
+            --accent-subtle:     hsl(168, 40%, 94%);   /* fondo sutil accent    */
+            --muted:             hsl(40, 10%, 93%);    /* gris cálido claro     */
+            --muted-foreground:  hsl(216, 20%, 46%);   /* texto secundario      */
+            --border:            hsl(40, 10%, 88%);    /* borde cálido          */
+            --input:             hsl(40, 10%, 88%);
+            --radius:            0.5rem;               /* 8px                   */
 
-            --bs-primary: #1e6b5e;
-            --bs-primary-rgb: 30, 107, 94;
-            --bs-link-color: #1e6b5e;
-            --bs-link-hover-color: #2a7c6f;
+            /* Bootstrap overrides */
+            --bs-body-bg:           hsl(40, 20%, 97%);
+            --bs-body-color:        hsl(216, 60%, 15%);
+            --bs-primary:           hsl(168, 100%, 21%);
+            --bs-primary-rgb:       0, 107, 85;
+            --bs-link-color:        hsl(168, 100%, 21%);
+            --bs-link-hover-color:  hsl(168, 100%, 25%);
+            --bs-border-color:      hsl(40, 10%, 88%);
         }
 
+        /* ── BODY ─────────────────────────────────────────────────────── */
         body {
-            background: #f4f6f8;
+            background: var(--background);
             min-height: 100vh;
-            font-family: 'Inter', 'Segoe UI', sans-serif;
-            color: #1a1a2e;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            color: var(--foreground);
             font-size: 15px;
             line-height: 1.6;
         }
 
-        /* Tipografía: headings en serif */
+        /* ── TIPOGRAFÍA ───────────────────────────────────────────────── */
         h1, h2, h3 {
-            font-family: 'Playfair Display', Georgia, serif;
-            color: var(--navy);
-            font-weight: 700;
-            line-height: 1.2;
+            font-family: 'Instrument Serif', Georgia, serif;
+            color: var(--foreground);
+            font-weight: 400;
+            line-height: 1.15;
         }
 
         h4, h5, h6 {
-            font-family: 'Inter', 'Segoe UI', sans-serif;
-            color: var(--navy);
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            color: var(--foreground);
             font-weight: 600;
         }
 
-        /* ── NAVBAR ─────────────────────────────────────── */
+        /* ── NAVBAR ───────────────────────────────────────────────────── */
         .navbar {
-            background: #ffffff !important;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+            background: var(--card) !important;
+            border-bottom: 1px solid var(--border);
+            box-shadow: none;
             padding-top: 14px;
             padding-bottom: 14px;
         }
@@ -59,192 +73,265 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            text-decoration: none;
+            text-decoration: none !important;
         }
 
         .navbar-brand .brand-icon {
             width: 36px;
             height: 36px;
-            background: var(--navy);
-            border-radius: 8px;
+            background: var(--foreground);
+            border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 18px;
+            font-size: 17px;
             flex-shrink: 0;
         }
 
         .navbar-brand .brand-text {
             display: flex;
             flex-direction: column;
-            line-height: 1.1;
+            line-height: 1.15;
         }
 
         .navbar-brand .brand-name {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 700;
-            font-size: 16px;
-            color: var(--navy) !important;
-            letter-spacing: -0.3px;
+            font-size: 15px;
+            color: var(--foreground) !important;
+            letter-spacing: -0.2px;
         }
 
         .navbar-brand .brand-sub {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 9px;
             font-weight: 600;
             letter-spacing: 1.2px;
             text-transform: uppercase;
-            color: #888;
+            color: var(--muted-foreground);
         }
 
         .navbar .nav-link {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 14px;
             font-weight: 500;
-            color: #444 !important;
+            color: var(--muted-foreground) !important;
             padding: 6px 14px !important;
+            transition: color 0.15s;
         }
 
         .navbar .nav-link:hover {
-            color: var(--primary) !important;
+            color: var(--foreground) !important;
         }
 
         .navbar .btn-ingresar {
-            background: var(--primary);
+            background: var(--accent);
             color: white !important;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius);
             padding: 8px 20px !important;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 14px;
             font-weight: 600;
             transition: background 0.2s, transform 0.15s;
         }
 
         .navbar .btn-ingresar:hover {
-            background: var(--teal-light);
+            background: var(--accent-hover);
             color: white !important;
             transform: translateY(-1px);
         }
 
-        /* ── CONTENEDOR PRINCIPAL ───────────────────────── */
+        /* ── CONTENEDOR PRINCIPAL ─────────────────────────────────────── */
         .container-main {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 2px 16px rgba(15,39,68,0.08);
+            background: var(--card);
+            border-radius: calc(var(--radius) * 2);
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 8px rgba(13, 31, 60, 0.06);
             padding: 40px;
             margin-top: 40px;
             margin-bottom: 40px;
         }
 
-        /* ── BOTONES ────────────────────────────────────── */
+        /* ── BOTONES ──────────────────────────────────────────────────── */
         .btn {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 600;
-            border-radius: 8px;
+            border-radius: var(--radius);
             transition: all 0.2s;
         }
 
         .btn-primary {
-            background: var(--primary);
-            border: none;
-            padding: 10px 28px;
+            background: var(--accent);
+            border-color: var(--accent);
             color: white;
+            padding: 9px 24px;
         }
 
         .btn-primary:hover, .btn-primary:focus {
-            background: var(--teal-light);
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
             color: white;
             transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(30, 107, 94, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 107, 85, 0.25);
         }
 
         .btn-outline-primary {
-            color: var(--primary);
-            border-color: var(--primary);
-            border-width: 1.5px;
+            color: var(--accent);
+            border-color: var(--accent);
         }
 
         .btn-outline-primary:hover {
-            background: var(--primary);
-            border-color: var(--primary);
+            background: var(--accent);
+            border-color: var(--accent);
             color: white;
         }
 
-        /* ── FORMULARIOS ────────────────────────────────── */
-        .form-control {
-            border-radius: 8px;
-            border: 1.5px solid #e0e4ea;
-            font-size: 15px;
+        .btn-secondary {
+            background: var(--muted);
+            border-color: var(--border);
+            color: var(--foreground);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+            color: var(--foreground);
+        }
+
+        /* ── FORMULARIOS ──────────────────────────────────────────────── */
+        .form-control, .form-select {
+            background: var(--card);
+            border: 1px solid var(--input);
+            border-radius: var(--radius);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 14px;
             padding: 10px 14px;
+            color: var(--foreground);
             transition: border-color 0.2s, box-shadow 0.2s;
         }
 
-        .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(30, 107, 94, 0.12);
+        .form-control:focus, .form-select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px hsl(168, 100%, 21%, 0.12);
+            background: var(--card);
+            color: var(--foreground);
         }
 
         .form-label {
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 600;
-            font-size: 14px;
-            color: #333;
+            font-size: 13px;
+            color: var(--foreground);
             margin-bottom: 6px;
         }
 
-        /* ── CARDS ──────────────────────────────────────── */
+        .form-text {
+            color: var(--muted-foreground);
+            font-size: 12px;
+        }
+
+        /* ── CARDS ────────────────────────────────────────────────────── */
         .card {
-            border: 1px solid #e8edf3;
-            border-radius: 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: calc(var(--radius) * 1.5);
+            box-shadow: none;
         }
 
-        .card.shadow-sm {
-            box-shadow: 0 2px 12px rgba(15,39,68,0.07) !important;
+        .card.shadow, .card.shadow-sm {
+            box-shadow: 0 2px 10px rgba(13, 31, 60, 0.06) !important;
         }
 
-        /* ── ALERTAS ────────────────────────────────────── */
-        .alert {
-            border-radius: 10px;
-            border: none;
+        /* ── TABLAS ───────────────────────────────────────────────────── */
+        .table {
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 14px;
+            color: var(--foreground);
         }
 
-        /* ── BADGES ─────────────────────────────────────── */
+        .table-light th {
+            background: var(--muted);
+            color: var(--muted-foreground);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border-color: var(--border);
+        }
+
+        .table td, .table th {
+            border-color: var(--border);
+            padding: 12px 16px;
+        }
+
+        /* ── BADGES ───────────────────────────────────────────────────── */
         .badge {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-weight: 600;
-            border-radius: 6px;
+            font-size: 11px;
+            border-radius: calc(var(--radius) - 2px);
+            padding: 4px 8px;
         }
 
-        /* ── FOOTER ─────────────────────────────────────── */
+        /* ── ALERTAS ──────────────────────────────────────────────────── */
+        .alert {
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            font-size: 14px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* ── ACCORDION (FAQ) ──────────────────────────────────────────── */
+        .accordion-button {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--foreground);
+            background: var(--card);
+        }
+
+        .accordion-button:not(.collapsed) {
+            color: var(--accent);
+            background: var(--card);
+            box-shadow: none;
+        }
+
+        .accordion-item { border-color: var(--border); }
+
+        /* ── FOOTER ───────────────────────────────────────────────────── */
         .footer {
-            background: var(--navy);
-            color: rgba(255,255,255,0.65);
-            padding: 32px 20px;
+            background: var(--foreground);
+            color: hsl(216, 20%, 65%);
+            padding: 36px 20px;
             margin-top: 60px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             font-size: 13px;
             text-align: center;
         }
 
         .footer p { margin: 0; }
 
-        /* ── LINKS ──────────────────────────────────────── */
+        /* ── LINKS ────────────────────────────────────────────────────── */
         a:not(.btn):not(.nav-link):not(.navbar-brand) {
-            color: var(--primary);
+            color: var(--accent);
             text-decoration: none;
         }
 
         a:not(.btn):not(.nav-link):not(.navbar-brand):hover {
-            color: var(--teal-light);
+            color: var(--accent-hover);
             text-decoration: underline;
         }
 
-        /* ── RESPONSIVE ─────────────────────────────────── */
+        /* ── SPINNER ──────────────────────────────────────────────────── */
+        .spinner-border.text-primary { color: var(--accent) !important; }
+
+        /* ── RESPONSIVE ───────────────────────────────────────────────── */
         @media (max-width: 768px) {
             .container-main {
                 padding: 24px 16px;
-                margin-top: 16px;
-                border-radius: 12px;
+                margin-top: 12px;
+                border-radius: var(--radius);
             }
         }
     </style>
@@ -270,14 +357,14 @@
                 <ul class="navbar-nav ms-auto align-items-center gap-1">
                     {% if current_user.is_authenticated %}
                         <li class="nav-item">
-                            <span class="nav-link text-muted" style="font-size:13px;">{{ current_user.email }}</span>
+                            <span class="nav-link" style="font-size:13px;">{{ current_user.email }}</span>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/dashboard">Dashboard</a>
                         </li>
                         {% if current_user.is_admin %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/" style="color: #e53935; font-weight: 600;">Admin</a>
+                            <a class="nav-link" href="/admin/" style="color:#dc2626;font-weight:600;">Admin</a>
                         </li>
                         {% endif %}
                         <li class="nav-item">
@@ -316,10 +403,10 @@
     <footer class="footer">
         <div class="container">
             <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
-                <div style="width:28px;height:28px;background:rgba(255,255,255,0.15);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+                <div style="width:28px;height:28px;background:rgba(255,255,255,0.12);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;">
                     <i class="bi bi-file-earmark-text" style="font-size:14px;color:white;"></i>
                 </div>
-                <span style="color:white;font-weight:600;font-size:15px;">Entre Expedientes</span>
+                <span style="color:white;font-weight:600;font-size:15px;font-family:'Plus Jakarta Sans',sans-serif;">Entre Expedientes</span>
             </div>
             <p>Expedientes judiciales unificados para abogados de Entre Ríos</p>
             <p class="mt-2" style="font-size:12px;">© 2026 Entre Expedientes · Entre Ríos, Argentina</p>
