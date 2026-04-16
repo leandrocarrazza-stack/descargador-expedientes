@@ -3,12 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Descargar Expediente</title>
+    <title>Descargar Expediente — Entre Expedientes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --background:        hsl(40, 33%, 98%);
+            --foreground:        hsl(220, 30%, 6%);
+            --card:              hsl(40, 33%, 98%);
+            --accent:            hsl(37, 30%, 52%);
+            --accent-hover:      hsl(37, 30%, 47%);
+            --accent-subtle:     hsl(37, 30%, 90%);
+            --muted:             hsl(38, 18%, 92%);
+            --muted-foreground:  hsl(218, 14%, 29%);
+            --border:            hsl(38, 18%, 82%);
+            --radius:            0.375rem;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--background);
+            color: var(--foreground);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -16,56 +32,72 @@
             padding: 20px;
         }
         .container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: var(--card);
+            border-radius: calc(var(--radius) * 2);
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 16px rgba(13, 31, 60, 0.08);
             padding: 40px;
             max-width: 560px;
             width: 100%;
         }
-        h1 { color: #333; margin-bottom: 20px; font-size: 24px; }
+        h1 {
+            font-family: 'Playfair Display', Georgia, serif;
+            color: var(--foreground);
+            font-weight: 600;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
 
         /* CREDITOS */
         .creditos-info {
-            background: #f0f4ff;
-            padding: 14px 18px;
-            border-radius: 10px;
-            margin-bottom: 24px;
+            background: var(--muted);
+            border: 1px solid var(--border);
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 14px;
-            color: #555;
+            color: var(--muted-foreground);
         }
-        .creditos-num { color: #667eea; font-weight: bold; font-size: 16px; }
+        .creditos-num { color: var(--accent); font-weight: 700; font-size: 16px; }
 
         /* FORMULARIO */
-        #panel-form label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        #panel-form label { display: block; margin-bottom: 6px; color: var(--foreground); font-weight: 600; font-size: 13px; }
         #panel-form input[type="text"] {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 15px;
+            color: var(--foreground);
+            background: var(--card);
+            transition: border-color 0.2s, box-shadow 0.2s;
             margin-bottom: 6px;
         }
-        #panel-form input[type="text"]:focus { outline: none; border-color: #667eea; }
-        .hint { font-size: 12px; color: #999; margin-bottom: 20px; }
+        #panel-form input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px hsl(168, 100%, 21%, 0.12);
+        }
+        .hint { font-size: 12px; color: var(--muted-foreground); margin-bottom: 20px; }
         .btn-primary {
             width: 100%;
-            padding: 13px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 12px;
+            background: var(--accent);
             color: white;
             border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
+            border-radius: var(--radius);
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
+            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
         }
-        .btn-primary:hover { transform: translateY(-2px); }
-        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,107,85,0.25); }
+        .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; transform: none; box-shadow: none; }
 
         /* PROGRESO */
         #panel-progreso { display: none; }
@@ -75,171 +107,177 @@
             align-items: center;
             gap: 12px;
             padding: 10px 0;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--border);
         }
         .etapa:last-child { border-bottom: none; }
         .etapa-badge {
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            background: #e8e8e8;
-            color: #999;
+            background: var(--muted);
+            color: var(--muted-foreground);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 12px;
-            font-weight: bold;
+            font-weight: 700;
             flex-shrink: 0;
             transition: all 0.4s;
         }
         .etapa-badge.activa {
-            background: #667eea;
+            background: var(--accent);
             color: white;
             animation: pulsar 1.2s ease-in-out infinite;
         }
-        .etapa-badge.completa { background: #4caf50; color: white; }
-        .etapa-badge.error-badge { background: #f44336; color: white; }
+        .etapa-badge.completa { background: #16a34a; color: white; }
+        .etapa-badge.error-badge { background: #dc2626; color: white; }
         @keyframes pulsar {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(102,126,234,0.4); }
-            50% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(102,126,234,0); }
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 hsl(168,100%,21%,0.35); }
+            50% { transform: scale(1.1); box-shadow: 0 0 0 6px hsl(168,100%,21%,0); }
         }
-        .etapa-texto { font-size: 14px; color: #555; }
-        .etapa-texto.activa { color: #333; font-weight: 500; }
-        .etapa-texto.completa { color: #4caf50; }
+        .etapa-texto { font-size: 14px; color: var(--muted-foreground); }
+        .etapa-texto.activa { color: var(--foreground); font-weight: 500; }
+        .etapa-texto.completa { color: #16a34a; }
 
         .barra-container { margin-top: 16px; }
         .barra-label {
             display: flex;
             justify-content: space-between;
             font-size: 13px;
-            color: #888;
+            color: var(--muted-foreground);
             margin-bottom: 8px;
         }
         .barra-bg {
-            background: #e8e8e8;
-            border-radius: 8px;
-            height: 10px;
+            background: var(--muted);
+            border-radius: 99px;
+            height: 8px;
             overflow: hidden;
         }
         .barra-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 8px;
+            background: var(--accent);
+            border-radius: 99px;
             transition: width 1.5s ease;
             width: 0%;
         }
-        .barra-fill.error-barra { background: #f44336; }
+        .barra-fill.error-barra { background: #dc2626; }
 
         /* SELECCIÓN MÚLTIPLE */
         #panel-seleccion { display: none; }
-        #panel-seleccion h3 { margin-bottom: 8px; color: #333; }
-        #panel-seleccion p { font-size: 13px; color: #777; margin-bottom: 16px; }
+        #panel-seleccion h3 { font-family: 'Playfair Display', serif; font-weight: 400; margin-bottom: 8px; color: var(--foreground); }
+        #panel-seleccion p { font-size: 13px; color: var(--muted-foreground); margin-bottom: 16px; }
         .opcion-card {
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
             padding: 14px 16px;
             margin-bottom: 10px;
             cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .opcion-card:hover { border-color: #667eea; background: #f8f9ff; }
-        .opcion-caratula { font-weight: 600; font-size: 14px; color: #333; margin-bottom: 4px; }
-        .opcion-meta { font-size: 12px; color: #888; }
+        .opcion-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,107,85,0.1); }
+        .opcion-caratula { font-weight: 600; font-size: 14px; color: var(--foreground); margin-bottom: 4px; }
+        .opcion-meta { font-size: 12px; color: var(--muted-foreground); }
         .opcion-meta span { margin-right: 12px; }
         .btn-opcion {
             margin-top: 8px;
             padding: 7px 16px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: var(--accent);
             color: white;
             border: none;
-            border-radius: 6px;
+            border-radius: var(--radius);
+            font-family: 'Inter', system-ui, sans-serif;
             font-size: 13px;
+            font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: background 0.2s;
         }
-        .btn-opcion:hover { opacity: 0.85; }
+        .btn-opcion:hover { background: var(--accent-hover); }
 
         /* ÉXITO */
         #panel-exito { display: none; }
         .exito-box {
-            background: #f0fff4;
-            border: 1px solid #b2dfdb;
-            border-radius: 10px;
+            background: var(--accent-subtle);
+            border: 1px solid hsl(168, 40%, 82%);
+            border-radius: var(--radius);
             padding: 20px;
             text-align: center;
             margin-bottom: 16px;
         }
-        .exito-icono { font-size: 40px; margin-bottom: 10px; }
-        .exito-titulo { font-size: 18px; font-weight: bold; color: #2e7d32; margin-bottom: 6px; }
-        .exito-creditos { font-size: 13px; color: #666; }
+        .exito-icono { font-size: 36px; margin-bottom: 10px; }
+        .exito-titulo { font-size: 17px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+        .exito-creditos { font-size: 13px; color: var(--muted-foreground); }
         .btn-descargar {
             display: block;
             width: 100%;
-            padding: 13px;
-            background: #4caf50;
+            padding: 12px;
+            background: #16a34a;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: var(--radius);
+            font-family: 'Inter', system-ui, sans-serif;
             font-size: 15px;
-            font-weight: bold;
+            font-weight: 600;
             cursor: pointer;
             text-align: center;
             text-decoration: none;
             margin-bottom: 10px;
-            transition: opacity 0.2s;
+            transition: background 0.2s;
         }
-        .btn-descargar:hover { opacity: 0.85; }
+        .btn-descargar:hover { background: #15803d; }
 
         /* ERROR */
         #panel-error { display: none; }
         .error-box {
-            background: #fff5f5;
-            border: 1px solid #ffcdd2;
-            border-radius: 10px;
+            background: hsl(0, 80%, 97%);
+            border: 1px solid hsl(0, 80%, 88%);
+            border-radius: var(--radius);
             padding: 16px;
             margin-bottom: 16px;
         }
-        .error-titulo { font-weight: bold; color: #c62828; margin-bottom: 6px; }
-        .error-msg { font-size: 13px; color: #666; }
+        .error-titulo { font-weight: 700; color: #dc2626; margin-bottom: 6px; font-size: 14px; }
+        .error-msg { font-size: 13px; color: var(--muted-foreground); }
 
         /* LINKS */
         .back-link { text-align: center; margin-top: 20px; }
-        .back-link a { color: #667eea; text-decoration: none; font-size: 14px; }
+        .back-link a { color: var(--accent); text-decoration: none; font-size: 14px; }
         .back-link a:hover { text-decoration: underline; }
         .btn-reintentar {
             width: 100%;
-            padding: 11px;
-            background: #f5f5f5;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 8px;
+            padding: 10px;
+            background: var(--muted);
+            color: var(--foreground);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: 'Inter', system-ui, sans-serif;
             font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
             margin-bottom: 8px;
+            transition: background 0.15s;
         }
-        .btn-reintentar:hover { background: #ebebeb; }
+        .btn-reintentar:hover { background: var(--border); }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📥 Descargar Expediente</h1>
+        <h1>Descargar Expediente</h1>
 
         <!-- Créditos disponibles -->
         <div class="creditos-info">
-            <span style="font-size:22px">⭐</span>
+            <span style="font-size:20px">🗂</span>
             <span>Tenés <span class="creditos-num" id="creditos-display">{{ creditos }}</span>
             crédito{{ 's' if creditos != 1 else '' }} disponible{{ 's' if creditos != 1 else '' }}</span>
         </div>
 
         <!-- Estado de sesión Mesa Virtual -->
         {% if tiene_sesion_mv %}
-        <div style="background:#f0fff4;border:1px solid #b2dfdb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#2e7d32;display:flex;align-items:center;gap:10px;">
+        <div style="background:hsl(168,40%,94%);border:1px solid hsl(168,40%,80%);border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;font-size:13px;display:flex;align-items:center;gap:10px;">
             <span style="font-size:18px">✅</span>
-            <span>Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}</span>
-            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:#667eea;font-size:12px;">Reconectar</a>
+            <span style="color:var(--foreground);">Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}</span>
+            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:var(--accent);font-size:12px;">Reconectar</a>
         </div>
         {% else %}
-        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#f57f17;display:flex;align-items:center;gap:10px;">
+        <div style="background:hsl(45,90%,96%);border:1px solid hsl(45,90%,80%);border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;font-size:13px;color:hsl(38,90%,35%);display:flex;align-items:center;gap:10px;">
             <span style="font-size:18px">⚠️</span>
             <span>Mesa Virtual no conectada. Al descargar te pediremos tu usuario y contraseña.</span>
         </div>
