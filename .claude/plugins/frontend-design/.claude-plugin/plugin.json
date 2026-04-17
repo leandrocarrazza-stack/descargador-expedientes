@@ -1,0 +1,9 @@
+{
+  "name": "frontend-design",
+  "version": "1.0.0",
+  "description": "Guides Claude to create bold, distinctive, production-grade frontend interfaces that avoid generic AI aesthetics.",
+  "author": "claude-plugins-official",
+  "skills": [
+    "skills/frontend-design"
+  ]
+}
