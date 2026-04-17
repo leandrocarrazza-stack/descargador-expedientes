@@ -1,170 +1,263 @@
 {% extends "base.html" %}
 
-{% block titulo %}Panel de Administración{% endblock %}
+{% block titulo %}Panel de administración · Foja{% endblock %}
 
 {% block estilos_extra %}
 <style>
+    .admin-hero {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .admin-hero h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .admin-hero .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
     .admin-badge {
-        background: linear-gradient(135deg, #e53935, #b71c1c);
+        background: linear-gradient(135deg, #b3261e, #8b1e28);
         color: white;
-        padding: 4px 10px;
+        padding: 3px 10px;
         border-radius: 20px;
-        font-size: 12px;
-        font-weight: bold;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        vertical-align: middle;
     }
+
+    .section-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .section-card-header {
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        font-weight: 600;
+        font-size: .95rem;
+        color: var(--cream);
+    }
+    .section-card-header.navy {
+        background: var(--navy);
+    }
+    .section-card-header.amber {
+        background: #7a4a00;
+    }
+    .section-card-header .icon-sm {
+        font-size: 1.1rem;
+        color: var(--gold);
+    }
+    .section-card-body {
+        padding: 1.5rem;
+    }
+
     .tabla-usuarios thead th {
-        background: linear-gradient(135deg, #667eea, #764ba2);
-        color: white;
+        background: var(--navy);
+        color: var(--cream);
         border: none;
+        font-size: .85rem;
+        font-family: var(--font-mono);
+        letter-spacing: .05em;
+        font-weight: 500;
     }
+    .tabla-usuarios tbody tr:hover { background: var(--cream-soft); }
+    .tabla-usuarios td { vertical-align: middle; }
+
     .creditos-badge {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #4caf50;
+        font-family: var(--font-serif);
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #2e7d32;
     }
     .creditos-badge.sin-creditos {
-        color: #f44336;
+        color: #b3261e;
+    }
+
+    .btn-table-sm {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: .3rem .7rem;
+        font-size: .82rem;
+        font-weight: 600;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--navy);
+        cursor: pointer;
+        transition: all .15s;
+        margin-right: .25rem;
+    }
+    .btn-table-sm:hover {
+        background: var(--gold);
+        border-color: var(--gold);
+        color: var(--navy);
     }
 </style>
 {% endblock %}
 
 {% block contenido %}
-<h2 class="mb-1">Panel de Administración <span class="admin-badge">ADMIN</span></h2>
-<p class="text-muted mb-4">Gestión de usuarios y créditos del sistema.</p>
-
-<!-- SESIÓN MESA VIRTUAL -->
-<div class="card mb-4 border-0 shadow-sm">
-    <div class="card-header" style="background: linear-gradient(135deg, #f57c00, #e65100); color: white; border-radius: 8px 8px 0 0;">
-        <strong>Sesión Mesa Virtual</strong>
-    </div>
-    <div class="card-body">
-        <p class="text-muted mb-2">
-            Si el servidor muestra <strong>"Error: No se completó el login a tiempo"</strong>,
-            la sesión de Mesa Virtual venció. Seguí estos pasos para renovarla:
-        </p>
-        <ol class="mb-3">
-            <li>En tu computadora, pedile a Claude que ejecute <code>mesa_virtual_iniciar_sesion</code></li>
-            <li>Completá el login en la ventana de Chrome que se abre</li>
-            <li>El archivo <code>~/.mesa_virtual_sesion.pkl</code> se actualiza automáticamente</li>
-            <li>Buscá ese archivo en tu computadora y subilo acá abajo</li>
-        </ol>
-        <div class="row g-3 align-items-end">
-            <div class="col-md-6">
-                <label class="form-label">Archivo de sesión (.pkl)</label>
-                <input type="file" id="archivoSesion" class="form-control" accept=".pkl">
-            </div>
-            <div class="col-md-3">
-                <button class="btn w-100 text-white" style="background-color: #f57c00;" onclick="subirSesion()">
-                    Subir sesión
-                </button>
-            </div>
-        </div>
-        <div id="mensajeSesion" class="mt-3 d-none"></div>
+<div class="admin-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Administración</span>
+        <h1 class="mt-2">Panel de administración <span class="admin-badge">Admin</span></h1>
+        <p class="subtitle mb-0">Gestión de usuarios, créditos y sesión de Mesa Virtual.</p>
     </div>
 </div>
 
-<!-- OTORGAR CRÉDITOS -->
-<div class="card mb-4 border-0 shadow-sm">
-    <div class="card-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 8px 8px 0 0;">
-        <strong>Otorgar Créditos Gratuitos</strong>
-    </div>
-    <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-5">
-                <label class="form-label">Email del usuario</label>
-                <input type="email" id="emailUsuario" class="form-control" placeholder="usuario@ejemplo.com">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Cantidad</label>
-                <input type="number" id="cantidadCreditos" class="form-control" value="5" min="1" max="100">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Motivo (opcional)</label>
-                <input type="text" id="motivoCreditos" class="form-control" placeholder="compensación, prueba...">
-            </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100" onclick="otorgarCreditos()">
-                    Otorgar
-                </button>
-            </div>
-        </div>
-        <div id="mensajeOtorgar" class="mt-3 d-none"></div>
-    </div>
-</div>
+<div class="container foja-page">
 
-<!-- TABLA DE USUARIOS -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center"
-         style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 8px 8px 0 0;">
-        <strong>Usuarios registrados ({{ usuarios|length }})</strong>
-        <button class="btn btn-sm btn-light" onclick="location.reload()">Actualizar</button>
-    </div>
-    <div class="card-body p-0">
-        {% if usuarios %}
-        <div class="table-responsive">
-            <table class="table tabla-usuarios mb-0">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Email</th>
-                        <th>Nombre</th>
-                        <th>Plan</th>
-                        <th>Créditos</th>
-                        <th>Rol</th>
-                        <th>Registrado</th>
-                        <th>Acción rápida</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for u in usuarios %}
-                    <tr>
-                        <td class="text-muted">{{ u.id }}</td>
-                        <td>
-                            <strong>{{ u.email }}</strong>
-                        </td>
-                        <td>{{ u.nombre or '—' }}</td>
-                        <td>
-                            <span class="badge bg-secondary">{{ u.plan }}</span>
-                        </td>
-                        <td>
-                            <span class="creditos-badge {% if u.creditos_disponibles == 0 %}sin-creditos{% endif %}">
-                                {{ u.creditos_disponibles }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if u.is_admin %}
-                                <span class="admin-badge">ADMIN</span>
-                            {% else %}
-                                <span class="text-muted">usuario</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-muted" style="font-size: 0.85em;">
-                            {{ u.creado_en.strftime('%d/%m/%Y') }}
-                        </td>
-                        <td>
-                            <!-- Botón para dar 1 crédito rápido -->
-                            <button class="btn btn-sm btn-outline-success"
-                                    onclick="otorgarRapido('{{ u.email }}', 1)"
-                                    title="+1 crédito">
-                                +1
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary"
-                                    onclick="otorgarRapido('{{ u.email }}', 5)"
-                                    title="+5 créditos">
-                                +5
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- SESIÓN MESA VIRTUAL -->
+    <div class="section-card">
+        <div class="section-card-header amber">
+            <i class="bi bi-key-fill icon-sm"></i>
+            Sesión Mesa Virtual
         </div>
-        {% else %}
-        <div class="p-4 text-center text-muted">
-            No hay usuarios registrados.
+        <div class="section-card-body">
+            <p class="text-muted-foja mb-3">
+                Si el servidor muestra <strong>"Error: No se completó el login a tiempo"</strong>,
+                la sesión de Mesa Virtual venció. Seguí estos pasos para renovarla:
+            </p>
+            <ol class="mb-4" style="color: var(--ink); font-size: .95rem; line-height: 2;">
+                <li>En tu computadora, pedile a Claude que ejecute <code class="mono">mesa_virtual_iniciar_sesion</code></li>
+                <li>Completá el login en la ventana de Chrome que se abre</li>
+                <li>El archivo <code class="mono">~/.mesa_virtual_sesion.pkl</code> se actualiza automáticamente</li>
+                <li>Buscá ese archivo en tu computadora y subilo acá abajo</li>
+            </ol>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label">Archivo de sesión (.pkl)</label>
+                    <input type="file" id="archivoSesion" class="form-control" accept=".pkl">
+                </div>
+                <div class="col-md-3">
+                    <button class="btn-foja w-100" onclick="subirSesion()">
+                        <i class="bi bi-upload"></i> Subir sesión
+                    </button>
+                </div>
+            </div>
+            <div id="mensajeSesion" class="mt-3 d-none"></div>
         </div>
-        {% endif %}
     </div>
+
+    <!-- OTORGAR CRÉDITOS -->
+    <div class="section-card">
+        <div class="section-card-header navy">
+            <i class="bi bi-coin icon-sm"></i>
+            Otorgar créditos gratuitos
+        </div>
+        <div class="section-card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">Email del usuario</label>
+                    <input type="email" id="emailUsuario" class="form-control" placeholder="usuario@ejemplo.com">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Cantidad</label>
+                    <input type="number" id="cantidadCreditos" class="form-control" value="5" min="1" max="100">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Motivo (opcional)</label>
+                    <input type="text" id="motivoCreditos" class="form-control" placeholder="compensación, prueba...">
+                </div>
+                <div class="col-md-2">
+                    <button class="btn-foja w-100" onclick="otorgarCreditos()">
+                        <i class="bi bi-plus-circle"></i> Otorgar
+                    </button>
+                </div>
+            </div>
+            <div id="mensajeOtorgar" class="mt-3 d-none"></div>
+        </div>
+    </div>
+
+    <!-- TABLA DE USUARIOS -->
+    <div class="section-card">
+        <div class="section-card-header navy" style="justify-content: space-between;">
+            <span><i class="bi bi-people-fill icon-sm"></i> Usuarios registrados ({{ usuarios|length }})</span>
+            <button class="btn-foja-outline-light" style="padding: .4rem 1rem; font-size: .85rem;" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+        </div>
+        <div class="section-card-body p-0">
+            {% if usuarios %}
+            <div class="table-responsive">
+                <table class="table tabla-usuarios mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Email</th>
+                            <th>Nombre</th>
+                            <th>Plan</th>
+                            <th>Créditos</th>
+                            <th>Rol</th>
+                            <th>Registrado</th>
+                            <th>Acción rápida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in usuarios %}
+                        <tr>
+                            <td class="text-muted-foja mono" style="font-size: .82rem;">{{ u.id }}</td>
+                            <td>
+                                <strong>{{ u.email }}</strong>
+                            </td>
+                            <td>{{ u.nombre or '—' }}</td>
+                            <td>
+                                <span class="badge bg-secondary">{{ u.plan }}</span>
+                            </td>
+                            <td>
+                                <span class="creditos-badge {% if u.creditos_disponibles == 0 %}sin-creditos{% endif %}">
+                                    {{ u.creditos_disponibles }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if u.is_admin %}
+                                    <span class="admin-badge">Admin</span>
+                                {% else %}
+                                    <span class="text-muted-foja" style="font-size: .85rem;">usuario</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted-foja mono" style="font-size: .82rem;">
+                                {{ u.creado_en.strftime('%d/%m/%Y') }}
+                            </td>
+                            <td>
+                                <button class="btn-table-sm"
+                                        onclick="otorgarRapido('{{ u.email }}', 1)"
+                                        title="+1 crédito">
+                                    <i class="bi bi-plus"></i>1
+                                </button>
+                                <button class="btn-table-sm"
+                                        onclick="otorgarRapido('{{ u.email }}', 5)"
+                                        title="+5 créditos">
+                                    <i class="bi bi-plus"></i>5
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-5 text-center text-muted-foja">
+                <i class="bi bi-people" style="font-size: 2rem; opacity: .4;"></i>
+                <p class="mt-2 mb-0">No hay usuarios registrados.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -191,7 +284,7 @@
             const data = await resp.json();
 
             if (data.exito) {
-                mostrarMensaje(msgDiv, `✓ ${data.mensaje} (total: ${data.creditos_nuevos})`, 'success');
+                mostrarMensaje(msgDiv, `Créditos otorgados. ${data.mensaje} (total: ${data.creditos_nuevos})`, 'success');
                 // Recargar la tabla después de 1 segundo
                 setTimeout(() => location.reload(), 1200);
             } else {
@@ -212,7 +305,7 @@
             });
             const data = await resp.json();
             if (data.exito) {
-                alert(`✓ ${data.mensaje}`);
+                alert(data.mensaje);
                 location.reload();
             } else {
                 alert(`Error: ${data.mensaje}`);
@@ -244,7 +337,7 @@
             const data = await resp.json();
 
             if (data.exito) {
-                mostrarMensaje(msgDiv, '✓ ' + data.mensaje, 'success');
+                mostrarMensaje(msgDiv, data.mensaje, 'success');
             } else {
                 mostrarMensaje(msgDiv, 'Error: ' + data.mensaje, 'danger');
             }

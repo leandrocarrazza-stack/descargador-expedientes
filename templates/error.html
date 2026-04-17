@@ -1,11 +1,56 @@
 {% extends "base.html" %}
 
+{% block titulo %}Error · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .error-wrap {
+        min-height: calc(100vh - 160px);
+        display: flex;
+        align-items: center;
+        padding: 3rem 1rem;
+    }
+    .error-card {
+        max-width: 560px;
+        width: 100%;
+        margin: 0 auto;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--gold);
+        border-radius: var(--radius);
+        padding: 3.5rem 2.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-md);
+    }
+    .error-card .icon {
+        font-size: 3.5rem;
+        color: var(--gold);
+        margin-bottom: 1rem;
+    }
+    .error-card h1 {
+        font-size: 2.2rem;
+        margin-bottom: .5rem;
+    }
+    .error-card p {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin-bottom: 2rem;
+    }
+</style>
+{% endblock %}
+
 {% block contenido %}
-<div class="row justify-content-center">
-    <div class="col-md-6 text-center">
-        <h1 class="display-4 mb-4">⚠️ Algo salió mal</h1>
-        <p class="lead mb-5">{{ error }}</p>
-        <a href="/" class="btn btn-primary">Volver a inicio</a>
+<div class="error-wrap">
+    <div class="error-card">
+        <div class="icon"><i class="bi bi-exclamation-octagon"></i></div>
+        <h1>Algo salió mal</h1>
+        <p>{{ error or mensaje or 'Hubo un problema y no pudimos completar la acción.' }}</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a href="/" class="btn-foja"><i class="bi bi-house-fill"></i> Volver al inicio</a>
+            {% if current_user.is_authenticated %}
+                <a href="/dashboard" class="btn-foja-outline"><i class="bi bi-speedometer2"></i> Ir a mi panel</a>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}
