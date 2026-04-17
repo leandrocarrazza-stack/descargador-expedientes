@@ -1,118 +1,227 @@
 {% extends "base.html" %}
 
-{% block titulo %}Descargar Expediente{% endblock %}
+{% block titulo %}Descargar expediente · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .descargar-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .descargar-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .descargar-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .form-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--gold);
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        box-shadow: var(--shadow-md);
+    }
+
+    .credits-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        background: rgba(212, 165, 74, 0.1);
+        border: 1px solid rgba(212, 165, 74, 0.3);
+        border-radius: 8px;
+        padding: .5rem 1rem;
+        font-size: .9rem;
+        color: var(--navy);
+        margin-bottom: 1.5rem;
+    }
+    .credits-badge strong { color: var(--gold-dark); }
+
+    .progress {
+        height: 12px;
+        background: var(--line);
+        border-radius: 10px;
+    }
+
+    .etapa-item {
+        display: flex;
+        align-items: center;
+        gap: .85rem;
+        padding: .6rem 0;
+        border-bottom: 1px dashed var(--line);
+    }
+    .etapa-item:last-child { border-bottom: 0; }
+    .etapa-badge {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .78rem;
+        font-weight: 600;
+        flex-shrink: 0;
+        background: var(--line);
+        color: var(--muted);
+        transition: all .2s;
+    }
+    .etapa-badge.active { background: var(--navy); color: var(--gold); }
+    .etapa-badge.done   { background: #2e7d32; color: #fff; }
+    .etapa-texto        { font-size: .92rem; color: var(--muted); }
+    .etapa-texto.active { color: var(--navy); font-weight: 600; }
+    .etapa-texto.done   { color: #2e7d32; }
+
+    .result-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid #2e7d32;
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-md);
+    }
+    .result-card.error { border-top-color: #b3261e; }
+    .result-icon { font-size: 3rem; color: #2e7d32; margin-bottom: .5rem; }
+    .result-icon.error { color: #b3261e; }
+    .result-details {
+        background: var(--cream);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1.5rem 0;
+        text-align: left;
+        font-size: .9rem;
+    }
+    .result-details strong { color: var(--navy); font-weight: 600; }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-6">
-            <h2 class="mb-4">Descargar Expediente</h2>
-
-            <!-- SECCION 1: FORMULARIO (se muestra al inicio) -->
-            <div id="form-section" class="card shadow-sm">
-                <div class="card-body">
-                    <form id="descarga-form">
-                        <div class="mb-3">
-                            <label for="numero_expediente" class="form-label">Numero de Expediente</label>
-                            <input
-                                type="text"
-                                class="form-control"
-                                id="numero_expediente"
-                                name="numero_expediente"
-                                placeholder="Ej: 21/24"
-                                required
-                            >
-                            <small class="text-muted">Ingresa el numero del expediente en formato: Numero/Ano (ej: 21/24)</small>
-                        </div>
-
-                        <div class="alert alert-info" role="alert">
-                            <strong>Costo:</strong> Esta descarga gastara 1 credito.
-                            <br>
-                            <strong>Creditos disponibles:</strong> {{ current_user.creditos_disponibles }}
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100">
-                            Solicitar Descarga
-                        </button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- SECCION 2: PROGRESO (se muestra cuando la tarea está en progreso) -->
-            <div id="progress-section" class="card shadow-sm" style="display: none;">
-                <div class="card-body">
-                    <div class="text-center mb-4">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Cargando...</span>
-                        </div>
-                        <p class="mt-3 text-muted">Descargando expediente...</p>
-                    </div>
-
-                    <div class="mb-3">
-                        <p class="small text-muted">Estado: <span id="status-text">PENDING</span></p>
-                        <div class="progress" style="height: 25px;">
-                            <div
-                                id="progress-bar"
-                                class="progress-bar progress-bar-striped progress-bar-animated"
-                                role="progressbar"
-                                style="width: 0%"
-                                aria-valuenow="0"
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                            >
-                                <span id="progress-text">0%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <p id="progress-message" class="text-muted"></p>
-
-                    <button id="cancel-btn" class="btn btn-danger w-100">
-                        Cancelar Descarga
-                    </button>
-                </div>
-            </div>
-
-            <!-- SECCION 3: EXITO (se muestra cuando se completo) -->
-            <div id="success-section" class="card shadow-sm border-success" style="display: none;">
-                <div class="card-body">
-                    <div class="alert alert-success" role="alert">
-                        <h4 class="alert-heading">Expediente Descargado!</h4>
-                        <p>El expediente se ha descargado correctamente. Haz click abajo para descargar el PDF.</p>
-                    </div>
-
-                    <div class="mb-3">
-                        <p><strong>Numero:</strong> <span id="success-numero"></span></p>
-                        <p><strong>Creditos restantes:</strong> <span id="success-creditos"></span></p>
-                    </div>
-
-                    <a id="download-btn" href="#" class="btn btn-success w-100 mb-2">
-                        Descargar PDF
-                    </a>
-
-                    <button id="back-btn" class="btn btn-secondary w-100">
-                        Descargar Otro Expediente
-                    </button>
-                </div>
-            </div>
-
-            <!-- SECCION 4: ERROR (se muestra cuando falla) -->
-            <div id="error-section" class="card shadow-sm border-danger" style="display: none;">
-                <div class="card-body">
-                    <div class="alert alert-danger" role="alert">
-                        <h4 class="alert-heading">Error en la Descarga</h4>
-                        <p id="error-message"></p>
-                    </div>
-
-                    <button id="retry-btn" class="btn btn-danger w-100">
-                        Intentar Nuevamente
-                    </button>
-                </div>
-            </div>
-        </div>
+<div class="descargar-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Descargar</span>
+        <h1 class="mt-2">Nuevo expediente</h1>
+        <p class="subtitle mb-0">Ingresá el número y Foja descarga todo en un único PDF cronológico.</p>
     </div>
 </div>
 
+<div class="container foja-page">
+    <div class="row">
+        <div class="col-lg-7 mx-auto">
+
+            <!-- Créditos disponibles -->
+            <div class="credits-badge">
+                <i class="bi bi-coin"></i>
+                <span>Créditos disponibles: <strong>{{ current_user.creditos_disponibles }}</strong></span>
+                <a href="{{ url_for('pagos.mostrar_planes') }}" class="ms-2 text-gold mono" style="font-size: .82rem;">Comprar más →</a>
+            </div>
+
+            <!-- SECCIÓN 1: Formulario -->
+            <div id="form-section" class="form-card">
+                <h3 class="mb-1">Número de expediente</h3>
+                <p class="text-muted-foja mb-4" style="font-size: .95rem;">
+                    Podés ingresar el número en formato <span class="mono">21/24</span> o <span class="mono">2024/12345</span>.
+                </p>
+                <form id="descarga-form">
+                    <div class="mb-4">
+                        <input type="text"
+                               class="form-control form-control-lg mono"
+                               id="numero_expediente"
+                               name="numero_expediente"
+                               placeholder="Ej: 14246/2024"
+                               required
+                               style="font-size: 1.2rem; letter-spacing: .04em;">
+                        <small class="text-muted-foja mt-1 d-block">Ingresá el número del expediente en formato: Numero/Año (ej: 21/24)</small>
+                    </div>
+
+                    <div class="alert alert-info d-flex align-items-center gap-2">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <span><strong>Costo:</strong> esta descarga gastará 1 crédito. Tenés <strong>{{ current_user.creditos_disponibles }}</strong> disponible{{ 's' if current_user.creditos_disponibles != 1 else '' }}.</span>
+                    </div>
+
+                    <button type="submit" class="btn-foja w-100 mt-3" id="btn-solicitar">
+                        <i class="bi bi-cloud-download-fill"></i> Solicitar descarga
+                    </button>
+                </form>
+            </div>
+
+            <!-- SECCIÓN 2: Progreso -->
+            <div id="progress-section" class="form-card mt-4" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="mb-0" style="font-size: 1.3rem;">Descargando expediente</h3>
+                    <span id="status-text" class="mono fw-semibold" style="color: var(--gold-dark); font-size: .85rem;">PENDING</span>
+                </div>
+                <p class="text-muted-foja small mb-3">Este proceso puede tardar entre 1 y 3 minutos.</p>
+
+                <div class="progress mb-3">
+                    <div id="progress-bar"
+                         class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar"
+                         style="width: 0%"
+                         aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                        <span id="progress-text" class="visually-hidden">0%</span>
+                    </div>
+                </div>
+
+                <p id="progress-message" class="text-muted-foja small mb-3"></p>
+
+                <button id="cancel-btn" class="btn-foja-outline w-100" style="padding: .65rem 1.4rem;">
+                    <i class="bi bi-x-circle"></i> Cancelar descarga
+                </button>
+            </div>
+
+            <!-- SECCIÓN 3: Éxito -->
+            <div id="success-section" class="result-card mt-4" style="display: none;">
+                <div class="result-icon"><i class="bi bi-check-circle-fill"></i></div>
+                <h3>Expediente descargado</h3>
+                <p class="text-muted-foja">El expediente está listo. Hacé clic para descargar el PDF.</p>
+
+                <div class="result-details">
+                    <div><strong>Número:</strong> <span id="success-numero" class="mono">—</span></div>
+                    <div class="mt-1"><strong>Créditos restantes:</strong> <span id="success-creditos" class="text-gold fw-semibold">—</span></div>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap justify-content-center">
+                    <a id="download-btn" href="#" class="btn-foja">
+                        <i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF
+                    </a>
+                    <button id="back-btn" class="btn-foja-outline">
+                        <i class="bi bi-arrow-clockwise"></i> Descargar otro
+                    </button>
+                </div>
+            </div>
+
+            <!-- SECCIÓN 4: Error -->
+            <div id="error-section" class="result-card error mt-4" style="display: none;">
+                <div class="result-icon error"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <h3>No se pudo completar</h3>
+
+                <div class="alert alert-danger mt-3 text-start">
+                    <strong>Motivo:</strong>
+                    <p id="error-message" class="mb-0 mt-1">—</p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap justify-content-center">
+                    <button id="retry-btn" class="btn-foja">
+                        <i class="bi bi-arrow-clockwise"></i> Reintentar
+                    </button>
+                    <a href="{{ url_for('descargas.historial_descargas') }}" class="btn-foja-outline">
+                        <i class="bi bi-clock-history"></i> Historial
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
 <script>
 // Estado global
 let currentTaskId = null;
@@ -138,7 +247,7 @@ document.getElementById('descarga-form').addEventListener('submit', async (e) =>
     const numero = document.getElementById('numero_expediente').value.trim();
 
     if (!numero) {
-        alert('Por favor ingresa un numero de expediente');
+        alert('Por favor ingresá un número de expediente');
         return;
     }
 
@@ -256,7 +365,7 @@ function showError(message) {
 document.getElementById('cancel-btn').addEventListener('click', async () => {
     if (!currentTaskId) return;
 
-    if (!confirm('Deseas cancelar la descarga?')) {
+    if (!confirm('¿Cancelar la descarga?')) {
         return;
     }
 

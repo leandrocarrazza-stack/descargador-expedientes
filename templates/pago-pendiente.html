@@ -1,55 +1,109 @@
 {% extends "base.html" %}
 
-{% block titulo %}Pago Pendiente - Descargador de Expedientes{% endblock %}
+{% block titulo %}Pago pendiente · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .pago-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .pago-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .pago-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .pending-icon-wrap {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(212, 165, 74, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+    }
+
+    .que-puede-pasar li {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding: .6rem 0;
+        border-bottom: 1px dashed var(--line);
+        font-size: .9rem;
+        color: var(--ink);
+    }
+    .que-puede-pasar li:last-child { border-bottom: 0; }
+    .que-puede-pasar li i { flex-shrink: 0; margin-top: .15rem; }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-lg-6">
-      <div class="card border-0 shadow">
-        <div class="card-body p-5 text-center">
-          <!-- Icono de Espera -->
-          <div class="mb-4">
-            <div class="rounded-circle bg-warning bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
-              <i class="bi bi-clock-history text-warning" style="font-size: 3rem;"></i>
-            </div>
-          </div>
-
-          <h1 class="h2 fw-bold mb-2">Pago Pendiente</h1>
-          <p class="text-muted mb-4">Tu pago está siendo procesado</p>
-
-          <div class="alert alert-info mb-4" role="alert">
-            <i class="bi bi-info-circle me-2"></i>
-            <small>
-              El procesamiento puede tomar de <strong>1 a 3 días hábiles</strong>.
-              Te notificaremos cuando se confirme.
-            </small>
-          </div>
-
-          <div class="bg-light p-4 rounded mb-4">
-            <p class="text-muted small mb-2">Lo que puede pasar ahora:</p>
-            <ul class="text-start small text-muted">
-              <li>✅ Pago se confirma: Créditos se acreditan automáticamente</li>
-              <li>❌ Pago rechazado: Te enviaremos un email con instrucciones</li>
-              <li>❓ Dudas: Revisa tu email o contacta a soporte</li>
-            </ul>
-          </div>
-
-          <div class="d-grid gap-2">
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary btn-lg">
-              <i class="bi bi-house me-2"></i>Ir al Dashboard
-            </a>
-            <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-outline-secondary">
-              <i class="bi bi-bag-plus me-2"></i>Ver Más Planes
-            </a>
-          </div>
-
-          <p class="text-muted small mt-4">
-            Referencia: Revisa tu email para el comprobante de la transacción
-          </p>
-        </div>
-      </div>
+<div class="pago-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Pagos</span>
+        <h1 class="mt-2">Pago pendiente</h1>
+        <p class="subtitle mb-0">Tu pago está siendo procesado.</p>
     </div>
-  </div>
+</div>
+
+<div class="container foja-page">
+    <div class="row">
+        <div class="col-lg-5 mx-auto">
+
+            <div class="foja-card text-center">
+                <div class="pending-icon-wrap">
+                    <i class="bi bi-clock-history" style="font-size: 2.5rem; color: var(--gold-dark);"></i>
+                </div>
+
+                <h2 class="mb-1">Pago pendiente</h2>
+                <p class="text-muted-foja mb-4">Tu pago está siendo procesado. Te notificaremos cuando se confirme.</p>
+
+                <div class="alert alert-info mb-4 text-start">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    El procesamiento puede tomar de <strong>1 a 3 días hábiles</strong> según el medio de pago elegido.
+                </div>
+
+                <div class="foja-card mb-4" style="text-align: left; padding: 1.25rem;">
+                    <div class="eyebrow mb-3">Lo que puede pasar</div>
+                    <ul class="que-puede-pasar list-unstyled m-0">
+                        <li>
+                            <i class="bi bi-check-circle-fill" style="color: #2e7d32;"></i>
+                            <span><strong>Pago confirmado:</strong> los créditos se acreditan automáticamente</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-x-circle-fill" style="color: #b3261e;"></i>
+                            <span><strong>Pago rechazado:</strong> te enviamos un email con instrucciones</span>
+                        </li>
+                        <li>
+                            <i class="bi bi-question-circle-fill" style="color: var(--gold-dark);"></i>
+                            <span><strong>Dudas:</strong> revisá tu email o contactá a soporte</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <a href="/dashboard" class="btn-foja">
+                        <i class="bi bi-house-fill"></i> Ir a mi panel
+                    </a>
+                    <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn-foja-outline">
+                        <i class="bi bi-bag-plus"></i> Ver más planes
+                    </a>
+                </div>
+
+                <p class="text-muted-foja small mt-4 mb-0">
+                    Revisá tu email para el comprobante de la transacción.
+                </p>
+            </div>
+
+        </div>
+    </div>
 </div>
 {% endblock %}
