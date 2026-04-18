@@ -642,7 +642,13 @@ class DescargadorArchivos:
             driver = self.cliente.driver
 
             while mov_idx_global < max_movimientos:
-                print(f"\n  [PAG {pagina_actual}] Extrayendo enlaces...")
+                print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
+
+                # IMPORTANTE: Esperar a que cargue la tabla completamente
+                # Puede haber diferentes estructuras según Material-UI/React rendering
+                self._esperar_tabla_cargada(driver)
+
+                print(f"  [PAG {pagina_actual}] Extrayendo enlaces...")
                 time.sleep(1)
 
                 # 1. Extraer hrefs de la pagina ACTUAL (tokens validos ahora)
@@ -711,6 +717,60 @@ class DescargadorArchivos:
 
         print(f"\n[OK] Total archivos descargados: {len(archivos_descargados)} ({pagina_actual} pagina(s))")
         return archivos_descargados
+
+    def _esperar_tabla_cargada(self, driver, timeout=15):
+        """
+        Espera a que la tabla de movimientos esté completamente cargada.
+
+        Estrategias (en orden):
+        1. Esperar a que exista <table> tag
+        2. Esperar a que exista div[role="table"]
+        3. Esperar a que exista algún <a> en la tabla
+        4. Esperar a que React termine de renderizar
+
+        Args:
+            driver: Selenium driver
+            timeout: Máximo tiempo a esperar (segundos)
+        """
+        estrategias = [
+            # Estrategia 1: HTML table
+            (By.XPATH, "//table", "tabla HTML"),
+            # Estrategia 2: Material-UI table
+            (By.XPATH, "//div[contains(@class, 'MuiTableContainer')]", "MuiTableContainer"),
+            # Estrategia 3: React div con role
+            (By.XPATH, "//div[@role='table']", "div[role=table]"),
+            # Estrategia 4: Cualquier tabla
+            (By.XPATH, "//table | //div[@role='table']", "tabla genérica"),
+            # Estrategia 5: Algún enlace en la página
+            (By.XPATH, "//table//a[@href] | //div[@role='table']//a[@href]", "enlaces en tabla"),
+        ]
+
+        for by_method, selector, descripcion in estrategias:
+            try:
+                print(f"    > Esperando {descripcion}...")
+                WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((by_method, selector))
+                )
+                print(f"    [OK] {descripcion} detectado")
+                time.sleep(1)  # Pequeño delay adicional para que termine renderizado
+                return True
+            except:
+                continue
+
+        # Si ninguna estrategia funcionó, esperar a que React cargue
+        try:
+            print(f"    > Esperando renderizado React...")
+            WebDriverWait(driver, 5).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(2)
+            print(f"    [OK] React renderizado")
+            return True
+        except:
+            pass
+
+        print(f"    [WARN] No se detectó tabla, continuando de todas formas...")
+        return False
 
     def _extraer_hrefs_pagina_actual(self, driver) -> List[str]:
         """
