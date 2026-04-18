@@ -160,17 +160,6 @@ def crear_app(config_obj=None):
 
         return _dashboard()
 
-    @app.route('/descargar')
-    def descargar():
-        """Página de descarga de expedientes (requiere login)."""
-        from flask_login import login_required
-
-        @login_required
-        def _descargar():
-            return render_template('descargar.html')
-
-        return _descargar()
-
     # ═════════════════════════════════════════════════════════════════════
     #  MANEJO DE ERRORES
     # ═════════════════════════════════════════════════════════════════════
