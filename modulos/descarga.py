@@ -819,11 +819,64 @@ class DescargadorArchivos:
 
             # Si llegamos aquí, no encontró nada
             print(f"  [WARN] No se encontraron enlaces con ninguna estrategia")
+            self._debug_estructura_tabla(driver)
             return []
 
         except Exception as e:
             print(f"  [WARN] Error extrayendo hrefs de pagina actual: {str(e)[:60]}")
             return []
+
+    def _debug_estructura_tabla(self, driver):
+        """
+        Captura información sobre la estructura de la tabla para debugging.
+        Se ejecuta cuando no se encuentran enlaces.
+        """
+        try:
+            html = driver.page_source
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Buscar todas las tablas
+            tablas = soup.find_all("table")
+            print(f"\n  [DEBUG TABLA] Total de <table>: {len(tablas)}")
+
+            for tabla_idx, tabla in enumerate(tablas, 1):
+                print(f"\n    Tabla {tabla_idx}:")
+                filas = tabla.find_all("tr")
+                print(f"      Total filas: {len(filas)}")
+
+                # Mostrar estructura de primeras 3 filas
+                for fila_idx, fila in enumerate(filas[:3], 1):
+                    celdas = fila.find_all(["td", "th"])
+                    enlaces = fila.find_all("a")
+                    print(f"        Fila {fila_idx}: {len(celdas)} celdas, {len(enlaces)} enlaces")
+
+                    # Mostrar contenido del primer enlace si existe
+                    if enlaces:
+                        for enlace_idx, enlace in enumerate(enlaces[:2], 1):
+                            href = enlace.get_attribute("href") if hasattr(enlace, "get_attribute") else enlace.get("href", "")
+                            texto = enlace.get_text(strip=True)[:40]
+                            print(f"          Enlace {enlace_idx}: href='{href[:50]}...' texto='{texto}'")
+
+            # Buscar divs con role="table" (Material-UI puede usar esto)
+            divs_tabla = soup.find_all("div", attrs={"role": "table"})
+            if divs_tabla:
+                print(f"\n    Encontrados {len(divs_tabla)} div[role='table']")
+                for div_idx, div in enumerate(divs_tabla[:1], 1):
+                    filas = div.find_all("div", attrs={"role": "row"})
+                    print(f"      Div tabla {div_idx}: {len(filas)} filas")
+
+            # Buscar cualquier enlace en la página
+            todos_enlaces = soup.find_all("a", href=True)
+            print(f"\n    Total <a> con href en página: {len(todos_enlaces)}")
+            if todos_enlaces:
+                print(f"      Primeros 3 enlaces:")
+                for enlace in todos_enlaces[:3]:
+                    href = enlace.get("href", "")
+                    texto = enlace.get_text(strip=True)[:40]
+                    print(f"        - href='{href[:50]}...' texto='{texto}'")
+
+        except Exception as e:
+            print(f"  [WARN] Error en debug: {str(e)[:50]}")
 
 
 def crear_descargador(
