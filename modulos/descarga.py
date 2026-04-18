@@ -642,7 +642,13 @@ class DescargadorArchivos:
             driver = self.cliente.driver
 
             while mov_idx_global < max_movimientos:
-                print(f"\n  [PAG {pagina_actual}] Extrayendo enlaces...")
+                print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
+
+                # IMPORTANTE: Esperar a que cargue la tabla completamente
+                # Puede haber diferentes estructuras según Material-UI/React rendering
+                self._esperar_tabla_cargada(driver)
+
+                print(f"  [PAG {pagina_actual}] Extrayendo enlaces...")
                 time.sleep(1)
 
                 # 1. Extraer hrefs de la pagina ACTUAL (tokens validos ahora)
@@ -712,28 +718,225 @@ class DescargadorArchivos:
         print(f"\n[OK] Total archivos descargados: {len(archivos_descargados)} ({pagina_actual} pagina(s))")
         return archivos_descargados
 
+    def _esperar_tabla_cargada(self, driver, timeout=15):
+        """
+        Espera a que la tabla de movimientos esté completamente cargada.
+
+        Estrategias (en orden):
+        1. Esperar a que exista <table> tag
+        2. Esperar a que exista div[role="table"]
+        3. Esperar a que exista algún <a> en la tabla
+        4. Esperar a que React termine de renderizar
+
+        Args:
+            driver: Selenium driver
+            timeout: Máximo tiempo a esperar (segundos)
+        """
+        estrategias = [
+            # Estrategia 1: HTML table
+            (By.XPATH, "//table", "tabla HTML"),
+            # Estrategia 2: Material-UI table
+            (By.XPATH, "//div[contains(@class, 'MuiTableContainer')]", "MuiTableContainer"),
+            # Estrategia 3: React div con role
+            (By.XPATH, "//div[@role='table']", "div[role=table]"),
+            # Estrategia 4: Cualquier tabla
+            (By.XPATH, "//table | //div[@role='table']", "tabla genérica"),
+            # Estrategia 5: Algún enlace en la página
+            (By.XPATH, "//table//a[@href] | //div[@role='table']//a[@href]", "enlaces en tabla"),
+        ]
+
+        for by_method, selector, descripcion in estrategias:
+            try:
+                print(f"    > Esperando {descripcion}...")
+                WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((by_method, selector))
+                )
+                print(f"    [OK] {descripcion} detectado")
+                time.sleep(1)  # Pequeño delay adicional para que termine renderizado
+                return True
+            except:
+                continue
+
+        # Si ninguna estrategia funcionó, esperar a que React cargue
+        try:
+            print(f"    > Esperando renderizado React...")
+            WebDriverWait(driver, 5).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            time.sleep(2)
+            print(f"    [OK] React renderizado")
+            return True
+        except:
+            pass
+
+        print(f"    [WARN] No se detectó tabla, continuando de todas formas...")
+        return False
+
     def _extraer_hrefs_pagina_actual(self, driver) -> List[str]:
         """
         Extrae los hrefs de descarga de la pagina actualmente visible en el navegador.
 
-        En Mesa Virtual cada fila de la tabla tiene dos enlaces:
-        - Primero: preview del documento
-        - Segundo: descarga del documento (el que queremos)
-
-        Retorna solo los hrefs del segundo <a> de cada fila.
+        Estrategias (en orden de preferencia):
+        1. Segundo <a> en cada fila (estructura tradicional)
+        2. Todos los <a> dentro de una tabla
+        3. Enlaces con href que contienen "descargar" o "download"
+        4. Búsqueda genérica de cualquier <a> en la tabla
         """
         try:
-            # Segundo <a> de cada fila = enlace de descarga
-            elementos = driver.find_elements(By.XPATH, "//table//tbody//tr//a[2]")
             hrefs = []
-            for elem in elementos:
-                href = elem.get_attribute("href") or ""
-                if href:
-                    hrefs.append(href)
-            return hrefs
+
+            # ESTRATEGIA 1: Segundo <a> de cada fila (estructura tradicional)
+            # //table//tbody//tr//a[2] o sin tbody
+            selectores_estrategia1 = [
+                "//table//tbody//tr//a[2]",
+                "//table//tr//a[2]",
+                "//table//tr[1]//a[position()>1]",
+            ]
+
+            for xpath in selectores_estrategia1:
+                try:
+                    elementos = driver.find_elements(By.XPATH, xpath)
+                    for elem in elementos:
+                        href = elem.get_attribute("href") or ""
+                        if href and href not in hrefs:
+                            hrefs.append(href)
+                    if hrefs:
+                        print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 1 ({xpath})")
+                        return hrefs
+                except:
+                    continue
+
+            # ESTRATEGIA 2: Todos los <a> dentro de tabla que NO sean el primero de cada fila
+            # (porque el primero suele ser preview)
+            try:
+                filas = driver.find_elements(By.XPATH, "//table//tr")
+                print(f"  [DEBUG] Encontradas {len(filas)} filas en tabla")
+
+                for fila_idx, fila in enumerate(filas, 1):
+                    enlaces = fila.find_elements(By.TAG_NAME, "a")
+                    print(f"    [FILA {fila_idx}] {len(enlaces)} enlace(s)")
+
+                    # Si hay múltiples enlaces, usar todos excepto el primero
+                    # Si hay solo uno, usarlo (podría ser descarga directa)
+                    for enlace_idx, enlace in enumerate(enlaces, 1):
+                        # Saltar primer enlace si hay múltiples (suele ser preview)
+                        if len(enlaces) > 1 and enlace_idx == 1:
+                            continue
+
+                        href = enlace.get_attribute("href") or ""
+                        if href and href not in hrefs:
+                            hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 2 (todos en tabla)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 2 falló: {str(e)[:50]}")
+
+            # ESTRATEGIA 3: Buscar enlaces con palabras clave en href o aria-label
+            try:
+                palabras_clave = ["descargar", "download", "pdf", "rtf", "doc", "archivo"]
+                enlaces = driver.find_elements(By.XPATH, "//table//a")
+                print(f"  [DEBUG] Encontrados {len(enlaces)} total enlaces en tabla")
+
+                for enlace in enlaces:
+                    href = enlace.get_attribute("href") or ""
+                    aria = (enlace.get_attribute("aria-label") or "").lower()
+                    texto = (enlace.text or "").lower()
+
+                    # Verificar si contiene palabra clave
+                    es_descarga = any(
+                        palabra in href.lower() or
+                        palabra in aria or
+                        palabra in texto
+                        for palabra in palabras_clave
+                    )
+
+                    if href and es_descarga and href not in hrefs:
+                        hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 3 (palabras clave)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 3 falló: {str(e)[:50]}")
+
+            # ESTRATEGIA 4: Última opción - cualquier <a> con href dentro de tabla
+            try:
+                elementos = driver.find_elements(By.XPATH, "//table//a[@href]")
+                print(f"  [DEBUG] Encontrados {len(elementos)} enlaces con href en tabla")
+
+                for elem in elementos:
+                    href = elem.get_attribute("href") or ""
+                    if href and href not in hrefs:
+                        hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 4 (todos con href)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 4 falló: {str(e)[:50]}")
+
+            # Si llegamos aquí, no encontró nada
+            print(f"  [WARN] No se encontraron enlaces con ninguna estrategia")
+            self._debug_estructura_tabla(driver)
+            return []
+
         except Exception as e:
             print(f"  [WARN] Error extrayendo hrefs de pagina actual: {str(e)[:60]}")
             return []
+
+    def _debug_estructura_tabla(self, driver):
+        """
+        Captura información sobre la estructura de la tabla para debugging.
+        Se ejecuta cuando no se encuentran enlaces.
+        """
+        try:
+            html = driver.page_source
+            soup = BeautifulSoup(html, "html.parser")
+
+            # Buscar todas las tablas
+            tablas = soup.find_all("table")
+            print(f"\n  [DEBUG TABLA] Total de <table>: {len(tablas)}")
+
+            for tabla_idx, tabla in enumerate(tablas, 1):
+                print(f"\n    Tabla {tabla_idx}:")
+                filas = tabla.find_all("tr")
+                print(f"      Total filas: {len(filas)}")
+
+                # Mostrar estructura de primeras 3 filas
+                for fila_idx, fila in enumerate(filas[:3], 1):
+                    celdas = fila.find_all(["td", "th"])
+                    enlaces = fila.find_all("a")
+                    print(f"        Fila {fila_idx}: {len(celdas)} celdas, {len(enlaces)} enlaces")
+
+                    # Mostrar contenido del primer enlace si existe
+                    if enlaces:
+                        for enlace_idx, enlace in enumerate(enlaces[:2], 1):
+                            href = enlace.get_attribute("href") if hasattr(enlace, "get_attribute") else enlace.get("href", "")
+                            texto = enlace.get_text(strip=True)[:40]
+                            print(f"          Enlace {enlace_idx}: href='{href[:50]}...' texto='{texto}'")
+
+            # Buscar divs con role="table" (Material-UI puede usar esto)
+            divs_tabla = soup.find_all("div", attrs={"role": "table"})
+            if divs_tabla:
+                print(f"\n    Encontrados {len(divs_tabla)} div[role='table']")
+                for div_idx, div in enumerate(divs_tabla[:1], 1):
+                    filas = div.find_all("div", attrs={"role": "row"})
+                    print(f"      Div tabla {div_idx}: {len(filas)} filas")
+
+            # Buscar cualquier enlace en la página
+            todos_enlaces = soup.find_all("a", href=True)
+            print(f"\n    Total <a> con href en página: {len(todos_enlaces)}")
+            if todos_enlaces:
+                print(f"      Primeros 3 enlaces:")
+                for enlace in todos_enlaces[:3]:
+                    href = enlace.get("href", "")
+                    texto = enlace.get_text(strip=True)[:40]
+                    print(f"        - href='{href[:50]}...' texto='{texto}'")
+
+        except Exception as e:
+            print(f"  [WARN] Error en debug: {str(e)[:50]}")
 
 
 def crear_descargador(
