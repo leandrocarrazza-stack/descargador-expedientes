@@ -9,8 +9,6 @@ Funciones:
 """
 
 import logging
-import os
-from pathlib import Path
 from functools import wraps
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
@@ -76,55 +74,4 @@ def otorgar_creditos():
     })
 
 
-@admin_bp.route('/subir-sesion', methods=['POST'])
-@login_required
-@requiere_admin
-def subir_sesion():
-    """
-    Sube el archivo de sesión de Mesa Virtual (.pkl) al servidor.
-
-    Permite renovar la sesión cuando vence, sin necesidad de redesplegar.
-    Solo accesible para admins. El archivo se guarda en la ruta configurada
-    por la variable de entorno MESA_VIRTUAL_SESSION_PATH (en Render: /data/sesion.pkl).
-    """
-    # Verificar que se envió un archivo
-    if 'archivo' not in request.files:
-        return jsonify({'exito': False, 'mensaje': 'No se recibió ningún archivo'}), 400
-
-    archivo = request.files['archivo']
-
-    if not archivo.filename:
-        return jsonify({'exito': False, 'mensaje': 'No se seleccionó ningún archivo'}), 400
-
-    # Solo aceptar archivos .pkl (el formato de sesión de Selenium)
-    if not archivo.filename.endswith('.pkl'):
-        return jsonify({'exito': False, 'mensaje': 'El archivo debe tener extensión .pkl'}), 400
-
-    # Determinar dónde guardar la sesión
-    # En Render: MESA_VIRTUAL_SESSION_PATH=/data/sesion.pkl
-    # En local: ~/.mesa_virtual_sesion.pkl
-    ruta_sesion = os.environ.get(
-        'MESA_VIRTUAL_SESSION_PATH',
-        str(Path.home() / '.mesa_virtual_sesion.pkl')
-    )
-    ruta_destino = Path(ruta_sesion)
-
-    # Crear directorio si no existe (ej: /data/ en Render)
-    ruta_destino.parent.mkdir(parents=True, exist_ok=True)
-
-    # Guardar el archivo en el disco del servidor
-    archivo.save(str(ruta_destino))
-    tamaño = ruta_destino.stat().st_size
-
-    logger.info(
-        f"Admin {current_user.email} subió nueva sesión de Mesa Virtual "
-        f"→ {ruta_destino} ({tamaño} bytes)"
-    )
-
-    return jsonify({
-        'exito': True,
-        'mensaje': f'Sesión guardada correctamente ({tamaño} bytes)',
-        'ruta': str(ruta_destino),
-        'tamaño': tamaño
-    })
 
