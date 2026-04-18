@@ -716,21 +716,111 @@ class DescargadorArchivos:
         """
         Extrae los hrefs de descarga de la pagina actualmente visible en el navegador.
 
-        En Mesa Virtual cada fila de la tabla tiene dos enlaces:
-        - Primero: preview del documento
-        - Segundo: descarga del documento (el que queremos)
-
-        Retorna solo los hrefs del segundo <a> de cada fila.
+        Estrategias (en orden de preferencia):
+        1. Segundo <a> en cada fila (estructura tradicional)
+        2. Todos los <a> dentro de una tabla
+        3. Enlaces con href que contienen "descargar" o "download"
+        4. Búsqueda genérica de cualquier <a> en la tabla
         """
         try:
-            # Segundo <a> de cada fila = enlace de descarga
-            elementos = driver.find_elements(By.XPATH, "//table//tbody//tr//a[2]")
             hrefs = []
-            for elem in elementos:
-                href = elem.get_attribute("href") or ""
-                if href:
-                    hrefs.append(href)
-            return hrefs
+
+            # ESTRATEGIA 1: Segundo <a> de cada fila (estructura tradicional)
+            # //table//tbody//tr//a[2] o sin tbody
+            selectores_estrategia1 = [
+                "//table//tbody//tr//a[2]",
+                "//table//tr//a[2]",
+                "//table//tr[1]//a[position()>1]",
+            ]
+
+            for xpath in selectores_estrategia1:
+                try:
+                    elementos = driver.find_elements(By.XPATH, xpath)
+                    for elem in elementos:
+                        href = elem.get_attribute("href") or ""
+                        if href and href not in hrefs:
+                            hrefs.append(href)
+                    if hrefs:
+                        print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 1 ({xpath})")
+                        return hrefs
+                except:
+                    continue
+
+            # ESTRATEGIA 2: Todos los <a> dentro de tabla que NO sean el primero de cada fila
+            # (porque el primero suele ser preview)
+            try:
+                filas = driver.find_elements(By.XPATH, "//table//tr")
+                print(f"  [DEBUG] Encontradas {len(filas)} filas en tabla")
+
+                for fila_idx, fila in enumerate(filas, 1):
+                    enlaces = fila.find_elements(By.TAG_NAME, "a")
+                    print(f"    [FILA {fila_idx}] {len(enlaces)} enlace(s)")
+
+                    # Si hay múltiples enlaces, usar todos excepto el primero
+                    # Si hay solo uno, usarlo (podría ser descarga directa)
+                    for enlace_idx, enlace in enumerate(enlaces, 1):
+                        # Saltar primer enlace si hay múltiples (suele ser preview)
+                        if len(enlaces) > 1 and enlace_idx == 1:
+                            continue
+
+                        href = enlace.get_attribute("href") or ""
+                        if href and href not in hrefs:
+                            hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 2 (todos en tabla)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 2 falló: {str(e)[:50]}")
+
+            # ESTRATEGIA 3: Buscar enlaces con palabras clave en href o aria-label
+            try:
+                palabras_clave = ["descargar", "download", "pdf", "rtf", "doc", "archivo"]
+                enlaces = driver.find_elements(By.XPATH, "//table//a")
+                print(f"  [DEBUG] Encontrados {len(enlaces)} total enlaces en tabla")
+
+                for enlace in enlaces:
+                    href = enlace.get_attribute("href") or ""
+                    aria = (enlace.get_attribute("aria-label") or "").lower()
+                    texto = (enlace.text or "").lower()
+
+                    # Verificar si contiene palabra clave
+                    es_descarga = any(
+                        palabra in href.lower() or
+                        palabra in aria or
+                        palabra in texto
+                        for palabra in palabras_clave
+                    )
+
+                    if href and es_descarga and href not in hrefs:
+                        hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 3 (palabras clave)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 3 falló: {str(e)[:50]}")
+
+            # ESTRATEGIA 4: Última opción - cualquier <a> con href dentro de tabla
+            try:
+                elementos = driver.find_elements(By.XPATH, "//table//a[@href]")
+                print(f"  [DEBUG] Encontrados {len(elementos)} enlaces con href en tabla")
+
+                for elem in elementos:
+                    href = elem.get_attribute("href") or ""
+                    if href and href not in hrefs:
+                        hrefs.append(href)
+
+                if hrefs:
+                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 4 (todos con href)")
+                    return hrefs
+            except Exception as e:
+                print(f"  [WARN] Estrategia 4 falló: {str(e)[:50]}")
+
+            # Si llegamos aquí, no encontró nada
+            print(f"  [WARN] No se encontraron enlaces con ninguna estrategia")
+            return []
+
         except Exception as e:
             print(f"  [WARN] Error extrayendo hrefs de pagina actual: {str(e)[:60]}")
             return []
