@@ -1,43 +1,79 @@
 {% extends "base.html" %}
 
-{% block titulo %}Pago Fallido - Descargador de Expedientes{% endblock %}
+{% block titulo %}Pago cancelado · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .pago-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .pago-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .pago-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .error-icon-wrap {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: rgba(179, 38, 30, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+    }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-lg-6">
-      <div class="card border-0 shadow">
-        <div class="card-body p-5 text-center">
-          <!-- Icono de Error -->
-          <div class="mb-4">
-            <div class="rounded-circle bg-danger bg-opacity-10 d-inline-flex align-items-center justify-content-center" style="width: 80px; height: 80px;">
-              <i class="bi bi-x-circle-fill text-danger" style="font-size: 3rem;"></i>
-            </div>
-          </div>
-
-          <h1 class="h2 fw-bold mb-2">Pago Cancelado</h1>
-          <p class="text-muted mb-4">{{ razon }}</p>
-
-          <div class="alert alert-warning mb-4" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            No se realizó el cargo a tu cuenta. Puedes intentar nuevamente.
-          </div>
-
-          <div class="d-grid gap-2">
-            <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-primary btn-lg">
-              <i class="bi bi-arrow-left me-2"></i>Volver a Planes
-            </a>
-            <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">
-              <i class="bi bi-house me-2"></i>Ir al Dashboard
-            </a>
-          </div>
-
-          <p class="text-muted small mt-4">
-            ¿Problemas? Contacta a <strong>soporte@ejemplo.com</strong>
-          </p>
-        </div>
-      </div>
+<div class="pago-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Pagos</span>
+        <h1 class="mt-2">Pago cancelado</h1>
+        <p class="subtitle mb-0">No se realizó ningún cargo a tu cuenta.</p>
     </div>
-  </div>
+</div>
+
+<div class="container foja-page">
+    <div class="row">
+        <div class="col-lg-5 mx-auto">
+
+            <div class="foja-card text-center">
+                <div class="error-icon-wrap">
+                    <i class="bi bi-x-circle-fill" style="font-size: 2.5rem; color: #b3261e;"></i>
+                </div>
+
+                <h2 class="mb-1">Pago cancelado</h2>
+                <p class="text-muted-foja mb-4">{{ razon }}</p>
+
+                <div class="alert alert-warning mb-4 text-start">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    No se realizó el cargo a tu cuenta. Podés intentar nuevamente cuando quieras.
+                </div>
+
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn-foja">
+                        <i class="bi bi-arrow-left"></i> Volver a planes
+                    </a>
+                    <a href="/dashboard" class="btn-foja-outline">
+                        <i class="bi bi-house"></i> Ir a mi panel
+                    </a>
+                </div>
+
+                <p class="text-muted-foja small mt-4 mb-0">
+                    ¿Problemas? Contactá a <strong>soporte@foja.app</strong>
+                </p>
+            </div>
+
+        </div>
+    </div>
 </div>
 {% endblock %}

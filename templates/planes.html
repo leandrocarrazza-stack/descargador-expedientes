@@ -1,297 +1,394 @@
 {% extends "base.html" %}
 
-{% block titulo %}
-  Comprar Créditos - Descargador de Expedientes
+{% block titulo %}Planes · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .planes-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 4rem 0 5rem;
+        text-align: center;
+        margin-bottom: -3rem;
+    }
+    .planes-header h1 {
+        color: var(--cream);
+        font-size: clamp(2.2rem, 5vw, 3.2rem);
+    }
+    .planes-header h1 .italic {
+        font-style: italic;
+        color: var(--gold);
+    }
+    .planes-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.1rem;
+        max-width: 600px;
+        margin: 1rem auto 0;
+    }
+
+    .credits-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .6rem;
+        background: rgba(212, 165, 74, 0.15);
+        border: 1px solid rgba(212, 165, 74, 0.35);
+        color: var(--cream);
+        padding: .55rem 1.2rem;
+        border-radius: 50px;
+        margin-top: 1.5rem;
+        font-size: .9rem;
+    }
+    .credits-pill strong { color: var(--gold); }
+
+    .planes-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.75rem;
+        margin-top: 2rem;
+    }
+    @media (max-width: 900px) { .planes-grid { grid-template-columns: 1fr; max-width: 460px; margin-left: auto; margin-right: auto; } }
+
+    .plan-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 2.5rem 2rem;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        transition: transform .25s, box-shadow .25s, border-color .25s;
+    }
+    .plan-card:hover {
+        transform: translateY(-6px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--gold);
+    }
+
+    .plan-card.destacado {
+        border: 2px solid var(--gold);
+        background: linear-gradient(180deg, #fff 0%, var(--cream-soft) 100%);
+        box-shadow: 0 20px 50px rgba(212, 165, 74, 0.2);
+        transform: translateY(-8px);
+    }
+
+    .plan-popular-badge {
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--gold);
+        color: var(--navy);
+        font-family: var(--font-mono);
+        font-size: .7rem;
+        letter-spacing: .2em;
+        text-transform: uppercase;
+        padding: .4rem 1rem;
+        border-radius: 4px;
+        font-weight: 700;
+    }
+
+    .plan-nombre {
+        font-family: var(--font-serif);
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: var(--navy);
+        margin-bottom: .3rem;
+    }
+    .plan-descripcion {
+        color: var(--muted);
+        font-size: .9rem;
+        margin-bottom: 2rem;
+        min-height: 2.2em;
+    }
+
+    .plan-precio {
+        margin-bottom: 2rem;
+    }
+    .plan-precio .num {
+        font-family: var(--font-serif);
+        font-size: 3rem;
+        font-weight: 700;
+        color: var(--navy);
+        line-height: 1;
+    }
+    .plan-precio .num.gold { color: var(--gold-dark); }
+    .plan-precio .moneda {
+        color: var(--muted);
+        font-size: .9rem;
+        margin-left: .3rem;
+    }
+    .plan-unidad {
+        margin-top: .5rem;
+        font-family: var(--font-mono);
+        font-size: .78rem;
+        color: var(--gold-dark);
+        font-weight: 600;
+    }
+
+    .plan-features {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 2rem;
+    }
+    .plan-features li {
+        display: flex;
+        align-items: flex-start;
+        gap: .6rem;
+        padding: .5rem 0;
+        color: var(--ink);
+        font-size: .92rem;
+    }
+    .plan-features li i {
+        color: var(--gold-dark);
+        font-size: 1rem;
+        flex-shrink: 0;
+        margin-top: .15rem;
+    }
+
+    .plan-btn {
+        margin-top: auto;
+    }
+
+    /* FAQ */
+    .faq-section {
+        margin-top: 5rem;
+        padding-top: 4rem;
+        border-top: 1px solid var(--line);
+    }
+    .accordion-item {
+        border: 1px solid var(--line);
+        border-radius: 8px !important;
+        margin-bottom: .75rem;
+        overflow: hidden;
+    }
+    .accordion-button {
+        background: #fff;
+        color: var(--navy);
+        font-weight: 600;
+        padding: 1.1rem 1.25rem;
+    }
+    .accordion-button:not(.collapsed) {
+        background: var(--cream);
+        color: var(--navy);
+        box-shadow: none;
+    }
+    .accordion-button:focus {
+        box-shadow: 0 0 0 3px rgba(212, 165, 74, 0.15);
+        border-color: var(--gold);
+    }
+    .accordion-body {
+        color: var(--ink);
+        background: #fff;
+        font-size: .95rem;
+        line-height: 1.7;
+    }
+</style>
 {% endblock %}
 
 {% block contenido %}
-<div class="container py-5">
-  <!-- Encabezado -->
-  <div class="text-center mb-5">
-    <h1 class="display-4 fw-bold mb-2">Compra Créditos</h1>
-    <p class="lead text-muted">Cada crédito = 1 descarga de expediente ($3.000 ARS)</p>
-    <div class="alert alert-info mt-3 d-inline-block">
-      <i class="bi bi-info-circle me-2"></i>
-      <strong>Créditos disponibles:</strong> {{ current_user.creditos_disponibles }} descargas
-    </div>
-  </div>
-
-  <!-- Tarjetas de Planes -->
-  <div class="row g-4 justify-content-center">
-
-    <!-- Plan Básico -->
-    <div class="col-md-5 col-lg-4">
-      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="basico">
-        <div class="card-body p-4">
-          <h2 class="card-title h3 fw-bold mb-1">{{ planes.basico.nombre }}</h2>
-          <p class="text-muted small mb-4">{{ planes.basico.descripcion }}</p>
-
-          <!-- Precio -->
-          <div class="mb-4">
-            <span class="display-5 fw-bold text-primary">${{ "{:,.0f}".format(planes.basico.precio_ars) }}</span>
-            <span class="text-muted"> ARS</span>
-          </div>
-
-          <!-- Detalles -->
-          <ul class="list-unstyled mb-4">
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              <strong>{{ planes.basico.creditos }}</strong> descarga
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Acceso inmediato
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Sin vencimiento
-            </li>
-            <li>
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Transferencia instantánea
-            </li>
-          </ul>
-
-          <!-- Botón de Compra -->
-          <button class="btn btn-primary w-100 btn-comprar" data-plan="basico">
-            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
-          </button>
+<div class="planes-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Planes y créditos</span>
+        <h1 class="mt-3">Comprá créditos <span class="italic">sólo cuando los necesites.</span></h1>
+        <p class="subtitle">Cada crédito = 1 descarga completa de expediente. Sin cuotas mensuales, sin vencimiento.</p>
+        <div class="credits-pill">
+            <i class="bi bi-coin"></i>
+            Tu saldo actual: <strong>{{ current_user.creditos_disponibles }} créditos</strong>
         </div>
-      </div>
     </div>
+</div>
 
-    <!-- Plan Ahorro (Destacado) -->
-    <div class="col-md-5 col-lg-4">
-      <div class="card h-100 shadow border-0 plan-card plan-destacado" data-plan="ahorro">
-        <!-- Badge de Popular -->
-        <div class="position-absolute top-0 start-50 translate-middle-x">
-          <span class="badge bg-warning text-dark py-2 px-3">
-            <i class="bi bi-star-fill me-1"></i>MÁS POPULAR
-          </span>
-        </div>
+<div class="container foja-page">
 
-        <div class="card-body p-4">
-          <h2 class="card-title h3 fw-bold mb-1">{{ planes.ahorro.nombre }}</h2>
-          <p class="text-muted small mb-4">{{ planes.ahorro.descripcion }}</p>
+    <div class="planes-grid">
 
-          <!-- Precio -->
-          <div class="mb-4">
-            <span class="display-5 fw-bold text-success">${{ "{:,.0f}".format(planes.ahorro.precio_ars) }}</span>
-            <span class="text-muted"> ARS</span>
+        <!-- Plan Básico -->
+        <div class="plan-card" data-plan="basico">
+            <div class="plan-nombre">{{ planes.basico.nombre }}</div>
+            <div class="plan-descripcion">{{ planes.basico.descripcion }}</div>
 
-            <!-- Precio unitario -->
-            <div class="mt-2">
-              <small class="text-success fw-semibold">
-                💰 $2.400 c/descarga (ahorra $3.000)
-              </small>
+            <div class="plan-precio">
+                <span class="num">${{ "{:,.0f}".format(planes.basico.precio_ars) }}</span>
+                <span class="moneda">ARS</span>
             </div>
-          </div>
 
-          <!-- Detalles -->
-          <ul class="list-unstyled mb-4">
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              <strong>{{ planes.ahorro.creditos }}</strong> descargas
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Acceso inmediato
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Sin vencimiento
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Transferencia instantánea
-            </li>
-            <li>
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Ahorro de $3.000
-            </li>
-          </ul>
+            <ul class="plan-features">
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.basico.creditos }}</strong> descarga completa</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
+                <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
+                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
+            </ul>
 
-          <!-- Botón de Compra (destacado) -->
-          <button class="btn btn-success w-100 btn-comprar btn-comprar-ahorro" data-plan="ahorro">
-            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Plan Profesional -->
-    <div class="col-md-5 col-lg-4">
-      <div class="card h-100 shadow-sm border-0 plan-card" data-plan="profesional">
-        <div class="card-body p-4">
-          <h2 class="card-title h3 fw-bold mb-1">{{ planes.profesional.nombre }}</h2>
-          <p class="text-muted small mb-4">{{ planes.profesional.descripcion }}</p>
-
-          <!-- Precio -->
-          <div class="mb-4">
-            <span class="display-5 fw-bold text-primary">${{ "{:,.0f}".format(planes.profesional.precio_ars) }}</span>
-            <span class="text-muted"> ARS</span>
-
-            <!-- Precio unitario -->
-            <div class="mt-2">
-              <small class="text-primary fw-semibold">
-                💰 $2.100 c/descarga (ahorra $18.000)
-              </small>
-            </div>
-          </div>
-
-          <!-- Detalles -->
-          <ul class="list-unstyled mb-4">
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              <strong>{{ planes.profesional.creditos }}</strong> descargas
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Acceso inmediato
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Sin vencimiento
-            </li>
-            <li class="mb-2">
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Transferencia instantánea
-            </li>
-            <li>
-              <i class="bi bi-check-circle-fill text-success me-2"></i>
-              Ahorro de $18.000
-            </li>
-          </ul>
-
-          <!-- Botón de Compra -->
-          <button class="btn btn-primary w-100 btn-comprar" data-plan="profesional">
-            <i class="bi bi-cart-plus me-2"></i>Comprar Ahora
-          </button>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Preguntas Frecuentes -->
-  <div class="row mt-5 pt-5">
-    <div class="col-lg-8 mx-auto">
-      <h3 class="fw-bold mb-4">Preguntas Frecuentes</h3>
-
-      <div class="accordion" id="faqAccordion">
-        <!-- FAQ 1 -->
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
-              ¿Cuánto tiempo son válidos los créditos?
+            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="basico">
+                <i class="bi bi-cart-plus"></i> Comprar
             </button>
-          </h2>
-          <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
-            <div class="accordion-body">
-              Los créditos son válidos de forma permanente. Una vez comprados, puedes usarlos cuando necesites sin restricción de tiempo.
-            </div>
-          </div>
         </div>
 
-        <!-- FAQ 2 -->
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-              ¿Puedo comprar más de un plan?
-            </button>
-          </h2>
-          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-            <div class="accordion-body">
-              Sí, puedes comprar múltiples planes. Los créditos se acumulan en tu cuenta.
+        <!-- Plan Ahorro (Destacado) -->
+        <div class="plan-card destacado" data-plan="ahorro">
+            <span class="plan-popular-badge"><i class="bi bi-star-fill"></i> Más popular</span>
+
+            <div class="plan-nombre">{{ planes.ahorro.nombre }}</div>
+            <div class="plan-descripcion">{{ planes.ahorro.descripcion }}</div>
+
+            <div class="plan-precio">
+                <span class="num gold">${{ "{:,.0f}".format(planes.ahorro.precio_ars) }}</span>
+                <span class="moneda">ARS</span>
+                <div class="plan-unidad">$2.400 c/descarga · Ahorrás $3.000</div>
             </div>
-          </div>
+
+            <ul class="plan-features">
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.ahorro.creditos }}</strong> descargas completas</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
+                <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
+                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorro de $3.000</li>
+            </ul>
+
+            <button class="btn-foja plan-btn btn-comprar w-100" data-plan="ahorro">
+                <i class="bi bi-cart-plus"></i> Comprar
+            </button>
         </div>
 
-        <!-- FAQ 3 -->
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-              ¿Qué métodos de pago aceptan?
-            </button>
-          </h2>
-          <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-            <div class="accordion-body">
-              Aceptamos todos los métodos de pago de Mercado Pago: tarjetas de crédito/débito, transferencia bancaria y billetera digital.
+        <!-- Plan Profesional -->
+        <div class="plan-card" data-plan="profesional">
+            <div class="plan-nombre">{{ planes.profesional.nombre }}</div>
+            <div class="plan-descripcion">{{ planes.profesional.descripcion }}</div>
+
+            <div class="plan-precio">
+                <span class="num">${{ "{:,.0f}".format(planes.profesional.precio_ars) }}</span>
+                <span class="moneda">ARS</span>
+                <div class="plan-unidad">$2.100 c/descarga · Ahorrás $18.000</div>
             </div>
-          </div>
+
+            <ul class="plan-features">
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.profesional.creditos }}</strong> descargas completas</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
+                <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
+                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorro de $18.000</li>
+            </ul>
+
+            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="profesional">
+                <i class="bi bi-cart-plus"></i> Comprar
+            </button>
         </div>
 
-        <!-- FAQ 4 -->
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-              ¿Hay reembolso si no estoy conforme?
-            </button>
-          </h2>
-          <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-            <div class="accordion-body">
-              Los créditos se acreditan inmediatamente después del pago. No ofrecemos reembolsos, pero puedes contactar a soporte si tienes problemas.
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
-  </div>
+
+    <!-- FAQ -->
+    <div class="faq-section">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="section-title" style="margin-bottom: 2.5rem;">
+                    <span class="eyebrow">Preguntas frecuentes</span>
+                    <h2 class="mt-3" style="font-size: 2rem;">Todo lo que necesitás saber.</h2>
+                    <div class="divider"></div>
+                </div>
+
+                <div class="accordion" id="faqAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                                ¿Cuánto tiempo son válidos los créditos?
+                            </button>
+                        </h2>
+                        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Los créditos son válidos de forma permanente. Una vez comprados, los usás cuando los necesites sin restricción de tiempo.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                                ¿Puedo comprar más de un plan?
+                            </button>
+                        </h2>
+                        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Sí. Los créditos se acumulan automáticamente en tu cuenta, comprés el plan que comprés.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                                ¿Qué métodos de pago aceptan?
+                            </button>
+                        </h2>
+                        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Todos los medios disponibles en Mercado Pago: tarjetas de crédito y débito, transferencia bancaria y billetera digital.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                                ¿Hay reembolso si no estoy conforme?
+                            </button>
+                        </h2>
+                        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                            <div class="accordion-body">
+                                Los créditos se acreditan inmediatamente después del pago. No ofrecemos reembolsos, pero podés contactarnos si tenés un problema con una descarga.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- Modal de Cargando -->
-<div class="modal fade" id="modalCargando" tabindex="-1" backdrop="static" keyboard="false">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-body text-center py-5">
-        <div class="spinner-border text-primary mb-3" role="status">
-          <span class="visually-hidden">Cargando...</span>
+<div class="modal fade" id="modalCargando" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-5">
+                <div class="spinner-border mb-3" role="status" style="color: var(--gold); width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="serif mb-1" style="font-size: 1.3rem; color: var(--navy);">Redirigiendo a Mercado Pago...</p>
+                <p class="text-muted-foja small mb-0">No cierres esta ventana</p>
+            </div>
         </div>
-        <p class="fw-semibold">Redirigiendo a Mercado Pago...</p>
-        <p class="text-muted small">No cierres esta ventana</p>
-      </div>
     </div>
-  </div>
 </div>
-
 {% endblock %}
 
 {% block scripts_extra %}
 <script>
-  // Manejar clicks en botones de compra
-  document.querySelectorAll('.btn-comprar').forEach(btn => {
+document.querySelectorAll('.btn-comprar').forEach(btn => {
     btn.addEventListener('click', async function() {
-      const plan = this.dataset.plan;
+        const plan = this.dataset.plan;
+        const modal = new bootstrap.Modal(document.getElementById('modalCargando'));
+        modal.show();
 
-      // Mostrar modal de cargando
-      const modal = new bootstrap.Modal(document.getElementById('modalCargando'));
-      modal.show();
+        try {
+            const response = await fetch('/pagos/crear-orden', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan: plan })
+            });
+            const data = await response.json();
 
-      try {
-        // Enviar solicitud POST para crear orden
-        const response = await fetch('/pagos/crear-orden', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ plan: plan })
-        });
-
-        const data = await response.json();
-
-        if (data.success && data.checkout_url) {
-          // Redirigir a Mercado Pago
-          window.location.href = data.checkout_url;
-        } else {
-          modal.hide();
-          alert('Error: ' + (data.mensaje || 'No se pudo procesar el pago'));
+            if (data.success && data.checkout_url) {
+                window.location.href = data.checkout_url;
+            } else {
+                modal.hide();
+                alert('Error: ' + (data.mensaje || 'No se pudo procesar el pago'));
+            }
+        } catch (error) {
+            modal.hide();
+            console.error('Error:', error);
+            alert('Error al procesar el pedido. Intentá de nuevo.');
         }
-      } catch (error) {
-        modal.hide();
-        console.error('Error:', error);
-        alert('Error al procesar el pedido. Intenta de nuevo.');
-      }
     });
-  });
+});
 </script>
 {% endblock %}

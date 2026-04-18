@@ -1,43 +1,85 @@
 {% extends "base.html" %}
 
-{% block titulo %}Login - Descargador de Expedientes{% endblock %}
+{% block titulo %}Iniciar sesión · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 160px);
+        display: flex;
+        align-items: center;
+        padding: 3rem 1rem;
+    }
+    .auth-card {
+        max-width: 460px;
+        width: 100%;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--gold);
+        padding: 3rem 2.5rem;
+        box-shadow: var(--shadow-md);
+    }
+    .auth-card h2 {
+        font-size: 1.8rem;
+        margin-bottom: .4rem;
+        text-align: center;
+    }
+    .auth-card .subtitle {
+        text-align: center;
+        color: var(--muted);
+        margin-bottom: 2rem;
+        font-size: .95rem;
+    }
+    .auth-footer {
+        text-align: center;
+        margin-top: 1.5rem;
+        color: var(--muted);
+        font-size: .9rem;
+    }
+    .auth-footer a {
+        color: var(--gold-dark);
+        font-weight: 500;
+    }
+    .auth-footer a:hover { color: var(--navy); }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <h2 class="mb-4 text-center">🔐 Iniciar Sesión</h2>
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h2>Iniciar sesión</h2>
+        <p class="subtitle">Accedé a tu cuenta para descargar expedientes.</p>
 
         <form id="formLogin">
             <div class="mb-3">
-                <label for="email" class="form-label">📧 Email</label>
+                <label for="email" class="form-label">Email</label>
                 <input type="email" class="form-control" id="email" name="email"
-                       placeholder="tu@ejemplo.com" required>
+                       placeholder="tu@estudio.com" autocomplete="email" required>
             </div>
 
             <div class="mb-3">
-                <label for="password" class="form-label">🔒 Contraseña</label>
+                <label for="password" class="form-label">Contraseña</label>
                 <input type="password" class="form-control" id="password" name="password"
-                       placeholder="Tu contraseña" required>
+                       placeholder="Tu contraseña" autocomplete="current-password" required>
             </div>
 
-            <div class="mb-3 form-check">
+            <div class="mb-4 form-check">
                 <input type="checkbox" class="form-check-input" id="recuerdame" name="recuerdame">
-                <label class="form-check-label" for="recuerdame">
-                    Recuérdame
-                </label>
+                <label class="form-check-label" for="recuerdame">Recordarme en este dispositivo</label>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100 mb-3">
-                Iniciar Sesión
+            <button type="submit" class="btn-foja w-100">
+                Iniciar sesión <i class="bi bi-arrow-right"></i>
             </button>
         </form>
 
-        <p class="text-center text-muted">
-            ¿No tienes cuenta?
-            <a href="/auth/signup" class="text-decoration-none">Crear cuenta aquí</a>
-        </p>
+        <div id="alertaError" class="alert alert-danger d-none mt-3" role="alert"></div>
 
-        <div id="alertaError" class="alert alert-danger d-none" role="alert"></div>
+        <div class="auth-footer">
+            ¿No tenés cuenta? <a href="/auth/signup">Crear cuenta</a>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -50,43 +92,35 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const recuerdame = document.getElementById('recuerdame').checked;
+    const alerta = document.getElementById('alertaError');
 
-    const btnSubmit = e.target.querySelector('button[type="submit"]');
-    const estadoOriginal = btnSubmit.innerHTML;
-    btnSubmit.disabled = true;
-    btnSubmit.innerHTML = '⏳ Conectando...';
+    alerta.classList.add('d-none');
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Conectando...';
 
     try {
         const response = await fetch('/auth/login', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                email,
-                password,
-                recuerdame
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, recuerdame })
         });
-
         const datos = await response.json();
 
         if (response.ok) {
-            // Login exitoso - redirigir a dashboard
-            alert('✅ ' + datos.mensaje);
             window.location.href = '/dashboard';
         } else {
-            // Error
-            document.getElementById('alertaError').textContent = datos.error;
-            document.getElementById('alertaError').classList.remove('d-none');
+            alerta.textContent = datos.error || 'No pudimos iniciar tu sesión.';
+            alerta.classList.remove('d-none');
         }
     } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('alertaError').textContent = 'Error de conexión. Intenta nuevamente.';
-        document.getElementById('alertaError').classList.remove('d-none');
+        alerta.textContent = 'Error de conexión. Intentá nuevamente.';
+        alerta.classList.remove('d-none');
     } finally {
-        btnSubmit.disabled = false;
-        btnSubmit.innerHTML = estadoOriginal;
+        btn.disabled = false;
+        btn.innerHTML = original;
     }
 });
 </script>

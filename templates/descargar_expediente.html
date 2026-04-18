@@ -1,107 +1,546 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Descargar Expediente</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/descargar.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block titulo %}Descargar expediente · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .descargar-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .descargar-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .descargar-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .form-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--gold);
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        box-shadow: var(--shadow-md);
+    }
+
+    /* Etapas de progreso */
+    .etapa {
+        display: flex;
+        align-items: center;
+        gap: .85rem;
+        padding: .7rem 0;
+        border-bottom: 1px dashed var(--line);
+    }
+    .etapa:last-child { border-bottom: 0; }
+    .etapa-badge {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--line);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .8rem;
+        font-weight: 600;
+        flex-shrink: 0;
+        transition: all .4s;
+    }
+    .etapa-badge.activa {
+        background: var(--navy);
+        color: var(--gold);
+        animation: pulsar 1.2s ease-in-out infinite;
+    }
+    .etapa-badge.completa { background: #2e7d32; color: #fff; }
+    .etapa-badge.error-badge { background: #b3261e; color: #fff; }
+
+    @keyframes pulsar {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(10, 31, 58, 0.3); }
+        50%       { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(10, 31, 58, 0); }
+    }
+
+    .etapa-texto        { font-size: .92rem; color: var(--muted); }
+    .etapa-texto.activa { color: var(--navy); font-weight: 600; }
+    .etapa-texto.completa { color: #2e7d32; }
+
+    .barra-container { margin-top: 1.25rem; }
+    .barra-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: .82rem;
+        color: var(--muted);
+        margin-bottom: .5rem;
+    }
+
+    /* Selección múltiple */
+    .opcion-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1.25rem;
+        margin-bottom: .75rem;
+        cursor: pointer;
+        transition: border-color .2s, box-shadow .2s;
+    }
+    .opcion-card:hover { border-color: var(--gold); box-shadow: var(--shadow-sm); }
+    .opcion-caratula { font-weight: 600; color: var(--navy); margin-bottom: .35rem; }
+    .opcion-meta { font-size: .82rem; color: var(--muted); display: flex; gap: 1rem; flex-wrap: wrap; }
+
+    /* Paneles de éxito/error */
+    .result-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid #2e7d32;
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-md);
+    }
+    .result-card.error { border-top-color: #b3261e; }
+    .result-icon { font-size: 3rem; color: #2e7d32; margin-bottom: .5rem; }
+    .result-icon.error { color: #b3261e; }
+
+    .mv-estado-ok {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        background: rgba(46, 125, 50, 0.06);
+        border: 1px solid rgba(46, 125, 50, 0.2);
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        margin-bottom: 1.5rem;
+        font-size: .9rem;
+    }
+    .mv-estado-warning {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        background: rgba(212, 165, 74, 0.08);
+        border: 1px solid rgba(212, 165, 74, 0.25);
+        border-radius: 8px;
+        padding: .75rem 1rem;
+        margin-bottom: 1.5rem;
+        font-size: .9rem;
+        color: var(--navy);
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="descargar-header">
     <div class="container">
-        <h1>📥 Descargar Expediente</h1>
+        <span class="eyebrow" style="color: var(--gold);">Descargar</span>
+        <h1 class="mt-2">Nuevo expediente</h1>
+        <p class="subtitle mb-0">Ingresá el número y Foja descarga todo en un único PDF cronológico.</p>
+    </div>
+</div>
 
-        <!-- Créditos disponibles -->
-        <div class="creditos-info">
-            <span style="font-size:22px">⭐</span>
-            <span>Tenés <span class="creditos-num" id="creditos-display">{{ creditos }}</span>
-            crédito{{ 's' if creditos != 1 else '' }} disponible{{ 's' if creditos != 1 else '' }}</span>
-        </div>
+<div class="container foja-page">
+    <div class="row">
+        <div class="col-lg-7 mx-auto">
 
-        <!-- Estado de sesión Mesa Virtual -->
-        {% if tiene_sesion_mv %}
-        <div style="background:#f0fff4;border:1px solid #b2dfdb;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#2e7d32;display:flex;align-items:center;gap:10px;">
-            <span style="font-size:18px">✅</span>
-            <span>Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}</span>
-            <a href="/auth/mv-login?next=/descargas/expediente" style="margin-left:auto;color:#667eea;font-size:12px;">Reconectar</a>
-        </div>
-        {% else %}
-        <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#f57f17;display:flex;align-items:center;gap:10px;">
-            <span style="font-size:18px">⚠️</span>
-            <span>Mesa Virtual no conectada. Al descargar te pediremos tu usuario y contraseña.</span>
-        </div>
-        {% endif %}
+            <!-- PANEL 1: Formulario -->
+            <div id="panel-form" class="form-card">
 
-        <!-- PANEL 1: Formulario -->
-        <div id="panel-form">
-            <label for="numero_expediente">Número de Expediente</label>
-            <input type="text" id="numero_expediente" placeholder="Ejemplo: 12881 o 21/24" autofocus>
-            <div class="hint">Ingresá el número del expediente que querés descargar</div>
-            <button class="btn-primary" onclick="iniciarDescarga()">Descargar Expediente</button>
-        </div>
-
-        <!-- PANEL 2: Progreso animado -->
-        <div id="panel-progreso">
-            <div class="etapas">
-                <div class="etapa" id="etapa-0">
-                    <div class="etapa-badge" id="badge-0">1</div>
-                    <span class="etapa-texto" id="texto-0">Autenticando en Mesa Virtual...</span>
+                <!-- Estado de sesión Mesa Virtual -->
+                {% if tiene_sesion_mv %}
+                <div class="mv-estado-ok">
+                    <i class="bi bi-check-circle-fill" style="color: #2e7d32; font-size: 1.1rem;"></i>
+                    <span>
+                        Mesa Virtual conectada{% if mv_usuario %} como <strong>{{ mv_usuario }}</strong>{% endif %}
+                    </span>
+                    <a href="/auth/mv-login?next=/descargas/expediente" class="ms-auto text-gold mono" style="font-size: .8rem;">Reconectar →</a>
                 </div>
-                <div class="etapa" id="etapa-1">
-                    <div class="etapa-badge" id="badge-1">2</div>
-                    <span class="etapa-texto" id="texto-1">Buscando expediente...</span>
+                {% else %}
+                <div class="mv-estado-warning">
+                    <i class="bi bi-exclamation-triangle-fill" style="color: var(--gold-dark); font-size: 1.1rem;"></i>
+                    <span>Mesa Virtual no conectada. Al descargar te pediremos tu usuario y contraseña.</span>
                 </div>
-                <div class="etapa" id="etapa-2">
-                    <div class="etapa-badge" id="badge-2">3</div>
-                    <span class="etapa-texto" id="texto-2">Descargando archivos...</span>
+                {% endif %}
+
+                <!-- Créditos -->
+                <div class="d-flex align-items-center gap-2 mb-4">
+                    <i class="bi bi-coin" style="color: var(--gold-dark);"></i>
+                    <span style="font-size: .9rem;">Créditos disponibles:
+                        <strong class="text-gold">{{ creditos }}</strong>
+                        crédito{{ 's' if creditos != 1 else '' }}
+                    </span>
+                    <a href="{{ url_for('pagos.mostrar_planes') }}" class="ms-auto text-gold mono" style="font-size: .8rem;">Comprar más →</a>
                 </div>
-                <div class="etapa" id="etapa-3">
-                    <div class="etapa-badge" id="badge-3">4</div>
-                    <span class="etapa-texto" id="texto-3">Convirtiendo y unificando PDF...</span>
+
+                <h3 class="mb-1">Número de expediente</h3>
+                <p class="text-muted-foja mb-4" style="font-size: .95rem;">
+                    Ingresá el número que querés descargar.
+                </p>
+
+                <input type="text"
+                       class="form-control form-control-lg mono mb-2"
+                       id="numero_expediente"
+                       placeholder="Ejemplo: 12881 o 21/24"
+                       autofocus
+                       style="font-size: 1.15rem; letter-spacing: .04em;">
+                <small class="text-muted-foja d-block mb-4">Ingresá el número del expediente que querés descargar</small>
+
+                <button class="btn-foja w-100" onclick="iniciarDescarga()">
+                    <i class="bi bi-cloud-download-fill"></i> Descargar expediente
+                </button>
+            </div>
+
+            <!-- PANEL 2: Progreso animado -->
+            <div id="panel-progreso" class="form-card mt-4" style="display: none;">
+                <h3 class="mb-3" style="font-size: 1.3rem;">Descargando expediente…</h3>
+                <p class="text-muted-foja small mb-4">Este proceso puede tardar entre 1 y 3 minutos.</p>
+
+                <div class="etapas">
+                    <div class="etapa" id="etapa-0">
+                        <div class="etapa-badge" id="badge-0">1</div>
+                        <span class="etapa-texto" id="texto-0">Autenticando en Mesa Virtual...</span>
+                    </div>
+                    <div class="etapa" id="etapa-1">
+                        <div class="etapa-badge" id="badge-1">2</div>
+                        <span class="etapa-texto" id="texto-1">Buscando expediente...</span>
+                    </div>
+                    <div class="etapa" id="etapa-2">
+                        <div class="etapa-badge" id="badge-2">3</div>
+                        <span class="etapa-texto" id="texto-2">Descargando archivos...</span>
+                    </div>
+                    <div class="etapa" id="etapa-3">
+                        <div class="etapa-badge" id="badge-3">4</div>
+                        <span class="etapa-texto" id="texto-3">Convirtiendo y unificando PDF...</span>
+                    </div>
+                </div>
+
+                <div class="barra-container">
+                    <div class="barra-label">
+                        <span id="etapa-label">Iniciando...</span>
+                        <span id="porcentaje-label" class="mono">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="barra-fill"
+                             role="progressbar"
+                             style="width: 0%"
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
                 </div>
             </div>
-            <div class="barra-container">
-                <div class="barra-label">
-                    <span id="etapa-label">Iniciando...</span>
-                    <span id="porcentaje-label">0%</span>
+
+            <!-- PANEL 3: Selección múltiple -->
+            <div id="panel-seleccion" class="form-card mt-4" style="display: none;">
+                <h3 class="mb-1">Varios expedientes encontrados</h3>
+                <p class="text-muted-foja mb-4">Se encontraron múltiples expedientes con ese número. Elegí cuál descargar:</p>
+                <div id="lista-opciones"></div>
+            </div>
+
+            <!-- PANEL 4: Éxito -->
+            <div id="panel-exito" class="result-card mt-4" style="display: none;">
+                <div class="result-icon"><i class="bi bi-check-circle-fill"></i></div>
+                <h3>Expediente descargado</h3>
+                <p class="text-muted-foja" id="exito-creditos"></p>
+
+                <div class="d-flex gap-2 flex-wrap justify-content-center mt-3">
+                    <a class="btn-foja" id="btn-descargar-pdf" href="#">
+                        <i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF
+                    </a>
+                    <button class="btn-foja-outline" onclick="reiniciar()">
+                        <i class="bi bi-arrow-clockwise"></i> Descargar otro expediente
+                    </button>
                 </div>
-                <div class="barra-bg">
-                    <div class="barra-fill" id="barra-fill"></div>
+            </div>
+
+            <!-- PANEL 5: Error -->
+            <div id="panel-error" class="result-card error mt-4" style="display: none;">
+                <div class="result-icon error"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                <h3>No se pudo completar</h3>
+
+                <div class="alert alert-danger mt-3 text-start">
+                    <strong>Motivo:</strong>
+                    <p id="error-detalle" class="mb-0 mt-1">—</p>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap justify-content-center">
+                    <button class="btn-foja" onclick="reiniciar()">
+                        <i class="bi bi-arrow-clockwise"></i> Reintentar
+                    </button>
+                    <a href="/dashboard" class="btn-foja-outline">
+                        <i class="bi bi-house"></i> Volver al panel
+                    </a>
                 </div>
             </div>
-        </div>
 
-        <!-- PANEL 3: Selección múltiple -->
-        <div id="panel-seleccion">
-            <h3>Varios expedientes encontrados</h3>
-            <p>Se encontraron múltiples expedientes con ese número. Elegí cuál descargar:</p>
-            <div id="lista-opciones"></div>
-        </div>
-
-        <!-- PANEL 4: Éxito -->
-        <div id="panel-exito">
-            <div class="exito-box">
-                <div class="exito-icono">✅</div>
-                <div class="exito-titulo">¡Expediente descargado!</div>
-                <div class="exito-creditos" id="exito-creditos"></div>
-            </div>
-            <a class="btn-descargar" id="btn-descargar-pdf" href="#">⬇ Descargar PDF</a>
-            <button class="btn-reintentar" onclick="reiniciar()">Descargar otro expediente</button>
-        </div>
-
-        <!-- PANEL 5: Error -->
-        <div id="panel-error">
-            <div class="error-box">
-                <div class="error-titulo">❌ Error en la descarga</div>
-                <div class="error-msg" id="error-detalle"></div>
-            </div>
-            <button class="btn-reintentar" onclick="reiniciar()">Reintentar</button>
-        </div>
-
-        <div class="back-link">
-            <a href="/dashboard">← Volver al Dashboard</a>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/descargar.js') }}"></script>
-</body>
-</html>
+{% block scripts_extra %}
+<script>
+    // Etapas con tiempos estimados para la animación
+    const ETAPAS = [
+        { idx: 0, porcentaje: 10, segundos: 2  },
+        { idx: 1, porcentaje: 25, segundos: 12 },
+        { idx: 2, porcentaje: 75, segundos: 30 },
+        { idx: 3, porcentaje: 95, segundos: 80 },
+    ];
+
+    let timers = [];
+    let numeroActual = '';
+
+    // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
+    function mostrarSolo(idPanel) {
+        ['panel-form', 'panel-progreso', 'panel-seleccion', 'panel-exito', 'panel-error']
+            .forEach(id => document.getElementById(id).style.display = 'none');
+        document.getElementById(idPanel).style.display = 'block';
+    }
+
+    // ─── ANIMACIÓN DE PROGRESO ─────────────────────────────────────────────
+    function iniciarAnimacion() {
+        mostrarSolo('panel-progreso');
+        setBarra(0, 'Iniciando...');
+
+        let delay = 0;
+        ETAPAS.forEach((etapa) => {
+            const t = setTimeout(() => activarEtapa(etapa.idx, etapa.porcentaje), delay * 1000);
+            timers.push(t);
+            delay += etapa.segundos;
+        });
+    }
+
+    function activarEtapa(idx, pct) {
+        // Marcar anteriores como completadas
+        for (let i = 0; i < idx; i++) marcarEtapaCompleta(i);
+
+        // Activar la actual
+        const badge = document.getElementById(`badge-${idx}`);
+        const texto = document.getElementById(`texto-${idx}`);
+        badge.className = 'etapa-badge activa';
+        texto.className = 'etapa-texto activa';
+
+        const textos = [
+            'Autenticando en Mesa Virtual...',
+            'Buscando expediente...',
+            'Descargando archivos...',
+            'Convirtiendo y unificando PDF...'
+        ];
+        texto.textContent = textos[idx];
+        setBarra(pct, textos[idx]);
+    }
+
+    function marcarEtapaCompleta(idx) {
+        document.getElementById(`badge-${idx}`).className = 'etapa-badge completa';
+        document.getElementById(`badge-${idx}`).textContent = '✓';
+        document.getElementById(`texto-${idx}`).className = 'etapa-texto completa';
+    }
+
+    function setBarra(pct, label) {
+        const barra = document.getElementById('barra-fill');
+        barra.style.width = pct + '%';
+        barra.setAttribute('aria-valuenow', pct);
+        document.getElementById('porcentaje-label').textContent = pct + '%';
+        document.getElementById('etapa-label').textContent = label;
+    }
+
+    function detenerAnimacion() {
+        timers.forEach(t => clearTimeout(t));
+        timers = [];
+    }
+
+    function animarExito() {
+        detenerAnimacion();
+        ETAPAS.forEach(e => marcarEtapaCompleta(e.idx));
+        setBarra(100, '¡Completado!');
+    }
+
+    function animarError() {
+        detenerAnimacion();
+        document.getElementById('barra-fill').classList.add('bg-danger');
+        setBarra(100, 'Error');
+        ETAPAS.forEach(e => {
+            const badge = document.getElementById(`badge-${e.idx}`);
+            if (!badge.classList.contains('completa')) {
+                badge.className = 'etapa-badge error-badge';
+                badge.textContent = '✗';
+            }
+        });
+    }
+
+    // ─── FLUJO PRINCIPAL ──────────────────────────────────────────────────
+    async function iniciarDescarga() {
+        const numero = document.getElementById('numero_expediente').value.trim();
+        if (!numero) {
+            alert('Ingresá un número de expediente');
+            return;
+        }
+        numeroActual = numero;
+        await enviarDescarga(numero, null);
+    }
+
+    async function descargarConIndice(indice) {
+        // Llamado desde el panel de selección múltiple
+        mostrarSolo('panel-progreso');
+        iniciarAnimacion();
+        await enviarDescarga(numeroActual, indice);
+    }
+
+    async function enviarDescarga(numero, indice) {
+        iniciarAnimacion();
+
+        const body = { numero_expediente: numero };
+        if (indice !== null) body.indice_expediente = indice;
+
+        try {
+            // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
+            const resp = await fetch('/descargas/expediente', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            const data = await resp.json();
+
+            // Errores de validación inmediatos (sin créditos, sin sesión MV, etc.)
+            if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
+                detenerAnimacion();
+                window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
+                return;
+            }
+            if (!resp.ok || !data.job_id) {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = data.mensaje || 'Error al iniciar la descarga';
+                    mostrarSolo('panel-error');
+                }, 800);
+                return;
+            }
+
+            // 2. Long-polling: esperar a que el job termine (el servidor retiene el request)
+            await longPolling(data.job_id);
+
+        } catch (err) {
+            animarError();
+            setTimeout(() => {
+                document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                mostrarSolo('panel-error');
+            }, 800);
+        }
+    }
+
+    // Long-polling: un único request que espera en el servidor hasta que el job complete
+    // (el servidor lo despierta apenas termina el pipeline, máx 5 minutos)
+    async function longPolling(jobId) {
+        try {
+            console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
+
+            const resp = await fetch(`/descargas/estado/${jobId}`);
+            const data = await resp.json();
+
+            console.log(`[LONG-POLL] Respuesta recibida:`, data);
+
+            if (data.estado === 'completo') {
+                animarExito();
+                setTimeout(() => {
+                    document.getElementById('exito-creditos').textContent =
+                        `Créditos restantes: ${data.creditos_restantes}`;
+                    document.getElementById('btn-descargar-pdf').href = data.pdf_url;
+                    mostrarSolo('panel-exito');
+                    window.location.href = data.pdf_url;
+                }, 800);
+                return;
+
+            } else if (data.estado === 'multiples_opciones') {
+                detenerAnimacion();
+                mostrarOpciones(data.opciones);
+                return;
+
+            } else if (data.estado === 'error') {
+                if (data.tipo_error === 'sesion_mv_requerida') {
+                    detenerAnimacion();
+                    window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
+                    return;
+                }
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = data.mensaje || 'Error desconocido';
+                    mostrarSolo('panel-error');
+                }, 800);
+                return;
+
+            } else if (data.estado === 'no_encontrado') {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = 'La sesión expiró. Intentá de nuevo.';
+                    mostrarSolo('panel-error');
+                }, 800);
+                return;
+
+            } else if (data.estado === 'procesando') {
+                // Timeout del server (5 minutos): el job sigue en progreso
+                // Reintentar con long-polling nuevamente
+                console.log('[LONG-POLL] Timeout del servidor, reintentando...');
+                await longPolling(jobId);
+                return;
+            }
+
+        } catch (err) {
+            animarError();
+            setTimeout(() => {
+                document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                mostrarSolo('panel-error');
+            }, 800);
+        }
+    }
+
+    // ─── PANEL DE SELECCIÓN MÚLTIPLE ──────────────────────────────────────
+    function mostrarOpciones(opciones) {
+        const lista = document.getElementById('lista-opciones');
+        lista.innerHTML = '';
+
+        opciones.forEach(op => {
+            const card = document.createElement('div');
+            card.className = 'opcion-card';
+            card.innerHTML = `
+                <div class="opcion-caratula">${op.caratula || 'Sin descripción'}</div>
+                <div class="opcion-meta">
+                    <span><i class="bi bi-file-text"></i> ${op.numero || ''}</span>
+                    <span><i class="bi bi-building"></i> ${op.tribunal || 'Tribunal no especificado'}</span>
+                </div>
+                <button class="btn-foja mt-3" style="padding: .55rem 1.2rem; font-size: .9rem;" onclick="descargarConIndice(${op.indice})">
+                    <i class="bi bi-cloud-download-fill"></i> Descargar este expediente
+                </button>
+            `;
+            lista.appendChild(card);
+        });
+
+        mostrarSolo('panel-seleccion');
+    }
+
+    // ─── REINICIAR ────────────────────────────────────────────────────────
+    function reiniciar() {
+        detenerAnimacion();
+        // Reset barra
+        const barra = document.getElementById('barra-fill');
+        barra.style.width = '0%';
+        barra.classList.remove('bg-danger');
+        barra.setAttribute('aria-valuenow', 0);
+        ETAPAS.forEach(e => {
+            const badge = document.getElementById(`badge-${e.idx}`);
+            badge.className = 'etapa-badge';
+            badge.textContent = e.idx + 1;
+            document.getElementById(`texto-${e.idx}`).className = 'etapa-texto';
+        });
+        mostrarSolo('panel-form');
+    }
+
+    // Enter en el input dispara la descarga
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('numero_expediente').addEventListener('keydown', e => {
+            if (e.key === 'Enter') iniciarDescarga();
+        });
+    });
+</script>
+{% endblock %}

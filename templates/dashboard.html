@@ -1,65 +1,195 @@
 {% extends "base.html" %}
 
-{% block titulo %}Dashboard - Descargador de Expedientes{% endblock %}
+{% block titulo %}Mi panel · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .dashboard-hero {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .dashboard-hero h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .dashboard-hero .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .stats-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    @media (max-width: 900px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 500px) { .stats-row { grid-template-columns: 1fr; } }
+
+    .stat-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        box-shadow: var(--shadow-sm);
+        transition: transform .2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card .eyebrow { display: block; margin-bottom: .5rem; }
+    .stat-card .value {
+        font-family: var(--font-serif);
+        font-size: 2.25rem;
+        font-weight: 600;
+        color: var(--navy);
+        line-height: 1;
+    }
+    .stat-card .value.gold { color: var(--gold-dark); }
+    .stat-card .foot {
+        font-size: .82rem;
+        color: var(--muted);
+        margin-top: .5rem;
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    @media (max-width: 900px) { .action-grid { grid-template-columns: 1fr; } }
+
+    .action-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 2rem;
+        text-decoration: none;
+        color: var(--ink);
+        display: flex;
+        flex-direction: column;
+        gap: .75rem;
+        transition: transform .2s, box-shadow .2s, border-color .2s;
+    }
+    .action-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--gold);
+        color: var(--ink);
+    }
+    .action-card .icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(212, 165, 74, 0.12);
+        color: var(--gold-dark);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+    .action-card .icon.navy {
+        background: rgba(10, 31, 58, 0.08);
+        color: var(--navy);
+    }
+    .action-card h4 {
+        font-size: 1.15rem;
+        margin: 0;
+        color: var(--navy);
+    }
+    .action-card p {
+        color: var(--muted);
+        margin: 0;
+        font-size: .9rem;
+        line-height: 1.5;
+    }
+    .action-card .go {
+        margin-top: auto;
+        color: var(--gold-dark);
+        font-size: .85rem;
+        font-weight: 600;
+        font-family: var(--font-mono);
+        letter-spacing: .05em;
+    }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<h2>📊 Mi Dashboard</h2>
-
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm bg-light">
-            <div class="card-body">
-                <h5 class="card-title">💳 Plan</h5>
-                <p class="card-text display-6">{{ current_user.plan }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm bg-light">
-            <div class="card-body">
-                <h5 class="card-title">⭐ Créditos</h5>
-                <p class="card-text display-6">{{ current_user.creditos_disponibles }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm bg-light">
-            <div class="card-body">
-                <h5 class="card-title">📥 Usados</h5>
-                <p class="card-text display-6">{{ current_user.creditos_usados_mes }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm bg-light">
-            <div class="card-body">
-                <h5 class="card-title">👤 Usuario</h5>
-                <p class="card-text small">{{ current_user.email }}</p>
-                <p class="card-text small text-muted">{{ current_user.nombre }}</p>
-            </div>
-        </div>
+<div class="dashboard-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Mi panel</span>
+        <h1 class="mt-2">Hola{% if current_user.nombre %}, {{ current_user.nombre.split(' ')[0] }}{% endif %}.</h1>
+        <p class="subtitle mb-0">Este es tu espacio en Foja. Desde acá descargás, consultás el historial y administrás tus créditos.</p>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-8">
-        <h3 class="mb-3">📋 Últimas Descargas</h3>
-        <p class="text-muted">
-            Tus expedientes descargados recientemente aparecen en el
-            <a href="{{ url_for('descargas.historial_descargas') }}">historial completo</a>.
-        </p>
+<div class="container foja-page">
+
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <span class="eyebrow">Plan</span>
+            <div class="value">{{ current_user.plan|capitalize }}</div>
+            <div class="foot">{{ current_user.email }}</div>
+        </div>
+        <div class="stat-card">
+            <span class="eyebrow">Créditos disponibles</span>
+            <div class="value gold">{{ current_user.creditos_disponibles }}</div>
+            <div class="foot">Cada crédito = 1 descarga</div>
+        </div>
+        <div class="stat-card">
+            <span class="eyebrow">Usados este mes</span>
+            <div class="value">{{ current_user.creditos_usados_mes }}</div>
+            <div class="foot">Expedientes descargados</div>
+        </div>
+        <div class="stat-card">
+            <span class="eyebrow">Estado</span>
+            <div class="value" style="font-size: 1.6rem;">
+                {% if current_user.creditos_disponibles > 0 %}
+                    <span style="color: #2e7d32;"><i class="bi bi-check-circle-fill"></i> Activo</span>
+                {% else %}
+                    <span style="color: var(--gold-dark);"><i class="bi bi-exclamation-circle-fill"></i> Sin créditos</span>
+                {% endif %}
+            </div>
+            <div class="foot">Tu cuenta Foja</div>
+        </div>
     </div>
-    <div class="col-md-4">
-        <h3 class="mb-3">🎯 Acciones</h3>
-        <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn btn-primary w-100 mb-2">
-            📥 Descargar Expediente
+
+    <!-- Acciones principales -->
+    <h3 class="mt-5 mb-0">Qué querés hacer hoy</h3>
+    <div class="action-grid">
+        <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="action-card">
+            <div class="icon"><i class="bi bi-cloud-download-fill"></i></div>
+            <h4>Descargar expediente</h4>
+            <p>Ingresá un número de expediente y recibí un único PDF cronológico listo para trabajar.</p>
+            <span class="go">Empezar descarga →</span>
         </a>
-        <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn btn-success w-100 mb-2">
-            💳 Comprar Créditos
+
+        <a href="{{ url_for('pagos.mostrar_planes') }}" class="action-card">
+            <div class="icon navy"><i class="bi bi-coin"></i></div>
+            <h4>Comprar créditos</h4>
+            <p>Elegí el paquete de créditos que mejor se adapte a tu volumen de trabajo.</p>
+            <span class="go">Ver planes →</span>
         </a>
-        <a href="{{ url_for('descargas.historial_descargas') }}" class="btn btn-info w-100 mb-2">
-            📋 Mi Historial
+
+        <a href="{{ url_for('descargas.historial_descargas') }}" class="action-card">
+            <div class="icon navy"><i class="bi bi-clock-history"></i></div>
+            <h4>Mi historial</h4>
+            <p>Revisá todos los expedientes que descargaste y bajá el PDF otra vez si lo necesitás.</p>
+            <span class="go">Ver historial →</span>
         </a>
     </div>
+
+    {% if current_user.creditos_disponibles == 0 %}
+    <div class="alert alert-warning mt-4 d-flex align-items-center gap-3">
+        <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.5rem; color: var(--gold-dark);"></i>
+        <div>
+            <strong>No te quedan créditos.</strong> Comprá más para seguir descargando expedientes.
+            <a href="{{ url_for('pagos.mostrar_planes') }}" class="ms-2 fw-semibold text-gold">Ver planes disponibles →</a>
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}

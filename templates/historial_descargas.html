@@ -1,86 +1,150 @@
 {% extends "base.html" %}
 
-{% block titulo %}Historial de Descargas{% endblock %}
+{% block titulo %}Historial de descargas · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .hist-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .hist-header h1 { color: var(--cream); font-size: clamp(2rem, 4vw, 2.75rem); }
+    .hist-header .subtitle { color: rgba(245, 241, 232, 0.75); font-size: 1.05rem; margin-top: .3rem; }
+
+    .hist-table-wrap {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .table {
+        margin: 0;
+        color: var(--ink);
+    }
+    .table thead {
+        background: var(--cream);
+    }
+    .table thead th {
+        font-family: var(--font-mono);
+        font-size: .72rem;
+        font-weight: 600;
+        letter-spacing: .15em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+    }
+    .table tbody td {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+    }
+    .table tbody tr:last-child td { border-bottom: 0; }
+    .table tbody tr:hover { background: var(--cream-soft); }
+
+    .exp-num { font-family: var(--font-mono); font-weight: 600; color: var(--navy); }
+
+    .empty-state {
+        background: #fff;
+        border: 1px dashed var(--line);
+        border-radius: var(--radius);
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+    .empty-state .icon {
+        font-size: 3rem;
+        color: var(--gold);
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
 
 {% block contenido %}
-<div class="container py-5">
-  <div class="row mb-4">
-    <div class="col-lg-10 mx-auto">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold">Historial de Descargas</h2>
-        <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn btn-primary">
-          <i class="bi bi-download me-2"></i>Nueva Descarga
-        </a>
-      </div>
-
-      {% if expedientes %}
-        <div class="card border-0 shadow-sm">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Expediente</th>
-                  <th>Caratula</th>
-                  <th>Tribunal</th>
-                  <th>Estado</th>
-                  <th>Fecha</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for exp in expedientes %}
-                <tr>
-                  <td class="fw-semibold">{{ exp.numero }}</td>
-                  <td>{{ exp.caratula or '—' }}</td>
-                  <td><small class="text-muted">{{ exp.tribunal or '—' }}</small></td>
-                  <td>
-                    {% if exp.estado == 'completed' %}
-                      <span class="badge bg-success">Completado</span>
-                    {% elif exp.estado == 'failed' %}
-                      <span class="badge bg-danger" title="{{ exp.error_msg or '' }}">Fallido</span>
-                    {% elif exp.estado == 'processing' %}
-                      <span class="badge bg-warning text-dark">Procesando</span>
-                    {% else %}
-                      <span class="badge bg-secondary">{{ exp.estado }}</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <small class="text-muted">
-                      {{ exp.creado_en.strftime('%d/%m/%Y %H:%M') if exp.creado_en else '—' }}
-                    </small>
-                  </td>
-                  <td>
-                    {% if exp.estado == 'completed' and exp.pdf_ruta_temporal %}
-                      <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}"
-                         class="btn btn-sm btn-outline-success">
-                        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-                      </a>
-                    {% elif exp.estado == 'failed' %}
-                      <small class="text-danger">{{ exp.error_msg[:50] if exp.error_msg else '' }}</small>
-                    {% else %}
-                      <span class="text-muted">—</span>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      {% else %}
-        <div class="card border-0 shadow-sm">
-          <div class="card-body text-center py-5">
-            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-            <p class="mt-3 text-muted">No hay descargas registradas todavía.</p>
-            <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn btn-primary mt-2">
-              Descargar mi primer expediente
+<div class="hist-header">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <span class="eyebrow" style="color: var(--gold);">Historial</span>
+                <h1 class="mt-2 mb-1">Tus descargas</h1>
+                <p class="subtitle mb-0">Todos los expedientes que descargaste con Foja.</p>
+            </div>
+            <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn-foja">
+                <i class="bi bi-cloud-download-fill"></i> Nueva descarga
             </a>
-          </div>
         </div>
-      {% endif %}
-
     </div>
-  </div>
+</div>
+
+<div class="container foja-page">
+
+    {% if expedientes %}
+        <div class="hist-table-wrap">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Expediente</th>
+                            <th>Carátula</th>
+                            <th>Tribunal</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exp in expedientes %}
+                        <tr>
+                            <td class="exp-num">{{ exp.numero }}</td>
+                            <td>{{ exp.caratula or '—' }}</td>
+                            <td><small class="text-muted-foja">{{ exp.tribunal or '—' }}</small></td>
+                            <td>
+                                {% if exp.estado == 'completed' %}
+                                    <span class="badge bg-success"><i class="bi bi-check-lg"></i> Completado</span>
+                                {% elif exp.estado == 'failed' %}
+                                    <span class="badge" style="background: #b3261e; color: #fff;" title="{{ exp.error_msg or '' }}"><i class="bi bi-x-lg"></i> Fallido</span>
+                                {% elif exp.estado == 'processing' %}
+                                    <span class="badge bg-warning">Procesando</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ exp.estado }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small class="text-muted-foja">
+                                    {{ exp.creado_en.strftime('%d/%m/%Y %H:%M') if exp.creado_en else '—' }}
+                                </small>
+                            </td>
+                            <td class="text-end">
+                                {% if exp.estado == 'completed' and exp.pdf_ruta_temporal %}
+                                    <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}"
+                                       class="btn-foja-outline" style="padding: .4rem .9rem; font-size: .82rem;">
+                                        <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                                    </a>
+                                {% elif exp.estado == 'failed' %}
+                                    <small class="text-danger">{{ exp.error_msg[:50] if exp.error_msg else '—' }}</small>
+                                {% else %}
+                                    <span class="text-muted-foja">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="icon"><i class="bi bi-folder2-open"></i></div>
+            <h3 style="font-size: 1.5rem;">Todavía no descargaste ningún expediente</h3>
+            <p class="text-muted-foja mb-4">Cuando generes tu primera descarga, aparecerá acá.</p>
+            <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn-foja">
+                <i class="bi bi-cloud-download-fill"></i> Descargar mi primer expediente
+            </a>
+        </div>
+    {% endif %}
+
 </div>
 {% endblock %}
