@@ -107,3 +107,4 @@ wheels/
 # Sistema operativo
 Thumbs.db
 .DS_Store
+app.db
