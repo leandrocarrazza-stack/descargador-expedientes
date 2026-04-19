@@ -177,7 +177,7 @@ def test_planes(session):
             print_ok("Página de planes carga correctamente")
 
             # Verificar que contiene opciones de planes
-            if "basico" in response.text.lower() or "ahorro" in response.text.lower():
+            if "individual" in response.text.lower() or "estudio" in response.text.lower():
                 print_ok("Planes disponibles encontrados")
                 return True
             else:
@@ -196,7 +196,7 @@ def test_crear_orden(session):
     print_header("TEST 6: Crear Orden de Compra")
 
     try:
-        data = {"plan": "basico"}
+        data = {"plan": "individual"}
         response = session.post(f"{BASE_URL}/pagos/crear-orden", json=data, allow_redirects=False)
 
         if response.status_code == 200:
