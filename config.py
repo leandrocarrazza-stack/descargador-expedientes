@@ -168,6 +168,13 @@ STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  CONTACTO Y SOPORTE
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
+CONTACT_WHATSAPP = os.getenv('CONTACT_WHATSAPP', '')
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN DE CELERY (tareas asincrónicas)
 # ═══════════════════════════════════════════════════════════════════════════
 
