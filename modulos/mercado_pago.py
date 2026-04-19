@@ -5,6 +5,8 @@ Maneja creación de órdenes, procesamiento de webhooks y actualización de cré
 """
 
 import os
+import hmac
+import hashlib
 import logging
 from typing import Dict, Any
 from dotenv import load_dotenv
@@ -259,19 +261,49 @@ def procesar_webhook(data: Dict[str, Any]) -> Dict[str, Any]:
         raise MercadoPagoError(error_msg)
 
 
-def validar_firma_webhook(signature: str, request_id: str, timestamp: str) -> bool:
+def validar_firma_webhook(signature: str, request_id: str, data_id: str) -> bool:
     """
-    Valida la firma del webhook (opcional pero recomendado en producción).
+    Valida la firma HMAC-SHA256 del webhook de Mercado Pago.
 
-    Args:
-        signature: Firma enviada por Mercado Pago
-        request_id: ID del request
-        timestamp: Timestamp del request
+    MP firma el payload con el webhook secret configurado en el panel de desarrolladores.
+    Header x-signature formato: "ts=<timestamp>,v1=<hex-digest>"
+    String firmado: "id:<data_id>;request-id:<request_id>;ts:<timestamp>"
 
-    Returns:
-        True si la firma es válida, False en caso contrario
+    Si MERCADO_PAGO_WEBHOOK_SECRET no está configurado (entorno local), permite el webhook
+    con un warning para no romper el flujo de desarrollo.
     """
-    # En producción, implementar validación de firma HMAC-SHA256
-    # Por ahora, permitimos todos los webhooks (no recomendado en prod)
-    logger.warning("Validación de firma de webhook deshabilitada. Activar en producción.")
+    secret = (os.getenv('MERCADO_PAGO_WEBHOOK_SECRET') or '').strip() or None
+
+    if not secret:
+        logger.warning("[SECURITY] MERCADO_PAGO_WEBHOOK_SECRET no configurado — omitiendo validación de firma.")
+        return True
+
+    if not signature:
+        logger.warning("[SECURITY] Webhook recibido sin header x-signature — rechazando.")
+        return False
+
+    # Parsear ts y v1 del header "ts=1234567890,v1=abc123..."
+    ts = None
+    v1 = None
+    for part in signature.split(','):
+        if part.startswith('ts='):
+            ts = part[3:]
+        elif part.startswith('v1='):
+            v1 = part[3:]
+
+    if not ts or not v1:
+        logger.warning("[SECURITY] Header x-signature malformado.")
+        return False
+
+    signed_string = f"id:{data_id};request-id:{request_id};ts:{ts}"
+    expected = hmac.new(
+        secret.encode('utf-8'),
+        signed_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected, v1):
+        logger.warning("[SECURITY] Firma de webhook inválida — posible ataque.")
+        return False
+
     return True

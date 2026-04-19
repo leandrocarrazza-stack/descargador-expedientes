@@ -27,11 +27,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from flask import Flask, render_template
 from flask_login import LoginManager, UserMixin
 from flask_cors import CORS
+from flask_wtf.csrf import CSRFProtect
 
 import config
 from modulos.database import db, migrate
 from modulos.models import User
 from modulos.celery_app import init_celery_with_app
+from modulos.extensions import limiter
 
 # Logger simple sin módulo externo
 import logging
@@ -87,8 +89,18 @@ def crear_app(config_obj=None):
         return str(self.id)
     User.get_id = obtener_id
 
-    # CORS (para llamadas AJAX desde frontend)
-    CORS(app, supports_credentials=True)
+    # CORS - solo orígenes configurados
+    allowed_origins_raw = os.getenv('CORS_ALLOWED_ORIGINS', '')
+    allowed_origins = [o.strip() for o in allowed_origins_raw.split(',') if o.strip()]
+    if not allowed_origins:
+        logger.warning("[SECURITY] CORS_ALLOWED_ORIGINS no configurado — bloqueando cross-origin")
+    CORS(app, origins=allowed_origins or [], supports_credentials=True)
+
+    # Inicializar rate limiter
+    limiter.init_app(app)
+
+    # Inicializar CSRF protection
+    csrf = CSRFProtect(app)
 
     # ═════════════════════════════════════════════════════════════════════
     #  INICIALIZAR CELERY (para tareas asincrónicas)
@@ -159,6 +171,27 @@ def crear_app(config_obj=None):
             return render_template('dashboard.html', usuario=current_user)
 
         return _dashboard()
+
+    # ═════════════════════════════════════════════════════════════════════
+    #  SECURITY HEADERS
+    # ═════════════════════════════════════════════════════════════════════
+
+    @app.after_request
+    def add_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none';"
+        )
+        return response
 
     # ═════════════════════════════════════════════════════════════════════
     #  MANEJO DE ERRORES

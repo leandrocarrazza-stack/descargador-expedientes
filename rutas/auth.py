@@ -24,11 +24,13 @@ Uso:
 """
 
 import logging
+from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email
 from modulos.models import User
 from modulos.database import db
+from modulos.extensions import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,18 @@ logger = logging.getLogger(__name__)
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 
+def _safe_next(url: str, default: str = '/descargas/expediente') -> str:
+    """Solo permite URLs relativas para prevenir open redirects."""
+    if not url:
+        return default
+    parsed = urlparse(url)
+    if parsed.scheme or parsed.netloc:
+        return default
+    return url
+
+
 @auth_bp.route('/signup', methods=['GET', 'POST'])
+@limiter.limit("5 per minute; 20 per hour")
 def signup():
     """
     Muestra formulario de signup (GET) o crea cuenta (POST).
@@ -94,6 +107,7 @@ def signup():
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute; 50 per hour")
 def login():
     """
     Muestra formulario de login (GET) o inicia sesión (POST).
@@ -247,7 +261,7 @@ def mv_login():
 
     if request.method == 'GET':
         # Mostrar formulario de conexión con Mesa Virtual
-        next_url = request.args.get('next', '/descargas/expediente')
+        next_url = _safe_next(request.args.get('next', ''))
         return render_template('mv_login.html', next_url=next_url)
 
     # POST: iniciar login
@@ -255,7 +269,7 @@ def mv_login():
         datos = request.get_json() or {}
         mv_usuario = datos.get('mv_usuario', '').strip()
         mv_password = datos.get('mv_password', '').strip()
-        next_url = datos.get('next', '/descargas/expediente')
+        next_url = _safe_next(datos.get('next', ''))
 
         if not mv_usuario or not mv_password:
             return jsonify({'estado': 'error', 'mensaje': 'Usuario y contraseña son requeridos'}), 400
@@ -301,7 +315,7 @@ def mv_2fa():
         datos = request.get_json() or {}
         session_id = datos.get('session_id', '').strip()
         codigo = datos.get('codigo', '').strip()
-        next_url = datos.get('next', '/descargas/expediente')
+        next_url = _safe_next(datos.get('next', ''))
 
         if not session_id or not codigo:
             return jsonify({'estado': 'error', 'mensaje': 'Faltan datos requeridos'}), 400

@@ -36,13 +36,16 @@ DEBUG = FLASK_ENV == 'development'
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Secret key para sesiones y CSRF (CRÍTICO: cambiar en producción)
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+_DEFAULT_SECRET = 'dev-secret-key-change-in-production'
+SECRET_KEY = os.getenv('SECRET_KEY', _DEFAULT_SECRET)
+if FLASK_ENV == 'production' and SECRET_KEY == _DEFAULT_SECRET:
+    raise RuntimeError("CRITICAL: SECRET_KEY env var no configurada en producción.")
 
 # Configuración de sesión
-PERMANENT_SESSION_LIFETIME = timedelta(days=7)  # Sesión válida por 7 días
+PERMANENT_SESSION_LIFETIME = timedelta(hours=8)  # Sesión válida por 8 horas
 SESSION_COOKIE_SECURE = FLASK_ENV == 'production'  # HTTPS solo en producción
 SESSION_COOKIE_HTTPONLY = True  # No accesible desde JavaScript
-SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+SESSION_COOKIE_SAMESITE = 'Strict'  # CSRF protection (máximo)
 SESSION_REFRESH_EACH_REQUEST = True  # Refrescar expiry en cada request
 
 # ═══════════════════════════════════════════════════════════════════════════

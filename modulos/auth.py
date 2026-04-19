@@ -30,6 +30,15 @@ from modulos.models import User
 logger = logging.getLogger(__name__)
 
 
+def _redact_email(email: str) -> str:
+    """Redacta email para logs: user@example.com → us**@example.com"""
+    if '@' not in email or len(email) < 3:
+        return '***'
+    local, domain = email.split('@', 1)
+    redacted = local[:2] + '**@' + domain if len(local) > 2 else '**@' + domain
+    return redacted
+
+
 def validar_email(email):
     """
     Valida que el email sea correcto.
@@ -81,6 +90,9 @@ def validar_password(password):
     if not re.search(r'\d', password):
         return False, "La contraseña debe contener al menos 1 número"
 
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;\'`~/]', password):
+        return False, "La contraseña debe contener al menos 1 carácter especial (!@#$%...)"
+
     return True, None
 
 
@@ -100,19 +112,19 @@ def crear_usuario(email, nombre, password, plan='free'):
     # Validar email
     email_valido, email_normalizado, error_email = validar_email(email)
     if not email_valido:
-        logger.warning(f"Email inválido: {email} - {error_email}")
+        logger.warning(f"Email inválido: {_redact_email(email)} - {error_email}")
         return None, f"Email inválido: {error_email}"
 
     # Validar contraseña
     password_valida, error_password = validar_password(password)
     if not password_valida:
-        logger.warning(f"Contraseña inválida para {email}: {error_password}")
+        logger.warning(f"Contraseña inválida para {_redact_email(email)}: {error_password}")
         return None, error_password
 
     # Verificar que email no exista
     usuario_existente = User.query.filter_by(email=email_normalizado).first()
     if usuario_existente:
-        logger.warning(f"Intento de registrar email duplicado: {email_normalizado}")
+        logger.warning(f"Intento de registrar email duplicado: {_redact_email(email_normalizado)}")
         return None, "El email ya está registrado"
 
     try:
@@ -128,12 +140,12 @@ def crear_usuario(email, nombre, password, plan='free'):
         db.session.add(usuario)
         db.session.commit()
 
-        logger.info(f" Usuario creado: {email_normalizado} (plan: {plan})")
+        logger.info(f" Usuario creado: {_redact_email(email_normalizado)} (plan: {plan})")
         return usuario, None
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error al crear usuario {email}: {e}")
+        logger.error(f"Error al crear usuario {_redact_email(email)}: {e}")
         return None, "Error al crear la cuenta. Intenta nuevamente."
 
 
@@ -169,13 +181,13 @@ def verificar_credenciales(email, password):
     # Buscar usuario
     usuario = obtener_usuario(email_normalizado)
     if not usuario:
-        logger.warning(f"Intento de login con email inexistente: {email_normalizado}")
+        logger.warning(f"Intento de login con email inexistente: {_redact_email(email_normalizado)}")
         return None, "Email o contraseña incorrectos"
 
     # Verificar contraseña
     if not usuario.verificar_password(password):
-        logger.warning(f"Intento de login con contraseña incorrecta: {email_normalizado}")
+        logger.warning(f"Intento de login con contraseña incorrecta: {_redact_email(email_normalizado)}")
         return None, "Email o contraseña incorrectos"
 
-    logger.info(f" Login exitoso: {email_normalizado}")
+    logger.info(f" Login exitoso: {_redact_email(email_normalizado)}")
     return usuario, None

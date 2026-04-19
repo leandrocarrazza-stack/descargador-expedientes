@@ -21,9 +21,20 @@ Uso:
     usuario = User.query.filter_by(email='test@example.com').first()
 """
 
+import os
+import json
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from cryptography.fernet import Fernet, InvalidToken
 from modulos.database import db
+
+
+def _get_fernet():
+    """Retorna instancia Fernet si ENCRYPTION_KEY está configurada."""
+    key = os.getenv('ENCRYPTION_KEY')
+    if not key:
+        return None
+    return Fernet(key.encode('utf-8'))
 
 
 class User(db.Model):
@@ -163,6 +174,28 @@ class SesionUsuarioMV(db.Model):
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     # Usuario de Mesa Virtual (para mostrarlo en la UI, no es sensible)
     mv_usuario = db.Column(db.String(255), nullable=True)
+
+    def set_cookies(self, cookies_dict: dict):
+        """Serializa y cifra las cookies antes de guardar."""
+        plaintext = json.dumps(cookies_dict).encode('utf-8')
+        f = _get_fernet()
+        if f:
+            self.cookies_json = f.encrypt(plaintext).decode('utf-8')
+        else:
+            self.cookies_json = plaintext.decode('utf-8')
+
+    def get_cookies(self) -> dict:
+        """Descifra y deserializa las cookies."""
+        f = _get_fernet()
+        raw = self.cookies_json.encode('utf-8')
+        if f:
+            try:
+                plaintext = f.decrypt(raw)
+            except InvalidToken:
+                raise ValueError("Descifrado de cookies falló — ENCRYPTION_KEY puede haber cambiado")
+        else:
+            plaintext = raw
+        return json.loads(plaintext)
 
     def __repr__(self):
         return f'<SesionUsuarioMV user_id={self.user_id} actualizado={self.actualizado_en}>'

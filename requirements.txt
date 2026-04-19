@@ -28,6 +28,10 @@ PyPDF2==3.0.1
 celery==5.3.1
 redis==5.0.0
 
+# Security & Encryption
+flask-limiter==3.5.0
+cryptography==42.0.5
+
 # Server & Production
 gunicorn==21.2.0
 
