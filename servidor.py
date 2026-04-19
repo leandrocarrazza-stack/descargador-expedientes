@@ -33,7 +33,6 @@ from modulos.database import db, migrate
 from modulos.models import User
 from modulos.celery_app import init_celery_with_app
 from modulos.extensions import limiter, csrf
-from modulos.extensions import limiter
 
 # Logger simple sin módulo externo
 import logging
