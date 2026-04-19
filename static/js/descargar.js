@@ -113,9 +113,13 @@ async function enviarDescarga(numero, indice) {
 
     try {
         // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const resp = await fetch('/descargas/expediente', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify(body)
         });
 

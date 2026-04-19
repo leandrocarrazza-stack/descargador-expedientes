@@ -244,9 +244,13 @@
         }
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const resp = await fetch('/admin/otorgar-creditos', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ email, creditos, motivo })
             });
             const data = await resp.json();
@@ -266,9 +270,13 @@
     // Botones rápidos en la tabla
     async function otorgarRapido(email, creditos) {
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const resp = await fetch('/admin/otorgar-creditos', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ email, creditos, motivo: 'otorgado rápido desde panel' })
             });
             const data = await resp.json();

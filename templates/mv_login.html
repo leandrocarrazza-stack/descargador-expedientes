@@ -166,9 +166,13 @@
         document.getElementById('msg-cargando').textContent = 'Conectando con Mesa Virtual...';
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const resp = await fetch('/auth/mv-login', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ mv_usuario: mvUsuario, mv_password: mvPassword, next: NEXT_URL })
             });
             const data = await resp.json();
@@ -205,9 +209,13 @@
         document.getElementById('msg-cargando').textContent = 'Verificando código...';
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const resp = await fetch('/auth/mv-2fa', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ session_id: sessionId, codigo: codigo, next: NEXT_URL })
             });
             const data = await resp.json();

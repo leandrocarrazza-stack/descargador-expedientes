@@ -369,9 +369,13 @@ document.querySelectorAll('.btn-comprar').forEach(btn => {
         modal.show();
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const response = await fetch('/pagos/crear-orden', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ plan: plan })
             });
             const data = await response.json();
