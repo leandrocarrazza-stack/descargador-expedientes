@@ -15,8 +15,7 @@ from dotenv import load_dotenv
 from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, validar_firma_webhook, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
-from modulos.extensions import limiter
-from flask_wtf.csrf import csrf_exempt
+from modulos.extensions import limiter, csrf
 import config
 
 # Cargar variables de entorno
@@ -146,7 +145,7 @@ def crear_orden():
 
 
 @pagos_bp.route('/webhook', methods=['POST'])
-@csrf_exempt
+@csrf.exempt
 @limiter.limit("60 per minute")
 def webhook_mercado_pago():
     """
