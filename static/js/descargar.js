@@ -221,16 +221,33 @@ function mostrarOpciones(opciones) {
     opciones.forEach(op => {
         const card = document.createElement('div');
         card.className = 'opcion-card';
-        card.innerHTML = `
-            <div class="opcion-caratula">${op.caratula || 'Sin descripción'}</div>
-            <div class="opcion-meta">
-                <span>📋 ${op.numero || ''}</span>
-                <span>🏛️ ${op.tribunal || 'Tribunal no especificado'}</span>
-            </div>
-            <button class="btn-opcion" onclick="descargarConIndice(${op.indice})">
-                ⬇ Descargar este expediente
-            </button>
-        `;
+
+        const caratula = document.createElement('div');
+        caratula.className = 'opcion-caratula';
+        caratula.textContent = op.caratula || 'Sin descripción';
+
+        const meta = document.createElement('div');
+        meta.className = 'opcion-meta';
+
+        const numero = document.createElement('span');
+        numero.textContent = '📋 ' + (op.numero || '');
+
+        const tribunal = document.createElement('span');
+        tribunal.textContent = '🏛️ ' + (op.tribunal || 'Tribunal no especificado');
+
+        const btn = document.createElement('button');
+        btn.className = 'btn-opcion';
+        btn.textContent = '⬇ Descargar este expediente';
+        const indice = parseInt(op.indice, 10);
+        if (!isNaN(indice)) {
+            btn.addEventListener('click', () => descargarConIndice(indice));
+        }
+
+        meta.appendChild(numero);
+        meta.appendChild(tribunal);
+        card.appendChild(caratula);
+        card.appendChild(meta);
+        card.appendChild(btn);
         lista.appendChild(card);
     });
 

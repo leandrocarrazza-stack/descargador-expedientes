@@ -12,9 +12,11 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 from dotenv import load_dotenv
 
-from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, MercadoPagoError
+from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, validar_firma_webhook, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
+from modulos.extensions import limiter
+from flask_wtf.csrf import csrf_exempt
 import config
 
 # Cargar variables de entorno
@@ -144,6 +146,8 @@ def crear_orden():
 
 
 @pagos_bp.route('/webhook', methods=['POST'])
+@csrf_exempt
+@limiter.limit("60 per minute")
 def webhook_mercado_pago():
     """
     Webhook de Mercado Pago.
@@ -158,12 +162,23 @@ def webhook_mercado_pago():
     """
 
     try:
+        # Validar firma HMAC-SHA256 antes de procesar el contenido
+        x_signature = request.headers.get('x-signature', '')
+        x_request_id = request.headers.get('x-request-id', '')
+        # data_id se necesita para reconstruir el string firmado
+        _body = request.get_json(silent=True) or {}
+        _data_id = _body.get('data', {}).get('id') or request.args.get('data.id') or ''
+
+        if not validar_firma_webhook(x_signature, x_request_id, str(_data_id)):
+            logger.warning("[SECURITY] Webhook rechazado por firma inválida.")
+            return jsonify({'status': 'invalid_signature'}), 400
+
         # MP envía el webhook como JSON en el body
-        data = request.get_json() or {}
+        data = _body
         # También puede venir como query param
         action = data.get('action') or request.args.get('action')
         # El ID que viene en el webhook es el ID del PAGO (no de la preferencia)
-        data_id = data.get('data', {}).get('id') or request.args.get('data.id')
+        data_id = _data_id
 
         logger.info(f"Webhook recibido: action={action}, data_id={data_id}")
 
