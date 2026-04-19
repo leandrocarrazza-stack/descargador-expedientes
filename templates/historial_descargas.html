@@ -121,6 +121,41 @@
         background: var(--cream-soft);
     }
 
+    .hist-month-filter {
+        position: relative;
+    }
+    .month-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        min-width: 180px;
+        margin-top: 0.25rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        z-index: 100;
+    }
+    .month-option {
+        display: block;
+        width: 100%;
+        padding: 0.5rem 0.875rem;
+        border: none;
+        background: none;
+        text-align: left;
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: var(--ink);
+        transition: background 0.15s;
+    }
+    .month-option:hover {
+        background: var(--cream-soft);
+    }
+    .month-option.active {
+        background: var(--cream);
+        font-weight: 500;
+    }
+
     .hist-grid {
         background: #fff;
         border: 1px solid var(--line);
@@ -317,9 +352,14 @@
                 <button class="filter-btn" data-filter="failed">Con error</button>
             </div>
             <div class="hist-actions">
-                <button title="Filtrar por mes">
-                    <i class="bi bi-calendar3"></i> Mes
-                </button>
+                <div class="hist-month-filter">
+                    <button id="monthBtn" title="Filtrar por mes">
+                        <i class="bi bi-calendar3"></i> Mes
+                    </button>
+                    <div id="monthDropdown" class="month-dropdown" style="display: none;">
+                        <button class="month-option" data-mes="all">Todos los meses</button>
+                    </div>
+                </div>
                 <a href="{{ url_for('descargas.exportar_historial') }}" class="hist-export-btn" title="Exportar historial como CSV">
                     <i class="bi bi-download"></i> Exportar
                 </a>
@@ -339,7 +379,7 @@
             </div>
 
             {% for exp in expedientes %}
-            <div class="hist-grid-row" data-estado="{{ exp.estado }}">
+            <div class="hist-grid-row" data-estado="{{ exp.estado }}" data-mes-ano="{{ exp.creado_en.strftime('%Y-%m') if exp.creado_en else '' }}">
                 <div class="col-num">{{ exp.numero }}</div>
                 <div class="col-caratula">{{ exp.caratula or '—' }}</div>
                 <div class="col-tribunal">{{ exp.tribunal or '—' }}</div>
@@ -384,29 +424,76 @@
         </div>
 
         <script>
-            // Filtrado de búsqueda
             const searchInput = document.getElementById('searchInput');
             const filterButtons = document.querySelectorAll('.filter-btn');
+            const monthBtn = document.getElementById('monthBtn');
+            const monthDropdown = document.getElementById('monthDropdown');
+            const rows = document.querySelectorAll('.hist-grid-row');
+
             let activeFilter = 'all';
+            let activeMonth = 'all';
+
+            // Generar opciones de mes dinámicamente
+            const months = new Set();
+            rows.forEach(row => {
+                const mesAno = row.dataset.mesAno;
+                if (mesAno) months.add(mesAno);
+            });
+
+            const sortedMonths = Array.from(months).sort().reverse();
+            sortedMonths.forEach(mesAno => {
+                const [year, month] = mesAno.split('-');
+                const date = new Date(year, parseInt(month) - 1);
+                const label = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+                const btn = document.createElement('button');
+                btn.className = 'month-option';
+                btn.dataset.mes = mesAno;
+                btn.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+                btn.addEventListener('click', () => selectMonth(mesAno));
+                monthDropdown.appendChild(btn);
+            });
+
+            function selectMonth(mesAno) {
+                activeMonth = mesAno;
+                monthDropdown.style.display = 'none';
+                monthBtn.innerHTML = mesAno === 'all'
+                    ? '<i class="bi bi-calendar3"></i> Mes'
+                    : `<i class="bi bi-calendar3"></i> ${new Date(mesAno + '-01').toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })}`;
+                filterRows();
+            }
 
             function filterRows() {
                 const query = searchInput.value.toLowerCase();
-                const rows = document.querySelectorAll('.hist-grid-row');
-
                 rows.forEach(row => {
                     const num = row.querySelector('.col-num').textContent;
                     const caratula = row.querySelector('.col-caratula').textContent;
                     const estado = row.dataset.estado;
+                    const mesAno = row.dataset.mesAno;
 
                     const matchesSearch = num.includes(query) || caratula.toLowerCase().includes(query);
                     const matchesFilter = activeFilter === 'all' || estado === activeFilter;
+                    const matchesMonth = activeMonth === 'all' || mesAno === activeMonth;
 
-                    row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
+                    row.style.display = (matchesSearch && matchesFilter && matchesMonth) ? '' : 'none';
                 });
             }
 
+            // Toggle dropdown
+            monthBtn.addEventListener('click', () => {
+                monthDropdown.style.display = monthDropdown.style.display === 'none' ? 'block' : 'none';
+            });
+
+            // Cerrar dropdown al hacer click fuera
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.hist-month-filter')) {
+                    monthDropdown.style.display = 'none';
+                }
+            });
+
+            // Búsqueda
             searchInput.addEventListener('input', filterRows);
 
+            // Filtros de estado
             filterButtons.forEach(btn => {
                 btn.addEventListener('click', () => {
                     filterButtons.forEach(b => b.classList.remove('active'));
