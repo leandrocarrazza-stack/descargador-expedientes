@@ -15,13 +15,15 @@ lo descarga. Además, al iniciar la app se borran PDFs con más de
 PDF_TTL_HOURS horas de antigüedad.
 """
 
+import csv
+import io
 import logging
 import os
 import time
 import threading
 import uuid
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_file, render_template, current_app
+from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response
 from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
@@ -381,3 +383,39 @@ def historial_descargas():
     except Exception as e:
         logger.error(f"Error al mostrar historial: {str(e)}")
         return render_template('error.html', mensaje='Error al cargar el historial'), 500
+
+
+@descargas_bp.route('/exportar-historial', methods=['GET'])
+@login_required
+def exportar_historial():
+    """
+    Exporta el historial de descargas del usuario como CSV.
+    """
+    try:
+        expedientes = ExpedienteDescargado.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ExpedienteDescargado.creado_en.desc()).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Número', 'Carátula', 'Tribunal', 'Fecha descarga', 'Estado', 'Error'])
+        for exp in expedientes:
+            writer.writerow([
+                exp.numero,
+                exp.caratula or '',
+                exp.tribunal or '',
+                exp.creado_en.strftime('%d/%m/%Y %H:%M') if exp.creado_en else '',
+                exp.estado,
+                exp.error_msg or '',
+            ])
+
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=historial_descargas.csv'},
+        )
+
+    except Exception as e:
+        logger.error(f"Error al exportar historial: {str(e)}")
+        return jsonify({'error': 'Error al exportar el historial'}), 500

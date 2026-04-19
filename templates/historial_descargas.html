@@ -100,7 +100,8 @@
         display: flex;
         gap: 0.5rem;
     }
-    .hist-actions button {
+    .hist-actions button,
+    .hist-actions .hist-export-btn {
         padding: 0.5rem 0.875rem;
         border: 1px solid var(--line);
         background: #fff;
@@ -110,8 +111,13 @@
         border-radius: 6px;
         transition: all 0.15s;
         white-space: nowrap;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
     }
-    .hist-actions button:hover {
+    .hist-actions button:hover,
+    .hist-actions .hist-export-btn:hover {
         background: var(--cream-soft);
     }
 
@@ -314,9 +320,9 @@
                 <button title="Filtrar por mes">
                     <i class="bi bi-calendar3"></i> Mes
                 </button>
-                <button title="Exportar historial">
+                <a href="{{ url_for('descargas.exportar_historial') }}" class="hist-export-btn" title="Exportar historial como CSV">
                     <i class="bi bi-download"></i> Exportar
-                </button>
+                </a>
             </div>
         </div>
 
