@@ -14,7 +14,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 
 from modulos.database import db
-from modulos.models import User
+from modulos.models import User, MensajeContacto
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,20 @@ def requiere_admin(f):
 def panel():
     """Panel principal: lista de usuarios con sus créditos."""
     usuarios = User.query.order_by(User.creado_en.desc()).all()
-    return render_template('admin_panel.html', usuarios=usuarios)
+    mensajes = MensajeContacto.query.order_by(MensajeContacto.creado_en.desc()).all()
+    no_leidos = sum(1 for m in mensajes if not m.leido)
+    return render_template('admin_panel.html', usuarios=usuarios, mensajes=mensajes, no_leidos=no_leidos)
+
+
+@admin_bp.route('/mensajes/<int:mensaje_id>/leido', methods=['POST'])
+@login_required
+@requiere_admin
+def marcar_leido(mensaje_id):
+    """Marca un mensaje de contacto como leído."""
+    mensaje = MensajeContacto.query.get_or_404(mensaje_id)
+    mensaje.leido = True
+    db.session.commit()
+    return jsonify({'exito': True})
 
 
 @admin_bp.route('/otorgar-creditos', methods=['POST'])

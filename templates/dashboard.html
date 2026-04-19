@@ -54,11 +54,10 @@
 
     .action-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
         gap: 1rem;
         margin-top: 2rem;
     }
-    @media (max-width: 900px) { .action-grid { grid-template-columns: 1fr; } }
 
     .action-card {
         background: #fff;
@@ -178,6 +177,13 @@
             <h4>Mi historial</h4>
             <p>Revisá todos los expedientes que descargaste y bajá el PDF otra vez si lo necesitás.</p>
             <span class="go">Ver historial →</span>
+        </a>
+
+        <a href="/contacto/" class="action-card">
+            <div class="icon navy"><i class="bi bi-headset"></i></div>
+            <h4>Contactar soporte</h4>
+            <p>¿Tuviste un problema, una descarga fallida o necesitás reponer créditos? Escribinos.</p>
+            <span class="go">Contactar →</span>
         </a>
     </div>
 

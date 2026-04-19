@@ -201,6 +201,27 @@ class SesionUsuarioMV(db.Model):
         return f'<SesionUsuarioMV user_id={self.user_id} actualizado={self.actualizado_en}>'
 
 
+class MensajeContacto(db.Model):
+    """Mensaje de contacto/soporte enviado por un usuario."""
+
+    __tablename__ = 'mensajes_contacto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
+
+    nombre = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    asunto = db.Column(db.String(100), nullable=False)
+    mensaje = db.Column(db.Text, nullable=False)
+
+    leido = db.Column(db.Boolean, default=False, nullable=False)
+
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self):
+        return f'<MensajeContacto {self.email} - {self.asunto}>'
+
+
 class CompraCreditos(db.Model):
     """Modelo de compra de créditos (historial de pago con Stripe)."""
 

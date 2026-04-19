@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block titulo %}Contacto · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .contacto-hero {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .contacto-hero h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .contacto-hero .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 1.05rem;
+        margin-top: .3rem;
+    }
+
+    .contacto-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        padding: 2.5rem;
+    }
+
+    .motivo-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: .75rem;
+        margin-bottom: 1.5rem;
+    }
+    .motivo-btn {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding: .75rem 1rem;
+        border: 1.5px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        font-size: .9rem;
+        cursor: pointer;
+        transition: all .15s;
+        text-align: left;
+    }
+    .motivo-btn i { color: var(--gold-dark); font-size: 1.1rem; flex-shrink: 0; }
+    .motivo-btn:hover,
+    .motivo-btn.seleccionado {
+        border-color: var(--gold);
+        background: rgba(212, 165, 74, 0.06);
+        color: var(--navy);
+    }
+    .motivo-btn.seleccionado { font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="contacto-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Soporte</span>
+        <h1 class="mt-2">Contactanos</h1>
+        <p class="subtitle mb-0">¿Tuviste un problema, una descarga fallida o necesitás reponer créditos? Escribinos y te respondemos a la brevedad.</p>
+    </div>
+</div>
+
+<div class="container foja-page">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+
+            <div class="contacto-card">
+                <form method="POST" action="{{ url_for('contacto.enviar') }}" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Asunto como botones visuales -->
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold mb-3">¿Sobre qué querés consultarnos?</label>
+                        <div class="motivo-grid">
+                            <button type="button" class="motivo-btn {% if asunto_sel == 'Descarga fallida' %}seleccionado{% endif %}"
+                                    onclick="seleccionarAsunto(this, 'Descarga fallida')">
+                                <i class="bi bi-cloud-slash-fill"></i> Descarga fallida
+                            </button>
+                            <button type="button" class="motivo-btn {% if asunto_sel == 'Reposición de créditos' %}seleccionado{% endif %}"
+                                    onclick="seleccionarAsunto(this, 'Reposición de créditos')">
+                                <i class="bi bi-coin"></i> Reposición de créditos
+                            </button>
+                            <button type="button" class="motivo-btn {% if asunto_sel == 'Problema técnico' %}seleccionado{% endif %}"
+                                    onclick="seleccionarAsunto(this, 'Problema técnico')">
+                                <i class="bi bi-bug-fill"></i> Problema técnico
+                            </button>
+                            <button type="button" class="motivo-btn {% if asunto_sel == 'Consulta sobre planes' %}seleccionado{% endif %}"
+                                    onclick="seleccionarAsunto(this, 'Consulta sobre planes')">
+                                <i class="bi bi-card-list"></i> Consulta sobre planes
+                            </button>
+                            <button type="button" class="motivo-btn {% if asunto_sel == 'Otro' %}seleccionado{% endif %}"
+                                    onclick="seleccionarAsunto(this, 'Otro')">
+                                <i class="bi bi-chat-dots-fill"></i> Otro
+                            </button>
+                        </div>
+                        <input type="hidden" name="asunto" id="asuntoInput" value="{{ asunto_sel or '' }}" required>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label for="nombre" class="form-label">Nombre</label>
+                            <input type="text" id="nombre" name="nombre" class="form-control"
+                                   value="{{ nombre }}" placeholder="Tu nombre" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" id="email" name="email" class="form-control"
+                                   value="{{ email }}" placeholder="tu@email.com" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="mensaje" class="form-label">Mensaje</label>
+                        <textarea id="mensaje" name="mensaje" class="form-control" rows="5"
+                                  placeholder="Describí tu consulta con el mayor detalle posible..." required>{{ mensaje or '' }}</textarea>
+                    </div>
+
+                    <button type="submit" class="btn-foja w-100" id="btnEnviar">
+                        <i class="bi bi-send-fill me-2"></i> Enviar mensaje
+                    </button>
+                </form>
+            </div>
+
+            {% if contact_email or contact_whatsapp %}
+            <p class="text-center mt-4" style="color: var(--muted); font-size: .9rem;">
+                También podés escribirnos directamente:
+                {% if contact_email %}
+                    <a href="mailto:{{ contact_email }}" class="text-gold fw-semibold">{{ contact_email }}</a>
+                {% endif %}
+                {% if contact_whatsapp %}
+                    {% if contact_email %} · {% endif %}
+                    <a href="https://wa.me/{{ contact_whatsapp }}" target="_blank" rel="noopener" class="text-gold fw-semibold">
+                        <i class="bi bi-whatsapp"></i> WhatsApp
+                    </a>
+                {% endif %}
+            </p>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+    function seleccionarAsunto(btn, valor) {
+        document.querySelectorAll('.motivo-btn').forEach(b => b.classList.remove('seleccionado'));
+        btn.classList.add('seleccionado');
+        document.getElementById('asuntoInput').value = valor;
+    }
+
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (!document.getElementById('asuntoInput').value) {
+            e.preventDefault();
+            alert('Por favor seleccioná un asunto antes de enviar.');
+        }
+    });
+</script>
+{% endblock %}

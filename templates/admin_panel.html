@@ -150,6 +150,66 @@
         </div>
     </div>
 
+    <!-- MENSAJES DE CONTACTO -->
+    <div class="section-card">
+        <div class="section-card-header amber" style="justify-content: space-between;">
+            <span>
+                <i class="bi bi-envelope-fill icon-sm"></i>
+                Mensajes de contacto
+                {% if no_leidos > 0 %}
+                    <span style="background: #b3261e; color: #fff; border-radius: 20px; padding: 1px 8px; font-size: .75rem; font-family: var(--font-mono); margin-left: .5rem;">{{ no_leidos }} sin leer</span>
+                {% endif %}
+            </span>
+        </div>
+        <div class="section-card-body p-0">
+            {% if mensajes %}
+            <div class="table-responsive">
+                <table class="table tabla-usuarios mb-0">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Asunto</th>
+                            <th>Mensaje</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in mensajes %}
+                        <tr id="msg-{{ m.id }}" {% if not m.leido %}style="background: rgba(212,165,74,.07);"{% endif %}>
+                            <td class="text-muted-foja mono" style="font-size: .8rem; white-space: nowrap;">
+                                {{ m.creado_en.strftime('%d/%m/%Y %H:%M') }}
+                            </td>
+                            <td><strong>{{ m.nombre }}</strong></td>
+                            <td>
+                                <a href="mailto:{{ m.email }}" style="color: var(--gold-dark);">{{ m.email }}</a>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ m.asunto }}</span></td>
+                            <td style="max-width: 300px; white-space: pre-wrap; font-size: .88rem; color: var(--ink);">{{ m.mensaje }}</td>
+                            <td>
+                                {% if m.leido %}
+                                    <span class="text-muted-foja" style="font-size: .82rem;">Leído</span>
+                                {% else %}
+                                    <button class="btn-table-sm" onclick="marcarLeido({{ m.id }})">
+                                        <i class="bi bi-check2"></i> Marcar leído
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-5 text-center text-muted-foja">
+                <i class="bi bi-envelope-open" style="font-size: 2rem; opacity: .4;"></i>
+                <p class="mt-2 mb-0">No hay mensajes de contacto todavía.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- TABLA DE USUARIOS -->
     <div class="section-card">
         <div class="section-card-header navy" style="justify-content: space-between;">
@@ -288,6 +348,23 @@
         div.className = `mt-3 alert alert-${tipo}`;
         div.textContent = texto;
         div.classList.remove('d-none');
+    }
+
+    async function marcarLeido(id) {
+        try {
+            const resp = await fetch(`/admin/mensajes/${id}/leido`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' }
+            });
+            const data = await resp.json();
+            if (data.exito) {
+                const fila = document.getElementById(`msg-${id}`);
+                fila.style.background = '';
+                fila.querySelector('td:last-child').innerHTML = '<span class="text-muted-foja" style="font-size: .82rem;">Leído</span>';
+            }
+        } catch (err) {
+            alert('Error al marcar como leído.');
+        }
     }
 </script>
 {% endblock %}

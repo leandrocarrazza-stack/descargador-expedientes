@@ -541,7 +541,7 @@
                         {% endif %}
                     </ul>
                 </div>
-                <div class="col-6 col-md-4">
+                <div class="col-6 col-md-2">
                     <h5 class="mono" style="color: var(--gold); font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 1rem;">Cuenta</h5>
                     <ul class="list-unstyled m-0" style="line-height: 2.2;">
                         {% if current_user.is_authenticated %}
@@ -551,6 +551,19 @@
                         {% else %}
                             <li><a href="/auth/login">Iniciar sesión</a></li>
                             <li><a href="/auth/signup">Crear cuenta</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="col-6 col-md-2">
+                    <h5 class="mono" style="color: var(--gold); font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 1rem;">Soporte</h5>
+                    <ul class="list-unstyled m-0" style="line-height: 2.2;">
+                        <li><a href="/contacto/">Contacto</a></li>
+                        {% if contact_whatsapp %}
+                            <li>
+                                <a href="https://wa.me/{{ contact_whatsapp }}?text=Hola%2C%20necesito%20ayuda%20con%20Foja." target="_blank" rel="noopener" style="display: flex; align-items: center; gap: .4rem;">
+                                    <i class="bi bi-whatsapp" style="font-size: .85rem;"></i> WhatsApp
+                                </a>
+                            </li>
                         {% endif %}
                     </ul>
                 </div>

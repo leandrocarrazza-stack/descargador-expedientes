@@ -132,11 +132,13 @@ def crear_app(config_obj=None):
     from rutas.pagos import pagos_bp
     from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos
     from rutas.admin import admin_bp
+    from rutas.contacto import contacto_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(contacto_bp)
 
     logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
 
@@ -219,6 +221,14 @@ def crear_app(config_obj=None):
     def inyectar_planes():
         """Inyecta planes en todos los templates."""
         return dict(planes=config.PLANES)
+
+    @app.context_processor
+    def inyectar_contacto():
+        """Inyecta datos de contacto en todos los templates."""
+        return dict(
+            contact_email=config.CONTACT_EMAIL,
+            contact_whatsapp=config.CONTACT_WHATSAPP,
+        )
 
     # ═════════════════════════════════════════════════════════════════════
     #  LOGGING
