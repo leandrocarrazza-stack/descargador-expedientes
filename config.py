@@ -136,23 +136,23 @@ PRECIO_DESCARGA_ARS = 3000
 
 # Planes de compra de créditos (cada crédito = 1 descarga)
 PLANES = {
-    'basico': {
-        'nombre': 'Pack Básico',
+    'individual': {
+        'nombre': 'Individual',
         'creditos': 1,
         'precio_ars': 3000,
-        'descripcion': '1 descarga'
+        'descripcion': '1 descarga · $3.000 c/u'
     },
-    'ahorro': {
-        'nombre': 'Pack Ahorro',
-        'creditos': 5,
-        'precio_ars': 12000,  # $3000 c/u, ahorra $3000
-        'descripcion': '5 descargas (ahorra $3.000)'
+    'estudio': {
+        'nombre': 'Estudio',
+        'creditos': 10,
+        'precio_ars': 24000,  # $2.400 c/u, ahorra $6.000
+        'descripcion': '10 descargas · $2.400 c/u'
     },
-    'profesional': {
-        'nombre': 'Pack Profesional',
-        'creditos': 20,
-        'precio_ars': 42000,  # $3000 c/u, ahorra $18.000
-        'descripcion': '20 descargas (ahorra $18.000)'
+    'matricula': {
+        'nombre': 'Matrícula',
+        'creditos': 30,
+        'precio_ars': 63000,  # $2.100 c/u, ahorra $27.000
+        'descripcion': '30 descargas · $2.100 c/u'
     }
 }
 

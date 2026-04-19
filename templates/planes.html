@@ -202,75 +202,74 @@
 
     <div class="planes-grid">
 
-        <!-- Plan Básico -->
-        <div class="plan-card" data-plan="basico">
-            <div class="plan-nombre">{{ planes.basico.nombre }}</div>
-            <div class="plan-descripcion">{{ planes.basico.descripcion }}</div>
+        <!-- Plan Individual -->
+        <div class="plan-card" data-plan="individual">
+            <div class="plan-nombre">{{ planes.individual.nombre }}</div>
+            <div class="plan-descripcion">Para una descarga puntual</div>
 
             <div class="plan-precio">
-                <span class="num">${{ "{:,.0f}".format(planes.basico.precio_ars) }}</span>
+                <span class="num">${{ "{:,.0f}".format(planes.individual.precio_ars) }}</span>
                 <span class="moneda">ARS</span>
+                <div class="plan-unidad">$3.000 c/descarga</div>
             </div>
 
             <ul class="plan-features">
-                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.basico.creditos }}</strong> descarga completa</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.individual.creditos }}</strong> descarga completa</span></li>
                 <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
                 <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
-                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
             </ul>
 
-            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="basico">
-                <i class="bi bi-cart-plus"></i> Comprar
+            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="individual">
+                <i class="bi bi-cart-plus"></i> Comprar crédito
             </button>
         </div>
 
-        <!-- Plan Ahorro (Destacado) -->
-        <div class="plan-card destacado" data-plan="ahorro">
-            <span class="plan-popular-badge"><i class="bi bi-star-fill"></i> Más popular</span>
+        <!-- Plan Estudio (Destacado) -->
+        <div class="plan-card destacado" data-plan="estudio">
+            <span class="plan-popular-badge"><i class="bi bi-star-fill"></i> Más elegido</span>
 
-            <div class="plan-nombre">{{ planes.ahorro.nombre }}</div>
-            <div class="plan-descripcion">{{ planes.ahorro.descripcion }}</div>
+            <div class="plan-nombre">{{ planes.estudio.nombre }}</div>
+            <div class="plan-descripcion">El plan más elegido por estudios</div>
 
             <div class="plan-precio">
-                <span class="num gold">${{ "{:,.0f}".format(planes.ahorro.precio_ars) }}</span>
+                <span class="num gold">${{ "{:,.0f}".format(planes.estudio.precio_ars) }}</span>
                 <span class="moneda">ARS</span>
-                <div class="plan-unidad">$2.400 c/descarga · Ahorrás $3.000</div>
+                <div class="plan-unidad">$2.400 c/descarga · Ahorrás $6.000</div>
             </div>
 
             <ul class="plan-features">
-                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.ahorro.creditos }}</strong> descargas completas</span></li>
-                <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.estudio.creditos }}</strong> descargas completas</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorrás $6.000</li>
                 <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
-                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
-                <li><i class="bi bi-check-circle-fill"></i> Ahorro de $3.000</li>
+                <li><i class="bi bi-check-circle-fill"></i> Factura por cada compra</li>
             </ul>
 
-            <button class="btn-foja plan-btn btn-comprar w-100" data-plan="ahorro">
-                <i class="bi bi-cart-plus"></i> Comprar
+            <button class="btn-foja plan-btn btn-comprar w-100" data-plan="estudio">
+                <i class="bi bi-cart-plus"></i> Comprar créditos
             </button>
         </div>
 
-        <!-- Plan Profesional -->
-        <div class="plan-card" data-plan="profesional">
-            <div class="plan-nombre">{{ planes.profesional.nombre }}</div>
-            <div class="plan-descripcion">{{ planes.profesional.descripcion }}</div>
+        <!-- Plan Matrícula -->
+        <div class="plan-card" data-plan="matricula">
+            <div class="plan-nombre">{{ planes.matricula.nombre }}</div>
+            <div class="plan-descripcion">Para estudios con alto volumen</div>
 
             <div class="plan-precio">
-                <span class="num">${{ "{:,.0f}".format(planes.profesional.precio_ars) }}</span>
+                <span class="num">${{ "{:,.0f}".format(planes.matricula.precio_ars) }}</span>
                 <span class="moneda">ARS</span>
-                <div class="plan-unidad">$2.100 c/descarga · Ahorrás $18.000</div>
+                <div class="plan-unidad">$2.100 c/descarga · Ahorrás $27.000</div>
             </div>
 
             <ul class="plan-features">
-                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.profesional.creditos }}</strong> descargas completas</span></li>
-                <li><i class="bi bi-check-circle-fill"></i> Acceso inmediato</li>
+                <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.matricula.creditos }}</strong> descargas completas</span></li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorrás $27.000</li>
                 <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
-                <li><i class="bi bi-check-circle-fill"></i> Pago por Mercado Pago</li>
-                <li><i class="bi bi-check-circle-fill"></i> Ahorro de $18.000</li>
+                <li><i class="bi bi-check-circle-fill"></i> Prioridad en cola de descarga</li>
+                <li><i class="bi bi-check-circle-fill"></i> Soporte dedicado</li>
             </ul>
 
-            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="profesional">
-                <i class="bi bi-cart-plus"></i> Comprar
+            <button class="btn-foja-outline plan-btn btn-comprar w-100" data-plan="matricula">
+                <i class="bi bi-cart-plus"></i> Comprar créditos
             </button>
         </div>
 

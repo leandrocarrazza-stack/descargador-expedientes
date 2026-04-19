@@ -68,9 +68,9 @@ def crear_orden_pago(
 
     # Mapeo de créditos por plan
     CREDITOS_POR_PLAN = {
-        'basico': 1,
-        'ahorro': 5,
-        'profesional': 20
+        'individual': 1,
+        'estudio': 10,
+        'matricula': 30
     }
 
     # Verificar que el token esté configurado antes de intentar llamar a la API
