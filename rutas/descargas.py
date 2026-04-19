@@ -23,7 +23,7 @@ import time
 import threading
 import uuid
 from pathlib import Path
-from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response
+from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response, redirect, url_for
 from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
@@ -208,14 +208,16 @@ def descargar_expediente_sync():
 
     Esto evita el timeout de ~60s del proxy de Render en expedientes extensos.
     """
-    # GET → mostrar formulario
+    # GET → mostrar formulario (o redirigir a login MV si no hay sesión)
     if request.method == 'GET':
         sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
+        if not sesion_mv:
+            return redirect(url_for('auth.mv_login') + '?next=' + url_for('descargas.descargar_expediente_sync'))
         return render_template(
             'descargar_expediente.html',
             creditos=current_user.creditos_disponibles,
-            tiene_sesion_mv=sesion_mv is not None,
-            mv_usuario=sesion_mv.mv_usuario if sesion_mv else None
+            tiene_sesion_mv=True,
+            mv_usuario=sesion_mv.mv_usuario
         )
 
     # POST → iniciar descarga asincrónica
