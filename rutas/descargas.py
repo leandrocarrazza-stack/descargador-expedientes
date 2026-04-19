@@ -370,12 +370,13 @@ def historial_descargas():
     """
     Muestra el historial de descargas del usuario.
     """
+    from datetime import datetime
     try:
         expedientes = ExpedienteDescargado.query.filter_by(
             user_id=current_user.id
         ).order_by(ExpedienteDescargado.creado_en.desc()).all()
 
-        return render_template('historial_descargas.html', expedientes=expedientes)
+        return render_template('historial_descargas.html', expedientes=expedientes, now=datetime.now())
 
     except Exception as e:
         logger.error(f"Error al mostrar historial: {str(e)}")

@@ -7,58 +7,268 @@
     .hist-header {
         background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
         color: var(--cream);
-        padding: 3.5rem 0 5rem;
-        margin-bottom: -3rem;
+        padding: 3.5rem 0 3rem;
+        margin-bottom: 2.5rem;
     }
-    .hist-header h1 { color: var(--cream); font-size: clamp(2rem, 4vw, 2.75rem); }
-    .hist-header .subtitle { color: rgba(245, 241, 232, 0.75); font-size: 1.05rem; margin-top: .3rem; }
+    .hist-header .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        gap: 1.5rem;
+    }
+    .hist-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 3rem);
+        letter-spacing: -0.02em;
+        margin: 0.5rem 0 0;
+    }
+    .hist-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+        margin-bottom: 0;
+    }
 
-    .hist-table-wrap {
+    .hist-toolbar {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.875rem 1rem;
+        background: var(--cream-soft);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+    .hist-toolbar .search-box {
+        position: relative;
+        flex: 1;
+    }
+    .hist-toolbar .search-box input {
+        width: 100%;
+        padding: 0.5rem 0.75rem 0.5rem 2rem;
+        height: 2.25rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-size: 0.875rem;
+        background: #fff;
+    }
+    .hist-toolbar .search-box input::placeholder {
+        color: var(--ink-3);
+    }
+    .hist-toolbar .search-box i {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--ink-3);
+        font-size: 0.875rem;
+    }
+
+    .hist-filters {
+        display: flex;
+        gap: 0.25rem;
         background: #fff;
         border: 1px solid var(--line);
-        border-radius: var(--radius);
-        overflow: hidden;
-        box-shadow: var(--shadow-sm);
+        border-radius: 6px;
+        padding: 0.25rem;
+    }
+    .hist-filters button {
+        padding: 0.5rem 0.875rem;
+        border: none;
+        background: transparent;
+        color: var(--ink-2);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.15s;
+    }
+    .hist-filters button:hover {
+        background: var(--cream-soft);
+    }
+    .hist-filters button.active {
+        background: var(--navy);
+        color: #fff;
     }
 
-    .table {
-        margin: 0;
+    .hist-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .hist-actions button {
+        padding: 0.5rem 0.875rem;
+        border: 1px solid var(--line);
+        background: #fff;
         color: var(--ink);
+        font-size: 0.875rem;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.15s;
+        white-space: nowrap;
     }
-    .table thead {
+    .hist-actions button:hover {
+        background: var(--cream-soft);
+    }
+
+    .hist-grid {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .hist-grid-header {
+        display: grid;
+        grid-template-columns: 110px 1fr 220px 120px 100px 120px 80px;
+        gap: 1rem;
+        padding: 0.625rem 1.25rem;
         background: var(--cream);
-    }
-    .table thead th {
+        border-bottom: 1px solid var(--line);
         font-family: var(--font-mono);
-        font-size: .72rem;
+        font-size: 0.6875rem;
         font-weight: 600;
-        letter-spacing: .15em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         color: var(--muted);
-        padding: 1rem 1.25rem;
-        border-bottom: 1px solid var(--line);
     }
-    .table tbody td {
-        padding: 1rem 1.25rem;
+    .hist-grid-row {
+        display: grid;
+        grid-template-columns: 110px 1fr 220px 120px 100px 120px 80px;
+        gap: 1rem;
+        padding: 0.875rem 1.25rem;
         border-bottom: 1px solid var(--line);
-        vertical-align: middle;
+        align-items: center;
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: background 0.15s;
     }
-    .table tbody tr:last-child td { border-bottom: 0; }
-    .table tbody tr:hover { background: var(--cream-soft); }
+    .hist-grid-row:last-child {
+        border-bottom: none;
+    }
+    .hist-grid-row:hover {
+        background: var(--cream-soft);
+    }
+    .hist-grid-row .col-num {
+        font-family: var(--font-mono);
+        font-size: 0.8125rem;
+        color: var(--ink-2);
+        font-weight: 600;
+    }
+    .hist-grid-row .col-caratula {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hist-grid-row .col-tribunal {
+        color: var(--muted);
+        font-size: 0.8125rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hist-grid-row .col-fecha {
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+    }
+    .hist-grid-row .col-fojas {
+        text-align: right;
+        font-size: 0.8125rem;
+    }
+    .hist-grid-row .col-fojas .size {
+        color: var(--muted);
+        font-size: 0.6875rem;
+    }
 
-    .exp-num { font-family: var(--font-mono); font-weight: 600; color: var(--navy); }
+    .hist-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+    }
+    .hist-chip.ok {
+        background: rgba(76, 175, 80, 0.1);
+        color: #2e7d32;
+    }
+    .hist-chip.err {
+        background: rgba(211, 47, 47, 0.1);
+        color: #c62828;
+    }
+    .hist-chip::before {
+        content: '';
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+    }
+    .hist-chip.ok::before {
+        background: #4caf50;
+    }
+    .hist-chip.err::before {
+        background: #d32f2f;
+    }
 
-    .empty-state {
+    .hist-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border: none;
+        background: transparent;
+        color: var(--ink-2);
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.15s;
+        padding: 0.375rem;
+    }
+    .hist-action-btn:hover {
+        background: var(--cream-soft);
+        color: var(--navy);
+    }
+
+    .hist-empty {
         background: #fff;
         border: 1px dashed var(--line);
-        border-radius: var(--radius);
-        padding: 4rem 2rem;
+        border-radius: 8px;
+        padding: 3.75rem 1.25rem;
         text-align: center;
     }
-    .empty-state .icon {
-        font-size: 3rem;
-        color: var(--gold);
+    .hist-empty .icon {
+        font-size: 1.75rem;
+        color: var(--ink-3);
+        margin-bottom: 0.75rem;
+    }
+    .hist-empty h3 {
+        font-size: 0.95rem;
+        margin: 0.75rem 0 0.5rem;
+    }
+    .hist-empty p {
+        color: var(--muted);
+        font-size: 0.875rem;
         margin-bottom: 1rem;
+    }
+
+    @media (max-width: 1024px) {
+        .hist-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .hist-filters, .hist-actions {
+            width: 100%;
+        }
+        .hist-grid-header, .hist-grid-row {
+            grid-template-columns: 80px 1fr 100px 100px 80px;
+            gap: 0.75rem;
+        }
+        .hist-grid-header .col-4, .hist-grid-header .col-5,
+        .hist-grid-row .col-tribunal, .hist-grid-row .col-fojas {
+            display: none;
+        }
     }
 </style>
 {% endblock %}
@@ -66,11 +276,11 @@
 {% block contenido %}
 <div class="hist-header">
     <div class="container">
-        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="header-content">
             <div>
                 <span class="eyebrow" style="color: var(--gold);">Historial</span>
-                <h1 class="mt-2 mb-1">Tus descargas</h1>
-                <p class="subtitle mb-0">Todos los expedientes que descargaste con Foja.</p>
+                <h1>Todas tus descargas</h1>
+                <p class="subtitle">{{ expedientes|length }} expedientes · {{ now.strftime('%B %Y')|capitalize if now else '' }}</p>
             </div>
             <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn-foja">
                 <i class="bi bi-cloud-download-fill"></i> Nueva descarga
@@ -82,64 +292,123 @@
 <div class="container foja-page">
 
     {% if expedientes %}
-        <div class="hist-table-wrap">
-            <div class="table-responsive">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Expediente</th>
-                            <th>Carátula</th>
-                            <th>Tribunal</th>
-                            <th>Estado</th>
-                            <th>Fecha</th>
-                            <th class="text-end">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for exp in expedientes %}
-                        <tr>
-                            <td class="exp-num">{{ exp.numero }}</td>
-                            <td>{{ exp.caratula or '—' }}</td>
-                            <td><small class="text-muted-foja">{{ exp.tribunal or '—' }}</small></td>
-                            <td>
-                                {% if exp.estado == 'completed' %}
-                                    <span class="badge bg-success"><i class="bi bi-check-lg"></i> Completado</span>
-                                {% elif exp.estado == 'failed' %}
-                                    <span class="badge" style="background: #b3261e; color: #fff;" title="{{ exp.error_msg or '' }}"><i class="bi bi-x-lg"></i> Fallido</span>
-                                {% elif exp.estado == 'processing' %}
-                                    <span class="badge bg-warning">Procesando</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ exp.estado }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <small class="text-muted-foja">
-                                    {{ exp.creado_en.strftime('%d/%m/%Y %H:%M') if exp.creado_en else '—' }}
-                                </small>
-                            </td>
-                            <td class="text-end">
-                                {% if exp.estado == 'completed' and exp.pdf_ruta_temporal %}
-                                    <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}"
-                                       class="btn-foja-outline" style="padding: .4rem .9rem; font-size: .82rem;">
-                                        <i class="bi bi-file-earmark-pdf-fill"></i> PDF
-                                    </a>
-                                {% elif exp.estado == 'failed' %}
-                                    <small class="text-danger">{{ exp.error_msg[:50] if exp.error_msg else '—' }}</small>
-                                {% else %}
-                                    <span class="text-muted-foja">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <!-- Toolbar con búsqueda y filtros -->
+        <div class="hist-toolbar">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar por número o carátula..." />
+            </div>
+            <div class="hist-filters">
+                <button class="filter-btn active" data-filter="all">Todos</button>
+                <button class="filter-btn" data-filter="completed">Completados</button>
+                <button class="filter-btn" data-filter="failed">Con error</button>
+            </div>
+            <div class="hist-actions">
+                <button title="Filtrar por mes">
+                    <i class="bi bi-calendar3"></i> Mes
+                </button>
+                <button title="Exportar historial">
+                    <i class="bi bi-download"></i> Exportar
+                </button>
             </div>
         </div>
+
+        <!-- Grid de resultados -->
+        <div class="hist-grid">
+            <div class="hist-grid-header">
+                <div>Número</div>
+                <div>Carátula</div>
+                <div>Tribunal</div>
+                <div>Fecha</div>
+                <div style="text-align: right;">Fojas</div>
+                <div>Estado</div>
+                <div></div>
+            </div>
+
+            {% for exp in expedientes %}
+            <div class="hist-grid-row" data-estado="{{ exp.estado }}">
+                <div class="col-num">{{ exp.numero }}</div>
+                <div class="col-caratula">{{ exp.caratula or '—' }}</div>
+                <div class="col-tribunal">{{ exp.tribunal or '—' }}</div>
+                <div class="col-fecha">{{ exp.creado_en.strftime('%d/%m %H:%M') if exp.creado_en else '—' }}</div>
+                <div class="col-fojas">
+                    {% if exp.estado == 'completed' %}
+                        {% if exp.pdf_ruta_temporal %}
+                            Sí <span class="size"></span>
+                        {% else %}
+                            0
+                        {% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+                <div>
+                    {% if exp.estado == 'completed' %}
+                        <span class="hist-chip ok">Completado</span>
+                    {% elif exp.estado == 'failed' %}
+                        <span class="hist-chip err" title="{{ exp.error_msg or '' }}">Error</span>
+                    {% elif exp.estado == 'processing' %}
+                        <span class="hist-chip ok">Procesando</span>
+                    {% else %}
+                        <span class="hist-chip ok">{{ exp.estado|capitalize }}</span>
+                    {% endif %}
+                </div>
+                <div style="text-align: right;">
+                    {% if exp.estado == 'completed' and exp.pdf_ruta_temporal %}
+                        <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}" class="hist-action-btn" title="Descargar PDF">
+                            <i class="bi bi-download"></i>
+                        </a>
+                    {% elif exp.estado == 'failed' %}
+                        <button class="hist-action-btn" title="Reintentar descarga">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    {% else %}
+                        <span>—</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <script>
+            // Filtrado de búsqueda
+            const searchInput = document.getElementById('searchInput');
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            let activeFilter = 'all';
+
+            function filterRows() {
+                const query = searchInput.value.toLowerCase();
+                const rows = document.querySelectorAll('.hist-grid-row');
+
+                rows.forEach(row => {
+                    const num = row.querySelector('.col-num').textContent;
+                    const caratula = row.querySelector('.col-caratula').textContent;
+                    const estado = row.dataset.estado;
+
+                    const matchesSearch = num.includes(query) || caratula.toLowerCase().includes(query);
+                    const matchesFilter = activeFilter === 'all' || estado === activeFilter;
+
+                    row.style.display = (matchesSearch && matchesFilter) ? '' : 'none';
+                });
+            }
+
+            searchInput.addEventListener('input', filterRows);
+
+            filterButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterButtons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    activeFilter = btn.dataset.filter;
+                    filterRows();
+                });
+            });
+        </script>
+
     {% else %}
-        <div class="empty-state">
-            <div class="icon"><i class="bi bi-folder2-open"></i></div>
-            <h3 style="font-size: 1.5rem;">Todavía no descargaste ningún expediente</h3>
-            <p class="text-muted-foja mb-4">Cuando generes tu primera descarga, aparecerá acá.</p>
+        <div class="hist-empty">
+            <div class="icon"><i class="bi bi-inbox"></i></div>
+            <h3>Sin resultados</h3>
+            <p>Todavía no descargaste ningún expediente.</p>
             <a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="btn-foja">
                 <i class="bi bi-cloud-download-fill"></i> Descargar mi primer expediente
             </a>
