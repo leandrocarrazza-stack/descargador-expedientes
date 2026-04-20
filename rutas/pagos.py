@@ -46,6 +46,7 @@ def mostrar_planes():
 
 @pagos_bp.route('/crear-orden', methods=['POST'])
 @login_required
+@csrf.exempt
 def crear_orden():
     """
     Crea una orden de pago en Mercado Pago.

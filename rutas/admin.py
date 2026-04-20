@@ -15,6 +15,7 @@ from flask_login import login_required, current_user
 
 from modulos.database import db
 from modulos.models import User
+from modulos.extensions import csrf
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def panel():
 @admin_bp.route('/otorgar-creditos', methods=['POST'])
 @login_required
 @requiere_admin
+@csrf.exempt
 def otorgar_creditos():
     """
     Otorga créditos gratuitos a un usuario.

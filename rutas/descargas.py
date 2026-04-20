@@ -30,6 +30,7 @@ from modulos.pipeline import PipelineDescargador
 from modulos.database import db
 from modulos.models import ExpedienteDescargado, SesionUsuarioMV
 from modulos.auth_mv import obtener_cookies_usuario
+from modulos.extensions import csrf
 import config
 
 # ── Jobs en memoria ───────────────────────────────────────────────────────────
@@ -199,6 +200,7 @@ def _borrar_diferido(ruta: str, delay: int = 10):
 
 @descargas_bp.route('/expediente', methods=['GET', 'POST'])
 @login_required
+@csrf.exempt
 def descargar_expediente_sync():
     """
     GET:  Muestra el formulario de descarga.

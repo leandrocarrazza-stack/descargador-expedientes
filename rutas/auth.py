@@ -30,7 +30,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email
 from modulos.models import User
 from modulos.database import db
-from modulos.extensions import limiter
+from modulos.extensions import limiter, csrf
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,7 @@ def _safe_next(url: str, default: str = '/descargas/expediente') -> str:
 
 @auth_bp.route('/signup', methods=['GET', 'POST'])
 @limiter.limit("5 per minute; 20 per hour")
+@csrf.exempt
 def signup():
     """
     Muestra formulario de signup (GET) o crea cuenta (POST).
@@ -108,6 +109,7 @@ def signup():
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 @limiter.limit("10 per minute; 50 per hour")
+@csrf.exempt
 def login():
     """
     Muestra formulario de login (GET) o inicia sesión (POST).
@@ -202,6 +204,7 @@ def obtener_usuario():
 
 
 @auth_bp.route('/verificar-email', methods=['POST'])
+@csrf.exempt
 def verificar_email_disponible():
     """
     Verifica si un email está disponible (para validación en signup).
@@ -242,6 +245,7 @@ def verificar_email_disponible():
 
 @auth_bp.route('/mv-login', methods=['GET', 'POST'])
 @login_required
+@csrf.exempt
 def mv_login():
     """
     GET:  Muestra el formulario para conectar Mesa Virtual.
@@ -296,6 +300,7 @@ def mv_login():
 
 @auth_bp.route('/mv-2fa', methods=['POST'])
 @login_required
+@csrf.exempt
 def mv_2fa():
     """
     Completa el login de Mesa Virtual con el código 2FA.
