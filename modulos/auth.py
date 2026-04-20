@@ -22,10 +22,12 @@ Uso:
 """
 
 import re
+import secrets
 import logging
+from datetime import datetime, timedelta
 from email_validator import validate_email, EmailNotValidError
 from modulos.database import db
-from modulos.models import User
+from modulos.models import User, TokenResetPassword
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +149,75 @@ def crear_usuario(email, nombre, password, plan='free'):
         db.session.rollback()
         logger.error(f"Error al crear usuario {_redact_email(email)}: {e}")
         return None, "Error al crear la cuenta. Intenta nuevamente."
+
+
+def generar_token_reset(email):
+    """
+    Genera un token de reset de contraseña para el email dado.
+
+    Para evitar enumeración de emails, siempre retorna éxito aunque el email
+    no exista. Solo devuelve el token real si el usuario existe (para enviar email).
+
+    Returns:
+        tuple: (token: str o None, error: str o None)
+            - token es None si el email no está registrado (respuesta genérica)
+    """
+    email_valido, email_normalizado, error = validar_email(email)
+    if not email_valido:
+        return None, "Email inválido"
+
+    usuario = User.query.filter_by(email=email_normalizado).first()
+    if not usuario:
+        return None, None  # No revelar que el email no existe
+
+    # Invalidar tokens anteriores no usados
+    TokenResetPassword.query.filter_by(user_id=usuario.id, usado=False).update({'usado': True})
+
+    token = secrets.token_urlsafe(48)
+    expira = datetime.utcnow() + timedelta(hours=1)
+
+    reset_token = TokenResetPassword(
+        user_id=usuario.id,
+        token=token,
+        expira_en=expira
+    )
+    db.session.add(reset_token)
+    db.session.commit()
+
+    logger.info(f"Token de reset generado para {_redact_email(email_normalizado)}")
+    return token, None
+
+
+def resetear_password(token, nueva_password):
+    """
+    Valida el token y cambia la contraseña del usuario.
+
+    Args:
+        token (str): Token recibido por email
+        nueva_password (str): Nueva contraseña
+
+    Returns:
+        tuple: (éxito: bool, error: str o None)
+    """
+    reset_token = TokenResetPassword.query.filter_by(token=token).first()
+
+    if not reset_token or not reset_token.es_valido():
+        return False, "El enlace de recuperación es inválido o ya expiró"
+
+    valida, error = validar_password(nueva_password)
+    if not valida:
+        return False, error
+
+    usuario = db.session.get(User, reset_token.user_id)
+    if not usuario:
+        return False, "Usuario no encontrado"
+
+    usuario.establecer_password(nueva_password)
+    reset_token.usado = True
+    db.session.commit()
+
+    logger.info(f"Contraseña reseteada para user_id={usuario.id}")
+    return True, None
 
 
 def obtener_usuario(email):

@@ -25,12 +25,13 @@ Uso:
 
 import logging
 from urllib.parse import urlparse
-from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for
+from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from modulos.auth import crear_usuario, verificar_credenciales, validar_email
-from modulos.models import User
+from flask_mail import Message
+from modulos.auth import crear_usuario, verificar_credenciales, validar_email, generar_token_reset, resetear_password
+from modulos.models import User, TokenResetPassword
 from modulos.database import db
-from modulos.extensions import limiter, csrf
+from modulos.extensions import limiter, csrf, mail
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,119 @@ def verificar_email_disponible():
 
     except Exception as e:
         logger.error(f"Error en verificar-email: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+def _enviar_email_reset(email, reset_url):
+    """Envía el email con el link de recuperación. Loguea el link si el mail no está configurado."""
+    try:
+        msg = Message(
+            subject='Recuperación de contraseña · Foja',
+            recipients=[email],
+            html=f"""
+            <p>Hola,</p>
+            <p>Recibimos una solicitud para restablecer tu contraseña en <strong>Foja</strong>.</p>
+            <p>Hacé clic en el siguiente enlace para crear una nueva contraseña (válido por 1 hora):</p>
+            <p><a href="{reset_url}" style="background:#b8860b;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">
+               Restablecer contraseña
+            </a></p>
+            <p>Si no solicitaste este cambio, podés ignorar este mensaje.</p>
+            <p>El equipo de Foja</p>
+            """,
+            body=f"Restablecé tu contraseña en: {reset_url}\n\nEl enlace expira en 1 hora."
+        )
+        mail.send(msg)
+        logger.info(f"Email de reset enviado a {email[:2]}**")
+    except Exception as e:
+        logger.warning(f"No se pudo enviar email de reset (¿MAIL_USERNAME configurado?): {e}")
+        logger.info(f"[DEV] Link de reset: {reset_url}")
+
+
+@auth_bp.route('/olvide-contrasena', methods=['GET', 'POST'])
+@limiter.limit("3 per minute; 10 per hour")
+@csrf.exempt
+def olvide_contrasena():
+    """
+    Muestra formulario para ingresar email (GET) o envía el link de reset (POST).
+
+    POST Body (JSON):
+        - email: Email del usuario
+
+    Returns:
+        GET: HTML del formulario
+        POST: 200 siempre (para no revelar si el email existe o no)
+    """
+    if request.method == 'GET':
+        return render_template('olvide_contrasena.html')
+
+    try:
+        datos = request.get_json()
+        if not datos:
+            return jsonify({'error': 'Datos vacíos'}), 400
+
+        email = datos.get('email', '').strip()
+        if not email:
+            return jsonify({'error': 'Email requerido'}), 400
+
+        token, error = generar_token_reset(email)
+
+        if error:
+            return jsonify({'error': error}), 400
+
+        # Si el usuario existe, enviar el email con el link
+        if token:
+            reset_url = url_for('auth.reset_contrasena', token=token, _external=True)
+            _enviar_email_reset(email, reset_url)
+
+        # Respuesta genérica para no revelar si el email existe
+        return jsonify({
+            'mensaje': 'Si el email está registrado, recibirás un enlace para restablecer tu contraseña.'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error en olvide_contrasena: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+@auth_bp.route('/reset-contrasena/<token>', methods=['GET', 'POST'])
+@csrf.exempt
+def reset_contrasena(token):
+    """
+    Muestra formulario para ingresar nueva contraseña (GET) o la actualiza (POST).
+
+    GET: Valida el token y muestra el formulario o un error si expiró.
+
+    POST Body (JSON):
+        - password: Nueva contraseña
+
+    Returns:
+        GET: HTML del formulario
+        POST: 200 con mensaje de éxito o 400 con error
+    """
+    if request.method == 'GET':
+        reset_token = TokenResetPassword.query.filter_by(token=token).first()
+        if not reset_token or not reset_token.es_valido():
+            return render_template('reset_contrasena.html', token_invalido=True)
+        return render_template('reset_contrasena.html', token=token)
+
+    try:
+        datos = request.get_json()
+        if not datos:
+            return jsonify({'error': 'Datos vacíos'}), 400
+
+        nueva_password = datos.get('password', '').strip()
+        if not nueva_password:
+            return jsonify({'error': 'Contraseña requerida'}), 400
+
+        exito, error = resetear_password(token, nueva_password)
+
+        if not exito:
+            return jsonify({'error': error}), 400
+
+        return jsonify({'mensaje': 'Contraseña actualizada correctamente. Ya podés iniciar sesión.'}), 200
+
+    except Exception as e:
+        logger.error(f"Error en reset_contrasena: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
