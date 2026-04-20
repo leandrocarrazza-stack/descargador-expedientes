@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block titulo %}Nueva contraseña · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .auth-wrap {
+        min-height: calc(100vh - 160px);
+        display: flex;
+        align-items: center;
+        padding: 3rem 1rem;
+    }
+    .auth-card {
+        max-width: 460px;
+        width: 100%;
+        margin: 0 auto;
+        background: #fff;
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        border-top: 3px solid var(--gold);
+        padding: 3rem 2.5rem;
+        box-shadow: var(--shadow-md);
+    }
+    .auth-card h2 {
+        font-size: 1.8rem;
+        margin-bottom: .4rem;
+        text-align: center;
+    }
+    .auth-card .subtitle {
+        text-align: center;
+        color: var(--muted);
+        margin-bottom: 2rem;
+        font-size: .95rem;
+    }
+    .password-rules {
+        font-size: .82rem;
+        color: var(--muted);
+        margin-top: .5rem;
+        line-height: 1.7;
+    }
+    .auth-footer {
+        text-align: center;
+        margin-top: 1.5rem;
+        color: var(--muted);
+        font-size: .9rem;
+    }
+    .auth-footer a {
+        color: var(--gold-dark);
+        font-weight: 500;
+    }
+    .auth-footer a:hover { color: var(--navy); }
+    .exito-msg {
+        text-align: center;
+        padding: 1.5rem 0;
+    }
+    .exito-msg .icono {
+        font-size: 2.5rem;
+        color: var(--gold-dark);
+        margin-bottom: 1rem;
+    }
+    .token-invalido {
+        text-align: center;
+        padding: 1.5rem 0;
+    }
+    .token-invalido .icono {
+        font-size: 2.5rem;
+        color: #dc3545;
+        margin-bottom: 1rem;
+    }
+    .token-invalido p {
+        color: var(--muted);
+        font-size: .95rem;
+        line-height: 1.6;
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="auth-wrap">
+    <div class="auth-card">
+
+        {% if token_invalido %}
+        <!-- Token inválido o expirado -->
+        <div class="token-invalido">
+            <div class="icono"><i class="bi bi-exclamation-circle"></i></div>
+            <h5>Enlace inválido o expirado</h5>
+            <p>Este enlace de recuperación ya no es válido.<br>
+               Los enlaces expiran a la hora de ser generados.</p>
+            <a href="/auth/olvide-contrasena" class="btn-foja mt-3 d-inline-block">
+                Solicitar un nuevo enlace
+            </a>
+        </div>
+
+        {% else %}
+        <!-- Formulario de nueva contraseña -->
+        <h2>Nueva contraseña</h2>
+        <p class="subtitle">Elegí una contraseña segura para tu cuenta.</p>
+
+        <div id="panelForm">
+            <form id="formNuevaPassword">
+                <input type="hidden" id="token" value="{{ token }}">
+
+                <div class="mb-3">
+                    <label for="password" class="form-label">Nueva contraseña</label>
+                    <input type="password" class="form-control" id="password" name="password"
+                           placeholder="Mínimo 8 caracteres" autocomplete="new-password" required>
+                    <div class="password-rules">
+                        Debe contener: mayúscula · minúscula · número · carácter especial
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label for="passwordConfirm" class="form-label">Confirmar contraseña</label>
+                    <input type="password" class="form-control" id="passwordConfirm"
+                           placeholder="Repetí la contraseña" autocomplete="new-password" required>
+                </div>
+
+                <button type="submit" class="btn-foja w-100">
+                    Guardar contraseña <i class="bi bi-check-lg"></i>
+                </button>
+            </form>
+
+            <div id="alertaError" class="alert alert-danger d-none mt-3" role="alert"></div>
+        </div>
+
+        <div id="panelExito" class="exito-msg d-none">
+            <div class="icono"><i class="bi bi-check-circle"></i></div>
+            <h5>Contraseña actualizada</h5>
+            <p>Tu contraseña fue cambiada correctamente.<br>Ya podés iniciar sesión.</p>
+            <a href="/auth/login" class="btn-foja mt-3 d-inline-block">
+                Ir al inicio de sesión
+            </a>
+        </div>
+        {% endif %}
+
+        {% if not token_invalido %}
+        <div class="auth-footer">
+            <a href="/auth/login"><i class="bi bi-arrow-left"></i> Volver al inicio de sesión</a>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{% if not token_invalido %}
+<script>
+document.getElementById('formNuevaPassword').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const token = document.getElementById('token').value;
+    const password = document.getElementById('password').value;
+    const passwordConfirm = document.getElementById('passwordConfirm').value;
+    const alerta = document.getElementById('alertaError');
+
+    alerta.classList.add('d-none');
+
+    if (password !== passwordConfirm) {
+        alerta.textContent = 'Las contraseñas no coinciden.';
+        alerta.classList.remove('d-none');
+        return;
+    }
+
+    const btn = e.target.querySelector('button[type="submit"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Guardando...';
+
+    try {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const response = await fetch(`/auth/reset-contrasena/${token}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ password })
+        });
+        const datos = await response.json();
+
+        if (response.ok) {
+            document.getElementById('panelForm').classList.add('d-none');
+            document.getElementById('panelExito').classList.remove('d-none');
+        } else {
+            alerta.textContent = datos.error || 'No se pudo actualizar la contraseña.';
+            alerta.classList.remove('d-none');
+        }
+    } catch (error) {
+        alerta.textContent = 'Error de conexión. Intentá nuevamente.';
+        alerta.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

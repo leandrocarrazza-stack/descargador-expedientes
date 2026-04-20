@@ -23,7 +23,7 @@ Uso:
 
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet, InvalidToken
 from flask_login import UserMixin
@@ -211,6 +211,25 @@ class SesionUsuarioMV(db.Model):
 
     def __repr__(self):
         return f'<SesionUsuarioMV user_id={self.user_id} actualizado={self.actualizado_en}>'
+
+
+class TokenResetPassword(db.Model):
+    """Token de un solo uso para recuperar contraseña vía email."""
+
+    __tablename__ = 'tokens_reset_password'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    token = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expira_en = db.Column(db.DateTime, nullable=False)
+    usado = db.Column(db.Boolean, default=False, nullable=False)
+
+    def es_valido(self):
+        return not self.usado and datetime.utcnow() < self.expira_en
+
+    def __repr__(self):
+        return f'<TokenResetPassword user_id={self.user_id} usado={self.usado}>'
 
 
 class MensajeContacto(db.Model):
