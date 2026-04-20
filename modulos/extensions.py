@@ -8,7 +8,7 @@ from flask_wtf.csrf import CSRFProtect
 limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[],
-    storage_uri=os.getenv('REDIS_URL', 'memory://'),
+    storage_uri='memory://',
 )
 
 csrf = CSRFProtect()
