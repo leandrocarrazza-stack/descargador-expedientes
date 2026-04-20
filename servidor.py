@@ -33,7 +33,7 @@ from modulos.database import db, migrate
 from modulos.models import User
 # Celery está deprecated - usamos threading en lugar de Celery para descargas
 # from modulos.celery_app import init_celery_with_app
-from modulos.extensions import limiter, csrf
+from modulos.extensions import limiter, csrf, mail
 
 # Logger simple sin módulo externo
 import logging
@@ -87,9 +87,10 @@ def crear_app(config_obj=None):
         logger.warning("[SECURITY] CORS_ALLOWED_ORIGINS no configurado — bloqueando cross-origin")
     CORS(app, origins=allowed_origins or [], supports_credentials=True)
 
-    # Inicializar rate limiter y CSRF protection
+    # Inicializar rate limiter, CSRF y mail
     limiter.init_app(app)
     csrf.init_app(app)
+    mail.init_app(app)
 
     # ═════════════════════════════════════════════════════════════════════
     #  NOTA: Celery está deprecated
