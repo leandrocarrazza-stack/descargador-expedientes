@@ -31,7 +31,8 @@ from flask_cors import CORS
 import config
 from modulos.database import db, migrate
 from modulos.models import User
-from modulos.celery_app import init_celery_with_app
+# Celery está deprecated - usamos threading en lugar de Celery para descargas
+# from modulos.celery_app import init_celery_with_app
 from modulos.extensions import limiter, csrf
 
 # Logger simple sin módulo externo
@@ -91,11 +92,12 @@ def crear_app(config_obj=None):
     csrf.init_app(app)
 
     # ═════════════════════════════════════════════════════════════════════
-    #  INICIALIZAR CELERY (para tareas asincrónicas)
+    #  NOTA: Celery está deprecated
     # ═════════════════════════════════════════════════════════════════════
-
-    init_celery_with_app(app)
-    logger.info("[OK] Celery inicializado (broker: Redis)")
+    # Usamos threading en lugar de Celery para descargas asincrónicas.
+    # Los archivos de Celery se mantienen para compatibilidad con código antiguo.
+    # init_celery_with_app(app)  ← Comentado - no es necesario
+    logger.info("[OK] Tareas asincrónicas via threading (Celery deprecated)")
 
     # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
