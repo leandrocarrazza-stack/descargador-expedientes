@@ -84,10 +84,6 @@ def crear_app(config_obj=None):
     User.is_active = property(lambda self: True)
     User.is_anonymous = property(lambda self: False)
 
-    def obtener_id(self):
-        return str(self.id)
-    User.get_id = obtener_id
-
     # CORS - solo orígenes configurados
     allowed_origins_raw = os.getenv('CORS_ALLOWED_ORIGINS', '')
     allowed_origins = [o.strip() for o in allowed_origins_raw.split(',') if o.strip()]

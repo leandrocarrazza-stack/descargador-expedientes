@@ -93,6 +93,10 @@ class User(db.Model):
             return True
         return False
 
+    def get_id(self):
+        """Retorna el ID del usuario como string (requerido por Flask-Login)."""
+        return str(self.id)
+
     def obtener_info(self):
         """Retorna dict con info del usuario (para JSON)."""
         return {
