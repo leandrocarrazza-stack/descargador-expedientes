@@ -131,22 +131,27 @@ def login():
     # Si es POST, iniciar sesión
     try:
         datos = request.get_json()
+        logger.info(f"[LOGIN] Datos recibidos: {bool(datos)}")
 
         if not datos:
             return jsonify({'error': 'Datos vacíos'}), 400
 
         email = datos.get('email', '').strip()
         password = datos.get('password', '').strip()
+        logger.info(f"[LOGIN] Email: {email}, Password presente: {bool(password)}")
 
         if not email or not password:
             return jsonify({'error': 'Email y contraseña requeridos'}), 400
 
+        logger.info(f"[LOGIN] Verificando credenciales para {email}")
         # Verificar credenciales
         usuario, error = verificar_credenciales(email, password)
+        logger.info(f"[LOGIN] Resultado verificación: usuario={bool(usuario)}, error={error}")
 
         if error:
             return jsonify({'error': error}), 401
 
+        logger.info(f"[LOGIN] Iniciando sesión para usuario {usuario.id}")
         # Iniciar sesión
         login_user(usuario, remember=datos.get('recuerdame', False))
 
@@ -159,6 +164,8 @@ def login():
 
     except Exception as e:
         logger.error(f"Error en login: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
