@@ -45,7 +45,7 @@ if FLASK_ENV == 'production' and SECRET_KEY == _DEFAULT_SECRET:
 PERMANENT_SESSION_LIFETIME = timedelta(hours=8)  # Sesión válida por 8 horas
 SESSION_COOKIE_SECURE = FLASK_ENV == 'production'  # HTTPS solo en producción
 SESSION_COOKIE_HTTPONLY = True  # No accesible desde JavaScript
-SESSION_COOKIE_SAMESITE = 'Strict'  # CSRF protection (máximo)
+SESSION_COOKIE_SAMESITE = 'Lax'  # Lax permite csrf_token() en navegación directa
 SESSION_REFRESH_EACH_REQUEST = True  # Refrescar expiry en cada request
 
 # ═══════════════════════════════════════════════════════════════════════════

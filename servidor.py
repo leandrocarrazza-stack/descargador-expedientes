@@ -77,12 +77,7 @@ def crear_app(config_obj=None):
     @login_manager.user_loader
     def cargar_usuario(user_id):
         """Carga un usuario por ID (necesario para Flask-Login)."""
-        return User.query.get(int(user_id))
-
-    # Hacer que User sea compatible con Flask-Login
-    User.is_authenticated = property(lambda self: True)
-    User.is_active = property(lambda self: True)
-    User.is_anonymous = property(lambda self: False)
+        return db.session.get(User, int(user_id))
 
     # CORS - solo orígenes configurados
     allowed_origins_raw = os.getenv('CORS_ALLOWED_ORIGINS', '')

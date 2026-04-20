@@ -26,6 +26,7 @@ import json
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet, InvalidToken
+from flask_login import UserMixin
 from modulos.database import db
 
 
@@ -37,7 +38,7 @@ def _get_fernet():
     return Fernet(key.encode('utf-8'))
 
 
-class User(db.Model):
+class User(UserMixin, db.Model):
     """Modelo de usuario de la aplicación."""
 
     __tablename__ = 'users'
@@ -92,10 +93,6 @@ class User(db.Model):
             self.creditos_usados_mes += cantidad
             return True
         return False
-
-    def get_id(self):
-        """Retorna el ID del usuario como string (requerido por Flask-Login)."""
-        return str(self.id)
 
     def obtener_info(self):
         """Retorna dict con info del usuario (para JSON)."""
