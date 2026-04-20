@@ -28,12 +28,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet, InvalidToken
 from flask_login import UserMixin
 from modulos.database import db
+import config
 
 
 def _get_fernet():
-    """Retorna instancia Fernet si ENCRYPTION_KEY está configurada."""
+    """Retorna instancia Fernet si ENCRYPTION_KEY está configurada.
+
+    En producción, ENCRYPTION_KEY es requerida para cifrar sesiones de Mesa Virtual.
+    Sin ella, las cookies se guardan en plaintext (riesgo de seguridad).
+    """
     key = os.getenv('ENCRYPTION_KEY')
     if not key:
+        if config.FLASK_ENV == 'production':
+            raise RuntimeError(
+                "CRITICAL: ENCRYPTION_KEY env var no configurada en producción. "
+                "Las sesiones de Mesa Virtual no pueden ser cifradas. "
+                "Configura ENCRYPTION_KEY en Render settings."
+            )
         return None
     return Fernet(key.encode('utf-8'))
 

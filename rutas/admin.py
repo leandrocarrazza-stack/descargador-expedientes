@@ -15,7 +15,7 @@ from flask_login import login_required, current_user
 
 from modulos.database import db
 from modulos.models import User
-from modulos.extensions import csrf
+from modulos.extensions import csrf, limiter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ def panel():
 @admin_bp.route('/otorgar-creditos', methods=['POST'])
 @login_required
 @requiere_admin
+@limiter.limit("20 per minute")
 @csrf.exempt
 def otorgar_creditos():
     """

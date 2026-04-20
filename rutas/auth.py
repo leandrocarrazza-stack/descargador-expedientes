@@ -245,6 +245,7 @@ def verificar_email_disponible():
 
 @auth_bp.route('/mv-login', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("10 per minute")
 @csrf.exempt
 def mv_login():
     """
@@ -300,6 +301,7 @@ def mv_login():
 
 @auth_bp.route('/mv-2fa', methods=['POST'])
 @login_required
+@limiter.limit("5 per minute")
 @csrf.exempt
 def mv_2fa():
     """
