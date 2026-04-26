@@ -13,6 +13,11 @@ temp/
 output/
 logs/
 descargas/
+data/jurisprudencia/pdfs/*.pdf
+data/jurisprudencia/pdfs/*
+!data/jurisprudencia/pdfs/.gitkeep
+!data/jurisprudencia/tesauro.json
+!data/jurisprudencia/tesauro_compacto.json
 
 # Archivos de debug generados
 debug_*.html

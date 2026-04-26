@@ -1,0 +1,12 @@
+{
+  "RESPONSABILIDAD CIVIL": ["responsabilidad civil", "daños y perjuicios"],
+  "ACCIDENTE DE TRÁNSITO": ["accidente", "tránsito", "colisión"],
+  "DAÑOS MATERIALES": ["daño material", "lucro cesante"],
+  "DAÑO MORAL": ["daño moral", "sufrimiento"],
+  "OBLIGACIONES": ["obligación", "deuda", "contrato"],
+  "DERECHO DE FAMILIA": ["divorcio", "custodia", "alimentos"],
+  "SUCESIONES": ["herencia", "testamento", "legado"],
+  "DERECHO PENAL": ["delito", "pena", "sentencia"],
+  "PROPIEDAD": ["propiedad", "inmueble", "posesión"],
+  "CONTRATO": ["contrato", "acuerdo", "convenio"]
+}

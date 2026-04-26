@@ -291,3 +291,184 @@ class CompraCreditos(db.Model):
             'creado_en': self.creado_en.isoformat(),
             'completado_en': self.completado_en.isoformat() if self.completado_en else None
         }
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  MODELOS DE JURISPRUDENCIA (STJER)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+class GmailOAuthToken(db.Model):
+    """
+    Credenciales OAuth2 de Gmail para descarga de adjuntos.
+    Token JSON cifrado con Fernet (como en SesionUsuarioMV).
+    Solo debe existir UN registro (la cuenta del sistema).
+    """
+    __tablename__ = 'gmail_oauth_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    gmail_account = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    token_json = db.Column(db.Text, nullable=False)
+    ultima_descarga = db.Column(db.DateTime, nullable=True)
+    emails_procesados = db.Column(db.Integer, default=0, nullable=False)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    actualizado_en = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    def set_token(self, token_dict: dict):
+        """Cifra y almacena un token dict."""
+        plaintext = json.dumps(token_dict).encode('utf-8')
+        f = _get_fernet()
+        if f:
+            self.token_json = f.encrypt(plaintext).decode('utf-8')
+        else:
+            self.token_json = plaintext.decode('utf-8')
+
+    def get_token(self) -> dict:
+        """Descifra y retorna el token como dict."""
+        f = _get_fernet()
+        raw = self.token_json.encode('utf-8')
+        try:
+            if f:
+                plaintext = f.decrypt(raw)
+            else:
+                plaintext = raw
+            return json.loads(plaintext)
+        except (InvalidToken, json.JSONDecodeError):
+            return {}
+
+
+class EmailFallo(db.Model):
+    """
+    Registro de un email procesado desde Gmail.
+    Evita reprocessar el mismo email en ejecuciones futuras.
+    """
+    __tablename__ = 'emails_fallo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    gmail_message_id = db.Column(
+        db.String(100),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+    remitente = db.Column(db.String(120), nullable=False)
+    asunto = db.Column(db.String(500), nullable=True)
+    fecha_email = db.Column(db.DateTime, nullable=True)
+    procesado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    adjuntos_count = db.Column(db.Integer, default=0)
+
+    fallos = db.relationship('Fallo', backref='email_origen', lazy=True)
+
+
+class Fallo(db.Model):
+    """
+    Representa un fallo/sentencia individual (adjunto PDF de un email).
+    """
+    __tablename__ = 'fallos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    email_id = db.Column(
+        db.Integer,
+        db.ForeignKey('emails_fallo.id'),
+        nullable=True,
+        index=True
+    )
+
+    nombre_archivo = db.Column(db.String(500), nullable=False)
+    ruta_pdf = db.Column(db.String(1000), nullable=True)
+    tamano_bytes = db.Column(db.Integer, nullable=True)
+
+    fecha_fallo = db.Column(db.Date, nullable=True)
+    tribunal = db.Column(db.String(255), nullable=True)
+    materia = db.Column(db.String(255), nullable=True)
+
+    estado_extraccion = db.Column(
+        db.String(50),
+        default='pendiente',
+        nullable=False,
+        index=True
+    )
+    error_extraccion = db.Column(db.Text, nullable=True)
+
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    texto = db.relationship(
+        'FalloTexto',
+        backref='fallo',
+        uselist=False,
+        cascade='all, delete-orphan'
+    )
+
+    def obtener_info(self):
+        """Retorna dict con info básica del fallo."""
+        return {
+            'id': self.id,
+            'nombre_archivo': self.nombre_archivo,
+            'fecha_fallo': self.fecha_fallo.isoformat() if self.fecha_fallo else None,
+            'tribunal': self.tribunal,
+            'materia': self.materia,
+            'estado_extraccion': self.estado_extraccion,
+            'tiene_texto': self.texto is not None,
+        }
+
+
+class FalloTexto(db.Model):
+    """
+    Texto extraído de un Fallo. Separado en tabla propia para:
+    - Evitar cargar texto completo en consultas de listado
+    - Facilitar adición de índices FTS en PostgreSQL
+    """
+    __tablename__ = 'fallos_texto'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fallo_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fallos.id'),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    contenido_texto = db.Column(db.Text, nullable=True)
+    sumarios_json = db.Column(db.Text, nullable=True)
+    voces_tesauro_json = db.Column(db.Text, nullable=True)
+
+    longitud_texto = db.Column(db.Integer, default=0)
+    cantidad_sumarios = db.Column(db.Integer, default=0)
+
+    actualizado_en = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    def get_sumarios(self) -> list:
+        """Retorna lista de sumarios (strings)."""
+        if not self.sumarios_json:
+            return []
+        try:
+            return json.loads(self.sumarios_json)
+        except json.JSONDecodeError:
+            return []
+
+    def set_sumarios(self, sumarios: list):
+        """Almacena lista de sumarios como JSON."""
+        self.sumarios_json = json.dumps(sumarios, ensure_ascii=False)
+        self.cantidad_sumarios = len(sumarios)
+
+    def get_voces_tesauro(self) -> list:
+        """Retorna lista de voces del tesauro (strings)."""
+        if not self.voces_tesauro_json:
+            return []
+        try:
+            return json.loads(self.voces_tesauro_json)
+        except json.JSONDecodeError:
+            return []
+
+    def set_voces_tesauro(self, voces: list):
+        """Almacena lista de voces como JSON."""
+        self.voces_tesauro_json = json.dumps(voces, ensure_ascii=False)

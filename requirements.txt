@@ -23,6 +23,7 @@ beautifulsoup4==4.12.2
 
 # PDF Processing
 PyPDF2==3.0.1
+pdfplumber==0.11.0
 
 # Async Tasks & Queue
 celery==5.3.1
@@ -32,6 +33,17 @@ redis==5.0.0
 flask-limiter==3.5.0
 cryptography==42.0.5
 Flask-Mail==0.10.0
+
+# Google APIs (Gmail OAuth2)
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.128.0
+
+# AI & LLM (Claude API)
+anthropic==0.30.0
+
+# Scheduler (Descarga mensual de fallos)
+APScheduler==3.10.4
 
 # Server & Production
 gunicorn==21.2.0

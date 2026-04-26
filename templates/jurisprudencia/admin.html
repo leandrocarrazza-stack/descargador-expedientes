@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Jurisprudencia{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="bi bi-gear"></i> Panel de Administración</h1>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4" id="statsContainer">
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Fallos</h5>
+                    <h2 id="statTotalFallos">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Indexados</h5>
+                    <h2 id="statIndexados">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pendientes</h5>
+                    <h2 id="statPendientes">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Emails</h5>
+                    <h2 id="statEmails">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-cloud-download"></i> Descargas</h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-primary w-100" onclick="descargarAhora()">
+                        Descargar Emails Ahora
+                    </button>
+                    <small class="d-block mt-2 text-muted">
+                        Descarga emails nuevos de scamaragualeguaychu@gmail.com
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-pdf"></i> Procesamiento</h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-primary w-100" onclick="procesarPDFs()">
+                        Procesar PDFs Pendientes
+                    </button>
+                    <small class="d-block mt-2 text-muted">
+                        Extrae texto e indexa PDFs nuevos
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gmail OAuth2 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-envelope"></i> Gmail OAuth2</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        Autoriza el acceso a tu cuenta de Gmail para descargar fallos.
+                    </p>
+                    <div id="gmailStatus">
+                        <button class="btn btn-success" onclick="iniciarOAuth()">
+                            <i class="bi bi-shield-check"></i> Configurar Gmail
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-list"></i> Logs Recientes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="logsContainer" style="height: 200px; overflow-y: auto; background: #f5f5f5; padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;">
+                        <span class="text-muted">Sin logs...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Cargar stats
+    function cargarStats() {
+        fetch('/jurisprudencia/admin/stats')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('statTotalFallos').textContent = data.total_fallos;
+                document.getElementById('statIndexados').textContent = data.fallos_indexados;
+                document.getElementById('statPendientes').textContent = data.fallos_pendientes;
+                document.getElementById('statEmails').textContent = data.emails_procesados;
+            })
+            .catch(e => console.error('Error cargando stats:', e));
+    }
+
+    function descargarAhora() {
+        if (!confirm('¿Descargar emails nuevos?')) return;
+
+        fetch('/jurisprudencia/admin/descargar-ahora', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                alert('Descarga iniciada: ' + data.mensaje);
+                setTimeout(cargarStats, 2000);
+            })
+            .catch(e => alert('Error: ' + e.message));
+    }
+
+    function procesarPDFs() {
+        if (!confirm('¿Procesar PDFs pendientes?')) return;
+
+        fetch('/jurisprudencia/admin/procesar-pdfs', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                alert('Procesamiento iniciado: ' + data.mensaje);
+                setTimeout(cargarStats, 2000);
+            })
+            .catch(e => alert('Error: ' + e.message));
+    }
+
+    function iniciarOAuth() {
+        window.location.href = '/jurisprudencia/admin/gmail-oauth-init';
+    }
+
+    // Cargar stats al abrir
+    cargarStats();
+    setInterval(cargarStats, 10000); // Actualizar cada 10s
+</script>
+{% endblock %}

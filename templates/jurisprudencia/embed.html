@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Jurisprudencia STJER</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: #f5f1e8; font-family: 'Georgia', serif; margin: 0; padding: 10px; }
+        .header { background: #1a3a52; color: #d4a574; padding: 10px 15px; border-radius: 6px; margin-bottom: 10px; }
+        .header h6 { margin: 0; font-size: 0.9rem; }
+        #chat-messages { height: 250px; overflow-y: auto; padding: 10px; background: white; border-radius: 6px; margin-bottom: 10px; border: 1px solid #dee2e6; }
+        .msg-user { text-align: right; margin-bottom: 8px; }
+        .msg-user span { background: #1a3a52; color: white; padding: 6px 10px; border-radius: 12px 12px 0 12px; font-size: 0.85rem; display: inline-block; }
+        .msg-bot { text-align: left; margin-bottom: 8px; }
+        .msg-bot span { background: #e8e4db; padding: 6px 10px; border-radius: 12px 12px 12px 0; font-size: 0.85rem; display: inline-block; }
+        .input-area { display: flex; gap: 6px; }
+        .input-area input { flex: 1; font-size: 0.85rem; }
+        .btn-send { background: #1a3a52; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; }
+        .btn-send:hover { background: #d4a574; }
+        .sumario-card { background: #fff; border-left: 3px solid #d4a574; padding: 8px; margin-top: 6px; border-radius: 4px; font-size: 0.8rem; }
+        .powered-by { text-align: right; font-size: 0.7rem; color: #999; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h6>⚖️ Buscador de Jurisprudencia STJER</h6>
+    </div>
+
+    <div id="chat-messages">
+        <div class="msg-bot">
+            <span>Hola. Consultame sobre jurisprudencia del Superior Tribunal de Entre Ríos. Ejemplo: "daños y perjuicios en accidente de tránsito"</span>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="msgInput" class="form-control form-control-sm"
+               placeholder="Escribí tu consulta..." onkeypress="if(event.key==='Enter') enviar()">
+        <button class="btn-send" onclick="enviar()">Buscar</button>
+    </div>
+
+    <div class="powered-by">Powered by STJER JUR + Claude AI</div>
+
+    <script>
+        const BASE_URL = window.location.origin;
+
+        function enviar() {
+            const input = document.getElementById('msgInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            agregarMensaje(msg, 'user');
+            input.value = '';
+            agregarMensaje('Buscando...', 'bot', 'loading');
+
+            fetch(`${BASE_URL}/jurisprudencia/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensaje: msg })
+            })
+            .then(r => r.json())
+            .then(data => {
+                document.querySelector('.loading')?.remove();
+                agregarMensaje(data.respuesta || 'Sin respuesta', 'bot');
+
+                if (data.resultados && data.resultados.length > 0) {
+                    data.resultados.slice(0, 2).forEach(r => {
+                        if (r.sumarios && r.sumarios.length > 0) {
+                            const card = document.createElement('div');
+                            card.className = 'sumario-card';
+                            card.textContent = r.sumarios[0].substring(0, 200) + '...';
+                            document.getElementById('chat-messages').appendChild(card);
+                        }
+                    });
+                }
+
+                document.getElementById('chat-messages').scrollTop = 99999;
+            })
+            .catch(e => {
+                document.querySelector('.loading')?.remove();
+                agregarMensaje('Error al conectar. Intente nuevamente.', 'bot');
+            });
+        }
+
+        function agregarMensaje(texto, tipo, cls) {
+            const div = document.createElement('div');
+            div.className = `msg-${tipo}${cls ? ' ' + cls : ''}`;
+            const span = document.createElement('span');
+            span.textContent = texto;
+            div.appendChild(span);
+            document.getElementById('chat-messages').appendChild(div);
+            document.getElementById('chat-messages').scrollTop = 99999;
+        }
+    </script>
+</body>
+</html>

@@ -208,6 +208,43 @@ CELERY_CONFIG = {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  JURISPRUDENCIA - STJER (Buscador de Fallos)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Directorios de jurisprudencia
+JURISPRUDENCIA_DIR = PROJECT_DIR / "data" / "jurisprudencia"
+JURISPRUDENCIA_PDFS_DIR = JURISPRUDENCIA_DIR / "pdfs"
+
+# Crear directorios si no existen
+JURISPRUDENCIA_PDFS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Tesauro (cargado en startup)
+TESAURO_PATH = JURISPRUDENCIA_DIR / "tesauro.json"
+TESAURO_COMPACTO_PATH = JURISPRUDENCIA_DIR / "tesauro_compacto.json"
+
+# Disponible en current_app.config['TESAURO'] y current_app.config['TESAURO_COMPACTO']
+TESAURO = None
+TESAURO_COMPACTO = None
+
+# Gmail OAuth2 (para descargar adjuntos)
+GMAIL_TARGET_ACCOUNT = os.getenv('GMAIL_TARGET_ACCOUNT', 'leofard@gmail.com')
+GMAIL_SOURCE_EMAIL = os.getenv('GMAIL_SOURCE_EMAIL', 'scamaragualeguaychu@gmail.com')
+GMAIL_CLIENT_ID = os.getenv('GMAIL_CLIENT_ID', '')
+GMAIL_CLIENT_SECRET = os.getenv('GMAIL_CLIENT_SECRET', '')
+GMAIL_OAUTH_REDIRECT_URI = os.getenv(
+    'GMAIL_OAUTH_REDIRECT_URI',
+    'http://localhost:5000/jurisprudencia/admin/gmail-oauth-callback'
+)
+
+# Claude API (para búsqueda conversacional)
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
+# APScheduler (descarga mensual)
+SCHEDULER_API_ENABLED = False
+SCHEDULER_TIMEZONE = 'America/Argentina/Buenos_Aires'
+JOBS = []
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  VALIDACIÓN AUTOMÁTICA
 # ═══════════════════════════════════════════════════════════════════════════
 

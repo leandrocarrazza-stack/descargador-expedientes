@@ -1,0 +1,42 @@
+{
+  "RESPONSABILIDAD CIVIL": {
+    "terminos": ["responsabilidad civil", "responsable", "daños y perjuicios"],
+    "notas": "Obligación de reparar el daño causado"
+  },
+  "ACCIDENTE DE TRÁNSITO": {
+    "terminos": ["accidente", "tránsito", "vehículo", "colisión", "choque"],
+    "notas": "Eventos viales que generan daños"
+  },
+  "DAÑOS MATERIALES": {
+    "terminos": ["daño material", "daño patrimonial", "lucro cesante"],
+    "notas": "Daño económicamente evaluable"
+  },
+  "DAÑO MORAL": {
+    "terminos": ["daño moral", "sufrimiento", "angustia", "humillación"],
+    "notas": "Afectación a derechos de la personalidad"
+  },
+  "OBLIGACIONES": {
+    "terminos": ["obligación", "deuda", "acreedor", "deudor", "contrato"],
+    "notas": "Relaciones jurídicas patrimoniales"
+  },
+  "DERECHO DE FAMILIA": {
+    "terminos": ["divorcio", "custodia", "alimentos", "patria potestad", "filiación"],
+    "notas": "Relaciones familiares y personales"
+  },
+  "SUCESIONES": {
+    "terminos": ["herencia", "testamento", "legado", "heredero", "sucesión"],
+    "notas": "Transmisión de bienes por muerte"
+  },
+  "DERECHO PENAL": {
+    "terminos": ["delito", "crimen", "pena", "sentencia", "fiscal"],
+    "notas": "Infracciones y castigos"
+  },
+  "PROPIEDAD": {
+    "terminos": ["propiedad", "dominio", "inmueble", "mueble", "posesión"],
+    "notas": "Derechos reales sobre cosas"
+  },
+  "CONTRATO": {
+    "terminos": ["contrato", "acuerdo", "convenio", "cláusula", "oferta"],
+    "notas": "Manifestación bilateral de voluntad"
+  }
+}
