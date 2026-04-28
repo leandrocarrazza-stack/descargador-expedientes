@@ -11,7 +11,7 @@
 # 5. Deploy!
 #
 # PLAN RECOMENDADO:
-#   Starter ($7/mes) — 512 MB RAM, suficiente para esta app
+#   Basic-256MB ($6/mes) — suficiente para esta app en etapa inicial
 #   Free tier NO soporta Docker (solo native runtimes)
 
 services:
@@ -58,4 +58,4 @@ services:
 
 databases:
   - name: descargador-db
-    plan: starter   # PostgreSQL starter ($7/mes)
+    plan: basic-256mb   # PostgreSQL Basic 256MB ($6/mes)
