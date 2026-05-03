@@ -128,6 +128,26 @@
         font-size: .9rem;
         color: var(--navy);
     }
+
+    .mv-confianza {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        background: rgba(10, 31, 58, 0.04);
+        border: 1px solid rgba(10, 31, 58, 0.12);
+        border-left: 3px solid var(--gold);
+        border-radius: 8px;
+        padding: .85rem 1rem;
+        margin-bottom: 1.5rem;
+        font-size: .88rem;
+        line-height: 1.45;
+        color: var(--navy);
+    }
+    .mv-confianza i {
+        color: var(--gold-dark);
+        font-size: 1.1rem;
+        margin-top: .15rem;
+    }
 </style>
 {% endblock %}
 
@@ -163,6 +183,17 @@
                 </div>
                 {% endif %}
 
+                <!-- Leyenda de confianza y seguridad -->
+                <div class="mv-confianza">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    <div>
+                        <strong>Tu cuenta de Mesa Virtual es solo tuya.</strong>
+                        Foja nunca almacena tu contraseña ni tu código de 2FA. La sesión se usa
+                        únicamente para descargar el expediente que pediste y se cifra mientras
+                        está activa. Podés reconectar o cerrar tu sesión cuando quieras.
+                    </div>
+                </div>
+
                 <!-- Créditos -->
                 <div class="d-flex align-items-center gap-2 mb-4">
                     <i class="bi bi-coin" style="color: var(--gold-dark);"></i>
@@ -194,7 +225,7 @@
             <!-- PANEL 2: Progreso animado -->
             <div id="panel-progreso" class="form-card mt-4" style="display: none;">
                 <h3 class="mb-3" style="font-size: 1.3rem;">Descargando expediente…</h3>
-                <p class="text-muted-foja small mb-4">Este proceso puede tardar entre 1 y 3 minutos.</p>
+                <p class="text-muted-foja small mb-4">Esto suele tardar entre 1 y 3 minutos. Expedientes con muchos movimientos pueden llegar a 5.</p>
 
                 <div class="etapas">
                     <div class="etapa" id="etapa-0">
@@ -227,6 +258,7 @@
                              style="width: 0%"
                              aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
+                    <small id="mensaje-extendido" class="text-muted-foja d-block mt-2" style="display: none !important;"></small>
                 </div>
             </div>
 
@@ -280,16 +312,29 @@
 
 {% block scripts_extra %}
 <script>
-    // Etapas con tiempos estimados para la animación
+    // Etapas con tiempos estimados y techo de porcentaje
     const ETAPAS = [
-        { idx: 0, porcentaje: 10, segundos: 2  },
-        { idx: 1, porcentaje: 25, segundos: 12 },
-        { idx: 2, porcentaje: 75, segundos: 30 },
-        { idx: 3, porcentaje: 95, segundos: 80 },
+        { idx: 0, techo: 10, segundos: 3,  textos: ['Autenticando en Mesa Virtual...'] },
+        { idx: 1, techo: 30, segundos: 10, textos: ['Buscando expediente...'] },
+        { idx: 2, techo: 70, segundos: 45, textos: [
+            'Descargando archivos del expediente...',
+            'Procesando movimientos...',
+            'Descargando documentos adjuntos...',
+            'Verificando archivos descargados...',
+        ]},
+        { idx: 3, techo: 92, segundos: 60, textos: [
+            'Convirtiendo y unificando PDF...',
+            'Combinando todas las fojas...',
+            'Generando el archivo final...',
+        ]},
     ];
 
     let timers = [];
+    let tickInterval = null;
     let numeroActual = '';
+    let tiempoInicioAnimacion = 0;
+    let etapaActualIdx = 0;
+    let porcentajeActual = 0;
 
     // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
     function mostrarSolo(idPanel) {
@@ -298,37 +343,79 @@
         document.getElementById(idPanel).style.display = 'block';
     }
 
-    // ─── ANIMACIÓN DE PROGRESO ─────────────────────────────────────────────
+    // ─── ANIMACIÓN DE PROGRESO CONTINUA ────────────────────────────────────
     function iniciarAnimacion() {
         mostrarSolo('panel-progreso');
+        porcentajeActual = 0;
+        etapaActualIdx = 0;
+        tiempoInicioAnimacion = Date.now();
         setBarra(0, 'Iniciando...');
 
-        let delay = 0;
-        ETAPAS.forEach((etapa) => {
-            const t = setTimeout(() => activarEtapa(etapa.idx, etapa.porcentaje), delay * 1000);
-            timers.push(t);
-            delay += etapa.segundos;
-        });
+        // Iniciar tick continuo
+        tickInterval = setInterval(tickAnimacion, 400);
     }
 
-    function activarEtapa(idx, pct) {
-        // Marcar anteriores como completadas
-        for (let i = 0; i < idx; i++) marcarEtapaCompleta(i);
+    function tickAnimacion() {
+        const tiempoTranscurrido = (Date.now() - tiempoInicioAnimacion) / 1000;
+        let nuevoIdx = 0;
+        let pctEnEtapa = 0;
 
-        // Activar la actual
+        // Determinar etapa actual y progreso dentro de ella
+        let tiempoAcumulado = 0;
+        for (let i = 0; i < ETAPAS.length; i++) {
+            const etapa = ETAPAS[i];
+            if (tiempoTranscurrido < tiempoAcumulado + etapa.segundos) {
+                nuevoIdx = i;
+                const tiempoEnEtapa = tiempoTranscurrido - tiempoAcumulado;
+                const k = etapa.segundos / 3; // Constante para la curva asintótica
+                pctEnEtapa = 1 - Math.exp(-tiempoEnEtapa / k);
+                break;
+            }
+            tiempoAcumulado += etapa.segundos;
+        }
+
+        // Si pasamos la última etapa, quedarse en techo
+        if (nuevoIdx >= ETAPAS.length) {
+            nuevoIdx = ETAPAS.length - 1;
+            pctEnEtapa = 1;
+        }
+
+        // Cambiar etapa si es necesario
+        if (nuevoIdx !== etapaActualIdx) {
+            for (let i = 0; i < nuevoIdx; i++) {
+                marcarEtapaCompleta(i);
+            }
+            activarEtapa(nuevoIdx);
+            etapaActualIdx = nuevoIdx;
+        }
+
+        // Rotar textos dentro de la etapa
+        const etapa = ETAPAS[nuevoIdx];
+        const tiempoEnEtapa = tiempoTranscurrido - (ETAPAS.slice(0, nuevoIdx).reduce((s, e) => s + e.segundos, 0));
+        const idxTexto = Math.floor((tiempoEnEtapa / (etapa.segundos / etapa.textos.length)) % etapa.textos.length);
+        const texto = etapa.textos[idxTexto];
+
+        // Calcular porcentaje
+        const pctDesde = nuevoIdx === 0 ? 0 : ETAPAS[nuevoIdx - 1].techo;
+        const pctHasta = etapa.techo;
+        const nuevoPct = Math.round(pctDesde + (pctHasta - pctDesde) * pctEnEtapa);
+
+        // Garantizar que siempre avanza (mínimo 0.1% más)
+        if (nuevoPct <= porcentajeActual) {
+            porcentajeActual = Math.min(porcentajeActual + 0.1, pctHasta);
+        } else {
+            porcentajeActual = nuevoPct;
+        }
+
+        setBarra(Math.round(porcentajeActual), texto);
+    }
+
+    function activarEtapa(idx) {
         const badge = document.getElementById(`badge-${idx}`);
         const texto = document.getElementById(`texto-${idx}`);
         badge.className = 'etapa-badge activa';
         texto.className = 'etapa-texto activa';
-
-        const textos = [
-            'Autenticando en Mesa Virtual...',
-            'Buscando expediente...',
-            'Descargando archivos...',
-            'Convirtiendo y unificando PDF...'
-        ];
-        texto.textContent = textos[idx];
-        setBarra(pct, textos[idx]);
+        texto.textContent = ETAPAS[idx].textos[0];
     }
 
     function marcarEtapaCompleta(idx) {
@@ -348,11 +435,18 @@
     function detenerAnimacion() {
         timers.forEach(t => clearTimeout(t));
         timers = [];
+        if (tickInterval) {
+            clearInterval(tickInterval);
+            tickInterval = null;
+        }
     }
 
     function animarExito() {
         detenerAnimacion();
         ETAPAS.forEach(e => marcarEtapaCompleta(e.idx));
+        // Transición suave a 100% (la clase progress-bar ya tiene transition: width 0.6s)
+        const barra = document.getElementById('barra-fill');
+        barra.style.transition = 'width 0.6s ease-out';
         setBarra(100, '¡Completado!');
     }
 
@@ -482,7 +576,7 @@
 
             } else if (data.estado === 'procesando') {
                 // Timeout del server (5 minutos): el job sigue en progreso
-                // Reintentar con long-polling nuevamente
+                mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
                 console.log('[LONG-POLL] Timeout del servidor, reintentando...');
                 await longPolling(jobId);
                 return;
@@ -494,6 +588,14 @@
                 document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
                 mostrarSolo('panel-error');
             }, 800);
+        }
+    }
+
+    function mostrarMensajeExtendido(texto) {
+        const el = document.getElementById('mensaje-extendido');
+        if (el) {
+            el.textContent = texto;
+            el.style.cssText = 'display: block !important;';
         }
     }
 
@@ -524,11 +626,13 @@
     // ─── REINICIAR ────────────────────────────────────────────────────────
     function reiniciar() {
         detenerAnimacion();
-        // Reset barra
         const barra = document.getElementById('barra-fill');
         barra.style.width = '0%';
+        barra.style.transition = '';
         barra.classList.remove('bg-danger');
         barra.setAttribute('aria-valuenow', 0);
+        const msgExtendido = document.getElementById('mensaje-extendido');
+        if (msgExtendido) msgExtendido.style.cssText = 'display: none !important;';
         ETAPAS.forEach(e => {
             const badge = document.getElementById(`badge-${e.idx}`);
             badge.className = 'etapa-badge';

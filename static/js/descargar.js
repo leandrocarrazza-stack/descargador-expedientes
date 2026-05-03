@@ -1,15 +1,28 @@
 /* Descargar Expediente - Lógica Principal */
 
-// Etapas con tiempos estimados para la animación
+// Etapas con tiempos estimados y techo de porcentaje
 const ETAPAS = [
-    { idx: 0, porcentaje: 10, segundos: 2  },
-    { idx: 1, porcentaje: 25, segundos: 12 },
-    { idx: 2, porcentaje: 75, segundos: 30 },
-    { idx: 3, porcentaje: 95, segundos: 80 },
+    { idx: 0, techo: 10, segundos: 3,  textos: ['Autenticando en Mesa Virtual...'] },
+    { idx: 1, techo: 30, segundos: 10, textos: ['Buscando expediente...'] },
+    { idx: 2, techo: 70, segundos: 45, textos: [
+        'Descargando archivos del expediente...',
+        'Procesando movimientos...',
+        'Descargando documentos adjuntos...',
+        'Verificando archivos descargados...',
+    ]},
+    { idx: 3, techo: 92, segundos: 60, textos: [
+        'Convirtiendo y unificando PDF...',
+        'Combinando todas las fojas...',
+        'Generando el archivo final...',
+    ]},
 ];
 
 let timers = [];
+let tickInterval = null;
 let numeroActual = '';
+let tiempoInicioAnimacion = 0;
+let etapaActualIdx = 0;
+let porcentajeActual = 0;
 
 // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
 function mostrarSolo(idPanel) {
@@ -18,37 +31,82 @@ function mostrarSolo(idPanel) {
     document.getElementById(idPanel).style.display = 'block';
 }
 
-// ─── ANIMACIÓN DE PROGRESO ─────────────────────────────────────────────
+// ─── ANIMACIÓN DE PROGRESO CONTINUA ────────────────────────────────────
 function iniciarAnimacion() {
     mostrarSolo('panel-progreso');
+    porcentajeActual = 0;
+    etapaActualIdx = 0;
+    tiempoInicioAnimacion = Date.now();
     setBarra(0, 'Iniciando...');
 
-    let delay = 0;
-    ETAPAS.forEach((etapa) => {
-        const t = setTimeout(() => activarEtapa(etapa.idx, etapa.porcentaje), delay * 1000);
-        timers.push(t);
-        delay += etapa.segundos;
-    });
+    // Activar la primera etapa inmediatamente
+    activarEtapa(0);
+
+    // Iniciar tick continuo
+    tickInterval = setInterval(tickAnimacion, 400);
 }
 
-function activarEtapa(idx, pct) {
-    // Marcar anteriores como completadas
-    for (let i = 0; i < idx; i++) marcarEtapaCompleta(i);
+function tickAnimacion() {
+    const tiempoTranscurrido = (Date.now() - tiempoInicioAnimacion) / 1000;
+    let nuevoIdx = 0;
+    let pctEnEtapa = 0;
 
-    // Activar la actual
+    // Determinar etapa actual y progreso dentro de ella
+    let tiempoAcumulado = 0;
+    for (let i = 0; i < ETAPAS.length; i++) {
+        const etapa = ETAPAS[i];
+        if (tiempoTranscurrido < tiempoAcumulado + etapa.segundos) {
+            nuevoIdx = i;
+            const tiempoEnEtapa = tiempoTranscurrido - tiempoAcumulado;
+            const k = etapa.segundos / 3;
+            pctEnEtapa = 1 - Math.exp(-tiempoEnEtapa / k);
+            break;
+        }
+        tiempoAcumulado += etapa.segundos;
+        // Si pasamos todas las etapas, quedarse en la última
+        if (i === ETAPAS.length - 1) {
+            nuevoIdx = i;
+            pctEnEtapa = 0.98;
+        }
+    }
+
+    // Cambiar etapa si es necesario
+    if (nuevoIdx !== etapaActualIdx) {
+        for (let i = 0; i < nuevoIdx; i++) {
+            marcarEtapaCompleta(i);
+        }
+        activarEtapa(nuevoIdx);
+        etapaActualIdx = nuevoIdx;
+    }
+
+    // Rotar textos dentro de la etapa
+    const etapa = ETAPAS[nuevoIdx];
+    const tiempoBase = ETAPAS.slice(0, nuevoIdx).reduce((s, e) => s + e.segundos, 0);
+    const tiempoEnEtapa = tiempoTranscurrido - tiempoBase;
+    const idxTexto = Math.floor((tiempoEnEtapa / (etapa.segundos / etapa.textos.length)) % etapa.textos.length);
+    const texto = etapa.textos[Math.min(idxTexto, etapa.textos.length - 1)];
+
+    // Calcular porcentaje con curva asintótica
+    const pctDesde = nuevoIdx === 0 ? 0 : ETAPAS[nuevoIdx - 1].techo;
+    const pctHasta = etapa.techo;
+    const nuevoPct = Math.round(pctDesde + (pctHasta - pctDesde) * pctEnEtapa);
+
+    // Garantizar que siempre avanza (mínimo 0.1% más)
+    if (nuevoPct <= porcentajeActual) {
+        porcentajeActual = Math.min(porcentajeActual + 0.1, pctHasta);
+    } else {
+        porcentajeActual = nuevoPct;
+    }
+
+    setBarra(Math.round(porcentajeActual), texto);
+}
+
+function activarEtapa(idx) {
     const badge = document.getElementById(`badge-${idx}`);
     const texto = document.getElementById(`texto-${idx}`);
     badge.className = 'etapa-badge activa';
     texto.className = 'etapa-texto activa';
-
-    const textos = [
-        'Autenticando en Mesa Virtual...',
-        'Buscando expediente...',
-        'Descargando archivos...',
-        'Convirtiendo y unificando PDF...'
-    ];
-    texto.textContent = textos[idx];
-    setBarra(pct, textos[idx]);
+    texto.textContent = ETAPAS[idx].textos[0];
 }
 
 function marcarEtapaCompleta(idx) {
@@ -58,7 +116,9 @@ function marcarEtapaCompleta(idx) {
 }
 
 function setBarra(pct, label) {
-    document.getElementById('barra-fill').style.width = pct + '%';
+    const barra = document.getElementById('barra-fill');
+    barra.style.width = pct + '%';
+    barra.setAttribute('aria-valuenow', pct);
     document.getElementById('porcentaje-label').textContent = pct + '%';
     document.getElementById('etapa-label').textContent = label;
 }
@@ -66,11 +126,18 @@ function setBarra(pct, label) {
 function detenerAnimacion() {
     timers.forEach(t => clearTimeout(t));
     timers = [];
+    if (tickInterval) {
+        clearInterval(tickInterval);
+        tickInterval = null;
+    }
 }
 
 function animarExito() {
     detenerAnimacion();
     ETAPAS.forEach(e => marcarEtapaCompleta(e.idx));
+    // Transición suave a 100%
+    const barra = document.getElementById('barra-fill');
+    barra.style.transition = 'width 0.6s ease-out';
     setBarra(100, '¡Completado!');
 }
 
@@ -99,7 +166,6 @@ async function iniciarDescarga() {
 }
 
 async function descargarConIndice(indice) {
-    // Llamado desde el panel de selección múltiple
     mostrarSolo('panel-progreso');
     iniciarAnimacion();
     await enviarDescarga(numeroActual, indice);
@@ -112,7 +178,6 @@ async function enviarDescarga(numero, indice) {
     if (indice !== null) body.indice_expediente = indice;
 
     try {
-        // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const resp = await fetch('/descargas/expediente', {
             method: 'POST',
@@ -125,7 +190,6 @@ async function enviarDescarga(numero, indice) {
 
         const data = await resp.json();
 
-        // Errores de validación inmediatos (sin créditos, sin sesión MV, etc.)
         if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
             detenerAnimacion();
             window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
@@ -140,7 +204,6 @@ async function enviarDescarga(numero, indice) {
             return;
         }
 
-        // 2. Long-polling: esperar a que el job termine (el servidor retiene el request)
         await longPolling(data.job_id);
 
     } catch (err) {
@@ -153,7 +216,6 @@ async function enviarDescarga(numero, indice) {
 }
 
 // Long-polling: un único request que espera en el servidor hasta que el job complete
-// (el servidor lo despierta apenas termina el pipeline, máx 5 minutos)
 async function longPolling(jobId) {
     try {
         console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
@@ -202,7 +264,7 @@ async function longPolling(jobId) {
 
         } else if (data.estado === 'procesando') {
             // Timeout del server (5 minutos): el job sigue en progreso
-            // Reintentar con long-polling nuevamente
+            mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
             console.log('[LONG-POLL] Timeout del servidor, reintentando...');
             await longPolling(jobId);
             return;
@@ -214,6 +276,14 @@ async function longPolling(jobId) {
             document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
             mostrarSolo('panel-error');
         }, 800);
+    }
+}
+
+function mostrarMensajeExtendido(texto) {
+    const el = document.getElementById('mensaje-extendido');
+    if (el) {
+        el.textContent = texto;
+        el.style.display = 'block';
     }
 }
 
@@ -261,9 +331,12 @@ function mostrarOpciones(opciones) {
 // ─── REINICIAR ────────────────────────────────────────────────────────
 function reiniciar() {
     detenerAnimacion();
-    // Reset barra
-    document.getElementById('barra-fill').style.width = '0%';
-    document.getElementById('barra-fill').classList.remove('error-barra');
+    const barra = document.getElementById('barra-fill');
+    barra.style.width = '0%';
+    barra.classList.remove('error-barra');
+    barra.setAttribute('aria-valuenow', 0);
+    const msgExtendido = document.getElementById('mensaje-extendido');
+    if (msgExtendido) msgExtendido.style.display = 'none';
     ETAPAS.forEach(e => {
         const badge = document.getElementById(`badge-${e.idx}`);
         badge.className = 'etapa-badge';
