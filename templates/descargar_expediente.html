@@ -131,7 +131,7 @@
 
     .mv-confianza {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: .75rem;
         background: rgba(10, 31, 58, 0.04);
         border: 1px solid rgba(10, 31, 58, 0.12);
@@ -146,7 +146,7 @@
     .mv-confianza i {
         color: var(--gold-dark);
         font-size: 1.1rem;
-        margin-top: .15rem;
+        flex-shrink: 0;
     }
 </style>
 {% endblock %}
@@ -185,13 +185,8 @@
 
                 <!-- Leyenda de confianza y seguridad -->
                 <div class="mv-confianza">
-                    <i class="bi bi-shield-lock-fill"></i>
-                    <div>
-                        <strong>Tu cuenta de Mesa Virtual es solo tuya.</strong>
-                        Foja nunca almacena tu contraseña ni tu código de 2FA. La sesión se usa
-                        únicamente para descargar el expediente que pediste y se cifra mientras
-                        está activa. Podés reconectar o cerrar tu sesión cuando quieras.
-                    </div>
+                    <i class="bi bi-shield-lock-fill" aria-hidden="true"></i>
+                    <span><strong>Tu cuenta de Mesa Virtual es solo tuya.</strong> Foja nunca almacena tu contraseña ni tu código de 2FA.</span>
                 </div>
 
                 <!-- Créditos -->
