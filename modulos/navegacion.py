@@ -54,11 +54,16 @@ class BuscadorExpedientes:
             print("   > Abriendo buscador...")
             driver.get("https://mesavirtual.jusentrerios.gov.ar/expedientes")
 
-            # Esperar a que React termine de renderizar (máximo 10 segundos)
+            # Esperar a que React termine de renderizar (máximo 20 segundos)
             print("   > Esperando que cargue la interfaz...")
-            WebDriverWait(driver, 10).until(
-                lambda d: d.execute_script("return document.readyState") == "complete"
-            )
+            try:
+                WebDriverWait(driver, 20).until(
+                    lambda d: d.execute_script("return document.readyState") == "complete"
+                )
+            except Exception:
+                # Chrome puede lanzar "script timeout" si está muy ocupado cargando;
+                # en ese caso esperamos un tiempo fijo y continuamos de todas formas.
+                time.sleep(5)
             time.sleep(2)  # Tiempo adicional para que React renderice
 
             # IMPORTANTE: Cerrar cartel de notificaciones PRIMERO (puede bloquear otros clicks)
