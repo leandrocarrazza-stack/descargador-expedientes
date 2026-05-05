@@ -60,9 +60,12 @@ class BuscadorExpedientes:
                 WebDriverWait(driver, 20).until(
                     lambda d: d.execute_script("return document.readyState") == "complete"
                 )
-            except Exception:
-                # Chrome puede lanzar "script timeout" si está muy ocupado cargando;
-                # en ese caso esperamos un tiempo fijo y continuamos de todas formas.
+            except Exception as wait_err:
+                # Chrome puede lanzar "script timeout" si está muy ocupado cargando,
+                # o WebDriverWait puede expirar si la página no termina de cargar.
+                # En ambos casos continuamos; si la página no cargó bien, los pasos
+                # siguientes fallarán con mensajes más descriptivos.
+                print(f"   [WARN] Timeout esperando readyState (URL actual: {driver.current_url}): {wait_err}")
                 time.sleep(5)
             time.sleep(2)  # Tiempo adicional para que React renderice
 
