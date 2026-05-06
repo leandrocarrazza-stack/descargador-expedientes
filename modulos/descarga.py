@@ -548,6 +548,13 @@ class DescargadorArchivos:
                     )
                     response.raise_for_status()
 
+                    # Detectar si el servidor devolvió HTML de login en vez del archivo
+                    # (ocurre cuando la sesión de Keycloak expiró)
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'text/html' in content_type:
+                        print(f"         [AUTH] Respuesta HTML recibida (sesión expirada), abortando")
+                        return False
+
                     # Validar que tenemos contenido
                     if not response.content or len(response.content) < 100:
                         if intento < max_intentos - 1:
@@ -643,6 +650,11 @@ class DescargadorArchivos:
 
             while mov_idx_global < max_movimientos:
                 print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
+
+                # Detectar si la sesión de Keycloak expiró (driver redirigido a login)
+                url_actual = driver.current_url
+                if "ol-sso" in url_actual or "/login" in url_actual:
+                    raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
 
                 # IMPORTANTE: Esperar a que cargue la tabla completamente
                 # Puede haber diferentes estructuras según Material-UI/React rendering

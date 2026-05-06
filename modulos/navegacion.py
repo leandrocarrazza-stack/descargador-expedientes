@@ -63,11 +63,14 @@ class BuscadorExpedientes:
             except Exception as wait_err:
                 # Chrome puede lanzar "script timeout" si está muy ocupado cargando,
                 # o WebDriverWait puede expirar si la página no termina de cargar.
-                # En ambos casos continuamos; si la página no cargó bien, los pasos
-                # siguientes fallarán con mensajes más descriptivos.
                 print(f"   [WARN] Timeout esperando readyState (URL actual: {driver.current_url}): {wait_err}")
                 time.sleep(5)
             time.sleep(2)  # Tiempo adicional para que React renderice
+
+            # Detectar si el driver fue redirigido a la página de login de Keycloak
+            url_actual = driver.current_url
+            if "ol-sso" in url_actual or "/login" in url_actual:
+                raise Exception(f"SESION_MV_EXPIRADA: redirigido a login durante búsqueda ({url_actual[:80]})")
 
             # IMPORTANTE: Cerrar cartel de notificaciones PRIMERO (puede bloquear otros clicks)
             print("   > Cerrando popup de notificaciones (si existe)...")

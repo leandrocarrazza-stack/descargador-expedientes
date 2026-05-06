@@ -214,6 +214,13 @@ class PipelineDescargador:
             )
 
         except Exception as e:
+            if "SESION_MV_EXPIRADA" in str(e):
+                logger.warning(f"[AUTH] Sesión de Mesa Virtual expirada durante el proceso: {e}")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.",
+                    tipo_error="auth_failed"
+                )
             logger.error(f"[ERROR] Excepción en pipeline: {str(e)}", exc_info=True)
             return ResultadoPipeline(
                 exito=False,
