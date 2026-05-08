@@ -1,4 +1,8 @@
-"""Renderiza el flyer HTML a PNG 1080x1350 listo para WhatsApp.
+"""Renderiza los flyers HTML a PNG listos para enviar.
+
+Genera dos piezas:
+  - flyer-whatsapp-er.png  (1080x1350, proporción 4:5 para chat de WhatsApp)
+  - flyer-story-er.png     (1080x1920, proporción 9:16 para Stories de WhatsApp/Instagram)
 
 Uso:
     python scripts/marketing/exportar_flyer.py
@@ -14,30 +18,37 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HTML_PATH = REPO_ROOT / "static" / "marketing" / "flyer-whatsapp-er.html"
-PNG_PATH = REPO_ROOT / "static" / "marketing" / "flyer-whatsapp-er.png"
+MARKETING_DIR = REPO_ROOT / "static" / "marketing"
 
-WIDTH, HEIGHT = 1080, 1350
+PIEZAS = [
+    ("flyer-whatsapp-er", 1080, 1350),
+    ("flyer-story-er", 1080, 1920),
+]
 
 
-def render():
+def _crear_driver(width: int, height: int):
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--hide-scrollbars")
-    options.add_argument(f"--window-size={WIDTH},{HEIGHT}")
+    options.add_argument(f"--window-size={width},{height}")
     options.add_argument("--force-device-scale-factor=1")
 
     service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
+    return webdriver.Chrome(service=service, options=options)
 
+
+def render(nombre: str, width: int, height: int):
+    html_path = MARKETING_DIR / f"{nombre}.html"
+    png_path = MARKETING_DIR / f"{nombre}.png"
+
+    driver = _crear_driver(width, height)
     try:
-        driver.set_window_size(WIDTH, HEIGHT)
-        driver.get(HTML_PATH.as_uri())
+        driver.set_window_size(width, height)
+        driver.get(html_path.as_uri())
 
-        # Esperar a que las webfonts terminen de cargar antes del screenshot.
         driver.execute_async_script(
             "var done = arguments[arguments.length - 1];"
             "if (document.fonts && document.fonts.ready) {"
@@ -46,11 +57,12 @@ def render():
         )
 
         flyer = driver.find_element("css selector", ".flyer")
-        flyer.screenshot(str(PNG_PATH))
-        print(f"PNG generado: {PNG_PATH}")
+        flyer.screenshot(str(png_path))
+        print(f"PNG generado: {png_path}  ({width}x{height})")
     finally:
         driver.quit()
 
 
 if __name__ == "__main__":
-    render()
+    for nombre, w, h in PIEZAS:
+        render(nombre, w, h)
