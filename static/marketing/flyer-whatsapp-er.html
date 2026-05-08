@@ -2,28 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Foja — Flyer WhatsApp Entre Ríos</title>
+    <title>Foja</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 
     <style>
-        :root {
-            --navy: #0a1f3a;
-            --navy-800: #0e2748;
-            --navy-900: #061429;
-            --gold: #d4a54a;
-            --gold-light: #e8b968;
-            --gold-dark: #b8892e;
-            --cream: #f5f1e8;
-            --cream-soft: #faf7f0;
-            --ink: #1a2b4a;
-            --line: #e8e2d3;
-        }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         html, body {
@@ -33,360 +18,273 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            color: var(--ink);
-            background: var(--cream);
+            font-family: 'Inter', sans-serif;
+            background: #07172b;
             -webkit-font-smoothing: antialiased;
         }
 
         .flyer {
             width: 1080px;
             height: 1350px;
+            position: relative;
             display: flex;
             flex-direction: column;
-            background: var(--cream);
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* ───────── HEADER ───────── */
-        .header {
-            background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
-            color: var(--cream);
-            padding: 38px 64px;
-            display: flex;
             align-items: center;
-            justify-content: space-between;
-            border-bottom: 3px solid var(--gold);
+            justify-content: center;
+            overflow: hidden;
+
+            /* fondo: gradiente sutil con punto de luz central */
+            background:
+                radial-gradient(ellipse 900px 700px at 50% 45%, #0e2748 0%, #07172b 100%);
         }
 
+        /* textura: líneas diagonales muy sutiles */
+        .flyer::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 28px,
+                rgba(212, 165, 74, 0.03) 28px,
+                rgba(212, 165, 74, 0.03) 29px
+            );
+            pointer-events: none;
+        }
+
+        /* marco dorado fino en los bordes */
+        .frame {
+            position: absolute;
+            inset: 36px;
+            border: 1px solid rgba(212, 165, 74, 0.22);
+            pointer-events: none;
+        }
+
+        .frame::before, .frame::after {
+            content: '';
+            position: absolute;
+            width: 48px;
+            height: 48px;
+            border-color: #d4a54a;
+            border-style: solid;
+            opacity: 0.7;
+        }
+
+        /* esquinas decorativas */
+        .frame::before {
+            top: -1px; left: -1px;
+            border-width: 2px 0 0 2px;
+        }
+        .frame::after {
+            bottom: -1px; right: -1px;
+            border-width: 0 2px 2px 0;
+        }
+
+        /* === CONTENIDO === */
+        .content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 0 96px;
+            width: 100%;
+        }
+
+        /* logo pequeño */
         .logo {
             font-family: 'Cormorant Garamond', serif;
-            font-weight: 600;
-            font-size: 64px;
-            line-height: 1;
-            color: var(--cream);
-            letter-spacing: -0.5px;
-        }
-
-        .logo .dot { color: var(--gold); margin-left: 2px; }
-
-        .eyebrow {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 16px;
-            text-transform: uppercase;
-            letter-spacing: 2.5px;
-            color: var(--gold);
-            text-align: right;
-        }
-
-        .eyebrow .small {
-            display: block;
-            color: var(--cream);
-            font-size: 13px;
-            letter-spacing: 1.8px;
-            margin-top: 4px;
-            opacity: 0.75;
-        }
-
-        /* ───────── HERO ───────── */
-        .hero {
-            padding: 56px 64px 36px;
-            text-align: center;
-        }
-
-        .hero h1 {
-            font-family: 'Cormorant Garamond', serif;
-            font-weight: 600;
-            font-size: 88px;
-            line-height: 1.02;
-            color: var(--navy);
-            letter-spacing: -1.5px;
-        }
-
-        .hero h1 .accent {
-            font-style: italic;
-            font-weight: 600;
-            color: var(--gold-dark);
-            display: block;
-            margin-top: 4px;
-        }
-
-        .hero p {
-            margin-top: 22px;
-            font-size: 26px;
-            line-height: 1.4;
-            color: var(--ink);
-            opacity: 0.85;
-            max-width: 880px;
-            margin-left: auto;
-            margin-right: auto;
             font-weight: 400;
-        }
-
-        .hero .stjer {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 17px;
-            color: var(--gold-dark);
-            letter-spacing: 1px;
-            margin-top: 16px;
+            font-size: 22px;
+            letter-spacing: 8px;
             text-transform: uppercase;
+            color: rgba(212, 165, 74, 0.7);
+            margin-bottom: 64px;
         }
 
-        /* ───────── BENEFICIOS ───────── */
-        .benefits {
-            padding: 8px 64px 24px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 18px;
-        }
-
-        .benefit {
-            background: var(--cream-soft);
-            border: 1.5px solid var(--line);
-            border-top: 3px solid var(--gold);
-            border-radius: 14px;
-            padding: 22px 24px;
+        /* divisor ornamental */
+        .divider {
             display: flex;
+            align-items: center;
             gap: 16px;
-            align-items: flex-start;
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 52px;
         }
 
-        .benefit i {
-            color: var(--gold-dark);
-            font-size: 34px;
-            line-height: 1;
-            margin-top: 2px;
-            flex-shrink: 0;
+        .divider-line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #d4a54a, transparent);
         }
 
-        .benefit-text h3 {
+        .divider-diamond {
+            width: 6px;
+            height: 6px;
+            background: #d4a54a;
+            transform: rotate(45deg);
+            opacity: 0.9;
+        }
+
+        /* titular principal */
+        .headline {
             font-family: 'Cormorant Garamond', serif;
+            font-weight: 300;
+            font-size: 108px;
+            line-height: 0.92;
+            letter-spacing: -2px;
+            color: #f5f1e8;
+            margin-bottom: 0;
+        }
+
+        .headline strong {
             font-weight: 600;
-            font-size: 28px;
-            color: var(--navy);
-            line-height: 1.15;
-            margin-bottom: 6px;
+            display: block;
         }
 
-        .benefit-text p {
-            font-size: 17px;
-            line-height: 1.45;
-            color: var(--ink);
-            opacity: 0.78;
+        .headline em {
+            font-style: italic;
+            font-weight: 300;
+            color: #d4a54a;
+            display: block;
+            font-size: 96px;
         }
 
-        /* ───────── PLANES ───────── */
-        .planes {
-            background: var(--navy);
-            color: var(--cream);
-            padding: 32px 64px 28px;
-            text-align: center;
-            border-top: 1px solid rgba(212, 165, 74, 0.25);
+        /* divisor 2 */
+        .divider2 {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            width: 100%;
+            max-width: 320px;
+            margin: 52px 0 48px;
         }
 
-        .planes-eyebrow {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
-            color: var(--gold);
-            letter-spacing: 2.5px;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-        }
-
-        .planes-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 18px;
-            margin-bottom: 18px;
-        }
-
-        .plan {
-            background: var(--navy-800);
-            border: 1px solid rgba(212, 165, 74, 0.35);
-            border-radius: 12px;
-            padding: 18px 14px;
-        }
-
-        .plan.featured {
-            background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 100%);
-            border-color: var(--gold-light);
-        }
-
-        .plan-name {
-            font-family: 'Cormorant Garamond', serif;
-            font-weight: 600;
+        /* subtítulo */
+        .subtitle {
+            font-family: 'Inter', sans-serif;
+            font-weight: 300;
             font-size: 26px;
-            color: var(--gold);
-            margin-bottom: 4px;
+            line-height: 1.55;
+            color: rgba(245, 241, 232, 0.65);
+            letter-spacing: 0.2px;
+            max-width: 760px;
         }
 
-        .plan.featured .plan-name { color: var(--navy); }
+        /* badge STJER */
+        .badge {
+            margin-top: 36px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(212, 165, 74, 0.35);
+            border-radius: 100px;
+            padding: 10px 26px;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 400;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            color: rgba(212, 165, 74, 0.75);
+        }
 
-        .plan-creditos {
+        .badge-dot {
+            width: 5px;
+            height: 5px;
+            background: #d4a54a;
+            border-radius: 50%;
+            opacity: 0.7;
+        }
+
+        /* CTA */
+        .cta-wrap {
+            margin-top: 72px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .cta-label {
             font-family: 'Inter', sans-serif;
             font-size: 14px;
-            color: var(--cream);
-            opacity: 0.75;
+            font-weight: 400;
+            letter-spacing: 3px;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
-            margin-bottom: 8px;
+            color: rgba(245, 241, 232, 0.35);
         }
 
-        .plan.featured .plan-creditos { color: var(--navy-900); opacity: 0.85; }
-
-        .plan-precio {
+        .cta-url {
             font-family: 'Cormorant Garamond', serif;
-            font-weight: 700;
-            font-size: 38px;
-            color: var(--cream);
+            font-style: italic;
+            font-weight: 600;
+            font-size: 62px;
+            letter-spacing: -0.5px;
+            color: #d4a54a;
             line-height: 1;
+
+            /* subrayado dorado animable */
+            border-bottom: 2px solid rgba(212, 165, 74, 0.4);
+            padding-bottom: 6px;
         }
 
-        .plan.featured .plan-precio { color: var(--navy); }
-
-        .plan-moneda {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            color: var(--gold);
-            letter-spacing: 1.5px;
-            margin-top: 4px;
-        }
-
-        .plan.featured .plan-moneda { color: var(--navy-900); opacity: 0.7; }
-
-        .planes-caption {
+        /* precio hint */
+        .precio-hint {
+            margin-top: 18px;
+            font-family: 'Inter', sans-serif;
             font-size: 17px;
-            color: var(--cream);
-            opacity: 0.7;
-            font-style: italic;
-        }
-
-        /* ───────── CTA / FOOTER ───────── */
-        .cta {
-            background: linear-gradient(180deg, var(--navy-800) 0%, var(--navy-900) 100%);
-            color: var(--cream);
-            padding: 36px 64px 32px;
-            text-align: center;
-            border-top: 3px solid var(--gold);
-            margin-top: auto;
-        }
-
-        .cta-line {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 42px;
-            font-weight: 500;
-            color: var(--cream);
-            line-height: 1.1;
-        }
-
-        .cta-line .url {
-            color: var(--gold);
-            font-weight: 700;
-            font-style: italic;
-        }
-
-        .cta-foot {
-            margin-top: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
-            color: var(--gold);
-            letter-spacing: 2.5px;
-            text-transform: uppercase;
-            opacity: 0.85;
+            font-weight: 300;
+            color: rgba(245, 241, 232, 0.38);
+            letter-spacing: 0.5px;
         }
     </style>
 </head>
 <body>
-
 <div class="flyer">
+    <!-- marcos de esquina -->
+    <div class="frame"></div>
 
-    <!-- HEADER -->
-    <header class="header">
-        <div class="logo">Foja<span class="dot">.</span></div>
-        <div class="eyebrow">
-            Para abogados
-            <span class="small">Entre Ríos</span>
+    <div class="content">
+
+        <div class="logo">Foja</div>
+
+        <div class="divider">
+            <div class="divider-line"></div>
+            <div class="divider-diamond"></div>
+            <div class="divider-line"></div>
         </div>
-    </header>
 
-    <!-- HERO -->
-    <section class="hero">
-        <h1>
-            Todas las fojas.
-            <span class="accent">Un solo PDF.</span>
+        <h1 class="headline">
+            <strong>Todas las fojas.</strong>
+            <em>Un solo PDF.</em>
         </h1>
-        <p>Descargá expedientes completos de la Mesa Virtual del STJER en minutos, no en horas.</p>
-        <div class="stjer">⎯ Mesa Virtual · Poder Judicial Entre Ríos ⎯</div>
-    </section>
 
-    <!-- BENEFICIOS -->
-    <section class="benefits">
-        <div class="benefit">
-            <i class="bi bi-lightning-charge-fill"></i>
-            <div class="benefit-text">
-                <h3>Descarga automática</h3>
-                <p>Foja se encarga de cada adjunto del expediente. No abrís archivo por archivo.</p>
-            </div>
+        <div class="divider2 divider">
+            <div class="divider-line"></div>
+            <div class="divider-diamond"></div>
+            <div class="divider-line"></div>
         </div>
-        <div class="benefit">
-            <i class="bi bi-file-earmark-pdf-fill"></i>
-            <div class="benefit-text">
-                <h3>PDF cronológico</h3>
-                <p>Todo el expediente termina en un único archivo, ordenado del más antiguo al más nuevo.</p>
-            </div>
-        </div>
-        <div class="benefit">
-            <i class="bi bi-shield-lock-fill"></i>
-            <div class="benefit-text">
-                <h3>Tu contraseña no se guarda</h3>
-                <p>Sesión cifrada mientras dura la descarga. Vos ingresás tu 2FA.</p>
-            </div>
-        </div>
-        <div class="benefit">
-            <i class="bi bi-credit-card-2-front-fill"></i>
-            <div class="benefit-text">
-                <h3>Sin cuotas mensuales</h3>
-                <p>Comprás créditos cuando los necesités. No pagás meses sin usar.</p>
-            </div>
-        </div>
-    </section>
 
-    <!-- PLANES -->
-    <section class="planes">
-        <div class="planes-eyebrow">Planes y créditos</div>
-        <div class="planes-grid">
-            <div class="plan">
-                <div class="plan-name">Individual</div>
-                <div class="plan-creditos">1 crédito</div>
-                <div class="plan-precio">$3.000</div>
-                <div class="plan-moneda">ARS</div>
-            </div>
-            <div class="plan featured">
-                <div class="plan-name">Estudio</div>
-                <div class="plan-creditos">10 créditos</div>
-                <div class="plan-precio">$24.000</div>
-                <div class="plan-moneda">Ahorrás $6.000</div>
-            </div>
-            <div class="plan">
-                <div class="plan-name">Matrícula</div>
-                <div class="plan-creditos">30 créditos</div>
-                <div class="plan-precio">$63.000</div>
-                <div class="plan-moneda">Ahorrás $27.000</div>
-            </div>
-        </div>
-        <div class="planes-caption">Créditos sin vencimiento. Pagás solo cuando descargás.</div>
-    </section>
+        <p class="subtitle">
+            Descargá expedientes completos de la Mesa Virtual<br>
+            del STJER en minutos, no en horas.
+        </p>
 
-    <!-- CTA -->
-    <section class="cta">
-        <div class="cta-line">
-            Probalo en <span class="url">foja.com.ar</span>
+        <div class="badge">
+            <span class="badge-dot"></span>
+            Poder Judicial · Entre Ríos
+            <span class="badge-dot"></span>
         </div>
-        <div class="cta-foot">⎯ Hecho para abogados de Entre Ríos ⎯</div>
-    </section>
 
+        <div class="cta-wrap">
+            <span class="cta-label">Accedé en</span>
+            <span class="cta-url">foja.com.ar</span>
+            <span class="precio-hint">Desde $3.000 · Sin cuota mensual</span>
+        </div>
+
+    </div>
 </div>
-
 </body>
 </html>
