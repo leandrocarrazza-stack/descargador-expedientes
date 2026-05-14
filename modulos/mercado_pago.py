@@ -8,6 +8,7 @@ import os
 import hmac
 import hashlib
 import logging
+import uuid
 from typing import Dict, Any
 from dotenv import load_dotenv
 import requests
@@ -106,7 +107,7 @@ def crear_orden_pago(
             "pending": pending_url or MP_PENDING_URL,
         },
         "auto_return": "approved",  # Redirige automáticamente solo si el pago fue aprobado
-        "external_reference": f"user_{user_id}_plan_{plan}",
+        "external_reference": f"user_{user_id}_plan_{plan}_{uuid.uuid4().hex[:8]}",
         "statement_descriptor": "Descargador Expedientes",
     }
 
