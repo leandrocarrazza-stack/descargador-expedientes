@@ -28,7 +28,10 @@ def step(name, duration_s, lo, hi, intensity=Intensity.ACTIVE, notes=None):
         s.duration_type = WorkoutStepDuration.TIME
         s.duration_time = duration_s
     s.target_type = WorkoutStepTarget.HEART_RATE
+    s.target_hr_zone = 0
     s.target_value = 0
+    s.custom_target_heart_rate_low = hr(lo)
+    s.custom_target_heart_rate_high = hr(hi)
     s.custom_target_value_low = hr(lo)
     s.custom_target_value_high = hr(hi)
     if notes:
@@ -42,7 +45,10 @@ def rest(name, duration_s, lo=95, hi=125):
     s.duration_type = WorkoutStepDuration.TIME
     s.duration_time = duration_s
     s.target_type = WorkoutStepTarget.HEART_RATE
+    s.target_hr_zone = 0
     s.target_value = 0
+    s.custom_target_heart_rate_low = hr(lo)
+    s.custom_target_heart_rate_high = hr(hi)
     s.custom_target_value_low = hr(lo)
     s.custom_target_value_high = hr(hi)
     return s
@@ -51,8 +57,9 @@ def build(filename, wkt_name, steps):
     builder = FitFileBuilder(auto_define=True)
     fid = FileIdMessage()
     fid.type = FileType.WORKOUT
-    fid.manufacturer = 255
-    fid.product = 0
+    fid.manufacturer = 1  # Garmin
+    fid.product = 65534
+    fid.number = 0
     fid.time_created = round(time.time() * 1000)
     fid.serial_number = 0x12345678
     builder.add(fid)
