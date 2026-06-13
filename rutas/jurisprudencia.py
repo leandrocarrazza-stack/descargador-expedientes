@@ -15,10 +15,12 @@ import io
 import json
 import zipfile
 from datetime import datetime
+from functools import wraps
 from flask import (
     Blueprint, render_template, request, jsonify,
     current_app, session, redirect, url_for, send_file
 )
+from flask_login import login_required, current_user
 from modulos.extensions import limiter, csrf
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,16 @@ jurisprudencia_bp = Blueprint(
     url_prefix='/jurisprudencia',
     template_folder='../templates/jurisprudencia'
 )
+
+
+def _requiere_admin(f):
+    """Decorador: exige usuario autenticado y con is_admin=True."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            return render_template('error.html', mensaje='Acceso denegado'), 403
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -47,7 +59,7 @@ def chat_main():
 
 @jurisprudencia_bp.route('/chat', methods=['POST'])
 @csrf.exempt
-@limiter.limit("5 per minute; 50 per hour")
+@limiter.limit("3 per minute; 15 per hour")
 def chat_api():
     """
     Endpoint de chat conversacional.
@@ -73,6 +85,8 @@ def chat_api():
         mensaje = data.get('mensaje', '').strip()
         if not mensaje:
             return jsonify({'error': 'Mensaje vacío'}), 400
+        if len(mensaje) > 2000:
+            return jsonify({'error': 'Mensaje demasiado largo (máx. 2000 caracteres)'}), 400
 
         # Recuperar historial de sesión
         historial = session.get('jur_historial', [])
@@ -262,6 +276,8 @@ exportado: {datetime.utcnow().strftime('%Y-%m-%d')}
 # ═══════════════════════════════════════════════════════════════════════════
 
 @jurisprudencia_bp.route('/admin', methods=['GET'])
+@login_required
+@_requiere_admin
 def admin_panel():
     """Panel de administración de jurisprudencia."""
     return render_template('admin.html')
@@ -272,6 +288,8 @@ def admin_panel():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @jurisprudencia_bp.route('/admin/stats', methods=['GET'])
+@login_required
+@_requiere_admin
 def admin_stats():
     """Estadísticas del sistema de jurisprudencia."""
     try:
@@ -315,6 +333,8 @@ def admin_stats():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @jurisprudencia_bp.route('/admin/descargar-ahora', methods=['POST'])
+@login_required
+@_requiere_admin
 @csrf.exempt
 def admin_descargar_ahora():
     """Trigger manual para descargar emails de Gmail."""
@@ -341,6 +361,8 @@ def admin_descargar_ahora():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @jurisprudencia_bp.route('/admin/procesar-pdfs', methods=['POST'])
+@login_required
+@_requiere_admin
 @csrf.exempt
 def admin_procesar_pdfs():
     """Trigger manual para extraer texto de PDFs pendientes."""
@@ -367,6 +389,8 @@ def admin_procesar_pdfs():
 # ═══════════════════════════════════════════════════════════════════════════
 
 @jurisprudencia_bp.route('/admin/gmail-oauth-init', methods=['GET'])
+@login_required
+@_requiere_admin
 def gmail_oauth_init():
     """Inicia el flujo OAuth2 de Gmail."""
     try:
@@ -425,6 +449,13 @@ def gmail_oauth_callback():
 
         if not code:
             return jsonify({'error': 'Código OAuth2 faltante'}), 400
+
+        # Validar el state para prevenir CSRF en el flujo OAuth
+        expected_state = session.get('oauth_state')
+        if not expected_state or state != expected_state:
+            logger.warning("[SECURITY] OAuth callback con state inválido — posible CSRF")
+            return jsonify({'error': 'Estado OAuth inválido'}), 400
+        session.pop('oauth_state', None)
 
         flow = Flow.from_client_config(
             {

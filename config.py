@@ -186,30 +186,12 @@ MAIL_PASSWORD = os.getenv('MAIL_PASSWORD', '')
 MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', MAIL_USERNAME)
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  CONFIGURACIÓN DE CELERY (tareas asincrónicas)
+#  JURISPRUDENCIA - STJER (Buscador de Fallos) — MÓDULO EN DESARROLLO
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Redis URL para Celery broker
-CELERY_BROKER_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-
-# Configuración de Celery
-CELERY_POOL = 'threads'  # 'threads', 'solo', o 'processes'
-CELERY_CONFIG = {
-    'broker_url': CELERY_BROKER_URL,
-    'result_backend': CELERY_RESULT_BACKEND,
-    'task_serializer': 'json',
-    'accept_content': ['json'],
-    'result_serializer': 'json',
-    'timezone': 'America/Argentina/Buenos_Aires',
-    'enable_utc': True,
-    'task_track_started': True,
-    'task_time_limit': 30 * 60,  # 30 minutos
-}
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  JURISPRUDENCIA - STJER (Buscador de Fallos)
-# ═══════════════════════════════════════════════════════════════════════════
+# Feature flag: False en producción hasta que el módulo esté listo.
+# Cambiarlo a True SOLO en desarrollo local o cuando el módulo esté completo.
+JURISPRUDENCIA_ENABLED = os.getenv('JURISPRUDENCIA_ENABLED', 'false').lower() == 'true'
 
 # Directorios de jurisprudencia
 JURISPRUDENCIA_DIR = PROJECT_DIR / "data" / "jurisprudencia"
@@ -227,8 +209,8 @@ TESAURO = None
 TESAURO_COMPACTO = None
 
 # Gmail OAuth2 (para descargar adjuntos)
-GMAIL_TARGET_ACCOUNT = os.getenv('GMAIL_TARGET_ACCOUNT', 'leofard@gmail.com')
-GMAIL_SOURCE_EMAIL = os.getenv('GMAIL_SOURCE_EMAIL', 'scamaragualeguaychu@gmail.com')
+GMAIL_TARGET_ACCOUNT = os.getenv('GMAIL_TARGET_ACCOUNT', '')
+GMAIL_SOURCE_EMAIL = os.getenv('GMAIL_SOURCE_EMAIL', '')
 GMAIL_CLIENT_ID = os.getenv('GMAIL_CLIENT_ID', '')
 GMAIL_CLIENT_SECRET = os.getenv('GMAIL_CLIENT_SECRET', '')
 GMAIL_OAUTH_REDIRECT_URI = os.getenv(

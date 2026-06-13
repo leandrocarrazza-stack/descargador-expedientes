@@ -187,16 +187,16 @@ class SesionUsuarioMV(db.Model):
     # Usuario de Mesa Virtual (para mostrarlo en la UI, no es sensible)
     mv_usuario = db.Column(db.String(255), nullable=True)
 
-    def set_cookies(self, cookies_dict: dict):
+    def set_cookies(self, cookies_data) -> None:
         """Serializa y cifra las cookies antes de guardar."""
-        plaintext = json.dumps(cookies_dict).encode('utf-8')
+        plaintext = json.dumps(cookies_data).encode('utf-8')
         f = _get_fernet()
         if f:
             self.cookies_json = f.encrypt(plaintext).decode('utf-8')
         else:
             self.cookies_json = plaintext.decode('utf-8')
 
-    def get_cookies(self) -> dict:
+    def get_cookies(self):
         """Descifra y deserializa las cookies."""
         f = _get_fernet()
         raw = self.cookies_json.encode('utf-8')

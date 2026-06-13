@@ -21,7 +21,6 @@ Importante:
     - Los drivers inactivos más de 5 minutos se limpian automáticamente
 """
 
-import json
 import logging
 import time
 import uuid
@@ -398,17 +397,13 @@ def guardar_sesion_usuario(user_id: int, cookies: list, mv_usuario: str = None) 
 
         if sesion:
             # Actualizar la existente
-            sesion.cookies_json = json.dumps(cookies)
-            sesion.actualizado_en = datetime.utcnow()
+            sesion.set_cookies(cookies)
             if mv_usuario:
                 sesion.mv_usuario = mv_usuario
         else:
             # Crear nueva
-            sesion = SesionUsuarioMV(
-                user_id=user_id,
-                cookies_json=json.dumps(cookies),
-                mv_usuario=mv_usuario
-            )
+            sesion = SesionUsuarioMV(user_id=user_id, mv_usuario=mv_usuario)
+            sesion.set_cookies(cookies)
             db.session.add(sesion)
 
         db.session.commit()
@@ -432,7 +427,7 @@ def obtener_cookies_usuario(user_id: int):
 
         sesion = SesionUsuarioMV.query.filter_by(user_id=user_id).first()
         if sesion:
-            return json.loads(sesion.cookies_json)
+            return sesion.get_cookies()
         return None
 
     except Exception as e:

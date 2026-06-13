@@ -8,7 +8,6 @@ Selenium maneja automáticamente todas las cookies del navegador.
 
 import requests
 import json
-import pickle
 import os
 from pathlib import Path
 from datetime import datetime
@@ -40,7 +39,7 @@ class ClienteSelenium:
         # Ruta de la sesión guardada. Configurable por env var para que en Docker
         # apunte a un volumen persistente (si no, se pierde al reiniciar el container)
         ruta_sesion = os.environ.get('MESA_VIRTUAL_SESSION_PATH')
-        self.archivo_sesion = Path(ruta_sesion) if ruta_sesion else Path.home() / ".mesa_virtual_sesion.pkl"
+        self.archivo_sesion = Path(ruta_sesion) if ruta_sesion else Path.home() / ".mesa_virtual_sesion.json"
 
     def abrir_navegador_y_loguearse(self, timeout_segundos=600):
         """Abre el navegador y espera a que el usuario se loguee.
@@ -104,8 +103,8 @@ class ClienteSelenium:
             # Crear directorio si no existe
             self.archivo_sesion.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(self.archivo_sesion, 'wb') as f:
-                pickle.dump(cookies, f)
+            with open(self.archivo_sesion, 'w', encoding='utf-8') as f:
+                json.dump(cookies, f)
 
             # Verificar que se guardó correctamente
             if self.archivo_sesion.exists():
@@ -139,8 +138,8 @@ class ClienteSelenium:
             time.sleep(2)
 
             # Cargar las cookies
-            with open(self.archivo_sesion, 'rb') as f:
-                cookies = pickle.load(f)
+            with open(self.archivo_sesion, 'r', encoding='utf-8') as f:
+                cookies = json.load(f)
 
             print(f"[COOKIES] Cargando {len(cookies)} cookie(s)...")
 

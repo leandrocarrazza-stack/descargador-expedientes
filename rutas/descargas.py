@@ -172,8 +172,8 @@ def limpiar_pdfs_antiguos():
                 try:
                     pdf.unlink()
                     eliminados += 1
-                except Exception:
-                    pass  # Archivo en uso o sin permisos, ignorar
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] No se pudo eliminar {pdf.name}: {e}")
         if eliminados > 0:
             logger.info(f"[CLEANUP] {eliminados} PDF(s) antiguos eliminados de output/")
     except Exception as e:
@@ -192,8 +192,8 @@ def _borrar_diferido(ruta: str, delay: int = 10):
             if os.path.exists(ruta):
                 os.unlink(ruta)
                 logger.info(f"[CLEANUP] PDF borrado tras descarga: {Path(ruta).name}")
-        except Exception:
-            pass  # No es crítico si no se borra ahora — el cleanup de startup lo atrapa
+        except Exception as e:
+            logger.warning(f"[CLEANUP] No se pudo borrar PDF diferido {Path(ruta).name}: {e}")
     t = threading.Thread(target=borrar, daemon=True)
     t.start()
 

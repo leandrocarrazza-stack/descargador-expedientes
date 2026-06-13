@@ -31,8 +31,6 @@ from flask_cors import CORS
 import config
 from modulos.database import db, migrate
 from modulos.models import User
-# Celery está deprecated - usamos threading en lugar de Celery para descargas
-# from modulos.celery_app import init_celery_with_app
 from modulos.extensions import limiter, csrf, mail
 
 # Logger simple sin módulo externo
@@ -93,14 +91,6 @@ def crear_app(config_obj=None):
     mail.init_app(app)
 
     # ═════════════════════════════════════════════════════════════════════
-    #  NOTA: Celery está deprecated
-    # ═════════════════════════════════════════════════════════════════════
-    # Usamos threading en lugar de Celery para descargas asincrónicas.
-    # Los archivos de Celery se mantienen para compatibilidad con código antiguo.
-    # init_celery_with_app(app)  ← Comentado - no es necesario
-    logger.info("[OK] Tareas asincrónicas via threading (Celery deprecated)")
-
-    # ═════════════════════════════════════════════════════════════════════
     #  CREAR TABLAS Y CONTEXTO DE APLICACIÓN
     # ═════════════════════════════════════════════════════════════════════
 
@@ -121,8 +111,9 @@ def crear_app(config_obj=None):
     #  CARGAR TESAURO DE JURISPRUDENCIA
     # ═════════════════════════════════════════════════════════════════════
 
-    from modulos.jurisprudencia.tesauro import cargar_tesauros
-    cargar_tesauros(app)
+    if config.JURISPRUDENCIA_ENABLED:
+        from modulos.jurisprudencia.tesauro import cargar_tesauros
+        cargar_tesauros(app)
 
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
@@ -133,16 +124,19 @@ def crear_app(config_obj=None):
     from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
-    from rutas.jurisprudencia import jurisprudencia_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(contacto_bp)
-    app.register_blueprint(jurisprudencia_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, jurisprudencia)")
+    if config.JURISPRUDENCIA_ENABLED:
+        from rutas.jurisprudencia import jurisprudencia_bp
+        app.register_blueprint(jurisprudencia_bp)
+        logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, jurisprudencia)")
+    else:
+        logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin) — jurisprudencia deshabilitada")
 
     # Limpiar PDFs antiguos del disco al iniciar la app
     # Evita que el disco del servidor se llene con descargas viejas
