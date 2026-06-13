@@ -146,6 +146,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 log.info(f"[JOB {job_id[:8]}] Despertando long-polling")
                 _job_events[job_id].set()
 
+
 logger = logging.getLogger(__name__)
 
 # Crear blueprint

@@ -18,7 +18,7 @@ from typing import List, Optional
 
 from modulos.logger import crear_logger
 from modulos.excepciones import ErrorDescarga
-from modulos.modelos import Archivo, Movimiento
+from modulos.dataclasses_expediente import Archivo, Movimiento
 
 logger = crear_logger(__name__)
 

@@ -10,7 +10,7 @@ Funciones:
 
 import logging
 from functools import wraps
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 
 from modulos.database import db
@@ -88,6 +88,3 @@ def otorgar_creditos():
         'mensaje': f'+{creditos} créditos otorgados a {email}',
         'creditos_nuevos': usuario.creditos_disponibles
     })
-
-
-

@@ -167,7 +167,7 @@ def ver_fallo(fallo_id):
     """Texto completo de un fallo."""
     try:
         from modulos.database import db
-        from modulos.models import Fallo, FalloTexto
+        from modulos.models import Fallo
 
         fallo = db.session.get(Fallo, fallo_id)
         if not fallo:
@@ -212,7 +212,6 @@ def export_obsidian():
     <texto completo>
     """
     try:
-        from modulos.database import db
         from modulos.models import Fallo
 
         fallos_indexados = Fallo.query.filter_by(estado_extraccion='indexado').all()
@@ -293,8 +292,7 @@ def admin_panel():
 def admin_stats():
     """Estadísticas del sistema de jurisprudencia."""
     try:
-        from modulos.database import db
-        from modulos.models import Fallo, FalloTexto, EmailFallo, GmailOAuthToken
+        from modulos.models import Fallo, EmailFallo, GmailOAuthToken
         import config
 
         total_fallos = Fallo.query.count()

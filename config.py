@@ -56,7 +56,14 @@ SESSION_REFRESH_EACH_REQUEST = True  # Refrescar expiry en cada request
 # Desarrollo: SQLite (local)
 # Producción: PostgreSQL (Render)
 if FLASK_ENV == 'testing':
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'  # BD en memoria para testing
+    from sqlalchemy.pool import StaticPool
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    # StaticPool: todas las conexiones comparten la misma BD en memoria.
+    # Sin esto, cada conexión nueva (entre requests) obtiene una BD vacía.
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'connect_args': {'check_same_thread': False},
+        'poolclass': StaticPool,
+    }
 elif FLASK_ENV == 'production':
     DATABASE_URL = os.getenv('DATABASE_URL')
     if not DATABASE_URL:

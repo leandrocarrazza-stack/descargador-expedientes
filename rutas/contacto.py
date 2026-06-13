@@ -6,7 +6,7 @@ POST /contacto  → Guarda el mensaje y envía email al admin
 """
 
 import logging
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import current_user
 from flask_mail import Message
 

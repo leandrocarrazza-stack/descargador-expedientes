@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from flask import Flask, render_template
-from flask_login import LoginManager, UserMixin
+from flask_login import LoginManager
 from flask_cors import CORS
 
 import config

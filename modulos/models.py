@@ -23,7 +23,7 @@ Uso:
 
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from cryptography.fernet import Fernet, InvalidToken
 from flask_login import UserMixin
@@ -267,7 +267,7 @@ class CompraCreditos(db.Model):
 
     # Detalles de la compra
     creditos_comprados = db.Column(db.Integer, nullable=False)
-    monto_pagado = db.Column(db.Float, nullable=False)  # En USD/ARS
+    monto_pagado = db.Column(db.Numeric(10, 2), nullable=False)
     plan = db.Column(db.String(50), nullable=False)  # free, pro, premium
 
     # Estado

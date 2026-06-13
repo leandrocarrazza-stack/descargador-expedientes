@@ -8,11 +8,11 @@ Modelo: Usuario compra créditos en ARS, cada descarga cuesta $3000 ARS
 
 import os
 import logging
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, url_for
 from flask_login import login_required, current_user
 from dotenv import load_dotenv
 
-from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, validar_firma_webhook, MercadoPagoError
+from modulos.mercado_pago import crear_orden_pago, obtener_pago, validar_firma_webhook, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
 from modulos.extensions import limiter, csrf
@@ -121,7 +121,7 @@ def crear_orden():
             'success': True,
             'checkout_url': orden.get('checkout_url'),
             'orden_id': orden['id'],
-            'mensaje': f'Orden creada. Redirigiendo a Mercado Pago...'
+            'mensaje': 'Orden creada. Redirigiendo a Mercado Pago...'
         }), 200
 
     except MercadoPagoError as e:
@@ -228,7 +228,7 @@ def _confirmar_compra(compra: CompraCreditos) -> None:
     compra.completado_en = datetime.utcnow()
     db.session.commit()
 
-    usuario = User.query.get(compra.user_id)
+    usuario = db.session.get(User, compra.user_id)
     if usuario:
         usuario.creditos_disponibles += compra.creditos_comprados
         db.session.commit()
@@ -271,7 +271,7 @@ def pago_confirmado():
 
             if compra:
                 _confirmar_compra(compra)
-                logger.info(f"Créditos acreditados via redirect (antes que el webhook)")
+                logger.info("Créditos acreditados via redirect (antes que el webhook)")
             else:
                 # Ya fue procesado por el webhook, buscar la compra completada
                 compra = CompraCreditos.query.filter_by(

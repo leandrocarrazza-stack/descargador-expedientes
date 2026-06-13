@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # Instalar solo dependencias que no requieren servicios externos (sin libpq-dev nativa)
+          pip install \
+            flask flask-sqlalchemy flask-migrate flask-login flask-wtf flask-cors \
+            flask-limiter flask-mail werkzeug sqlalchemy \
+            python-dotenv email-validator cryptography \
+            requests \
+            anthropic \
+            python-dateutil \
+            pytest pytest-cov
+
+      - name: Lint (flake8 — módulos core)
+        run: |
+          pip install flake8
+          flake8 rutas/ modulos/auth.py modulos/models.py modulos/pipeline.py \
+            modulos/mercado_pago.py modulos/extensions.py servidor.py config.py \
+            --max-line-length=120 \
+            --ignore=E402,E501,W503,E128,E124
+
+      - name: Run unit tests
+        env:
+          FLASK_ENV: testing
+          SECRET_KEY: ci-secret-not-for-production
+        run: |
+          pytest tests/ --ignore=tests/integration -v --tb=short
