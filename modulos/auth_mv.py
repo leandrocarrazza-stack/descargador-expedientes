@@ -28,6 +28,7 @@ import uuid
 from datetime import datetime
 
 from selenium import webdriver
+from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -38,7 +39,14 @@ logger = logging.getLogger(__name__)
 
 URL_MESA_VIRTUAL = "https://mesavirtual.jusentrerios.gov.ar/"
 TIMEOUT_LOGIN = 30        # segundos para que cargue cada página
-TIMEOUT_SESION_RELAY = 300  # segundos que guardamos el driver en memoria (5 min)
+TIMEOUT_SESION_RELAY = 180  # segundos que guardamos el driver en memoria (3 min)
+# Render starter (512 MB) ocasionalmente no tiene RAM libre en el instante exacto
+# en que Chrome intenta arrancar (otro hilo descargando/convirtiendo PDFs), lo que
+# produce "session not created: chrome not reachable". Es transitorio: reintentar
+# con una pequeña espera (para que el otro proceso libere memoria) casi siempre
+# resuelve el problema sin intervención del usuario.
+REINTENTOS_CHROME = 3
+ESPERA_ENTRE_REINTENTOS = 4  # segundos
 
 # ── Almacén en memoria de drivers en espera de 2FA ────────────────────────────
 # Clave: session_id (string único por intento de login)
@@ -84,7 +92,21 @@ def _crear_driver_headless():
     options.add_argument('--js-flags=--max-old-space-size=256')  # Limitar heap de JS a 256 MB
 
     # Sin webdriver_manager: Selenium Manager elige el driver correcto automáticamente
-    return webdriver.Chrome(options=options)
+    ultimo_error = None
+    for intento in range(1, REINTENTOS_CHROME + 1):
+        try:
+            return webdriver.Chrome(options=options)
+        except WebDriverException as e:
+            ultimo_error = e
+            if intento < REINTENTOS_CHROME:
+                logger.warning(
+                    f"[AUTH_MV] Chrome no arrancó (intento {intento}/{REINTENTOS_CHROME}): {e}. "
+                    f"Reintentando en {ESPERA_ENTRE_REINTENTOS}s..."
+                )
+                time.sleep(ESPERA_ENTRE_REINTENTOS)
+            else:
+                logger.error(f"[AUTH_MV] Chrome no pudo arrancar tras {REINTENTOS_CHROME} intentos: {e}")
+    raise ultimo_error
 
 
 def _capturar_todas_las_cookies(driver):
@@ -218,7 +240,12 @@ def iniciar_login_mv(mv_usuario: str, mv_password: str) -> dict:
                 driver.quit()
             except Exception:
                 pass
-        return {'estado': 'error', 'mensaje': f'Error al conectar con Mesa Virtual: {str(e)}'}
+        if isinstance(e, WebDriverException):
+            # No mostrar el stacktrace crudo de Selenium al usuario
+            mensaje = 'El servidor está ocupado en este momento. Esperá unos segundos e intentá de nuevo.'
+        else:
+            mensaje = f'Error al conectar con Mesa Virtual: {str(e)}'
+        return {'estado': 'error', 'mensaje': mensaje}
 
 
 def completar_login_mv(session_id: str, codigo_2fa: str) -> dict:
