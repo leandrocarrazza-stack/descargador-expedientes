@@ -9,8 +9,13 @@
 # Estas dependencias son para la COSECHA (traer los datos del sitio).
 
 # Parseo de HTML. beautifulsoup4 ya esta en requirements.txt; lxml es el
-# parser rapido que usa por debajo.
-lxml==5.2.2
+# parser rapido que usa por debajo. Es OPCIONAL: si no esta instalado,
+# parser.py cae solo al parser de la biblioteca estandar (mas lento, pero
+# funciona igual). No pinees una version vieja de lxml: por debajo de la
+# 5.3.0 no hay wheels precompilados para Python 3.13 en Windows, y sin ellos
+# pip intenta compilarlo desde cero (necesita Visual Studio + libxml2, que
+# casi nadie tiene instalado).
+lxml>=5.3.0
 beautifulsoup4==4.12.2
 
 # Cliente HTTP de las ramas A/B (el camino rapido) y descarga de PDFs.
