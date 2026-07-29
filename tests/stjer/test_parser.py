@@ -241,6 +241,46 @@ def test_el_contexto_ubica_los_hijos_en_su_rama():
     }
 
 
+def test_no_confunde_los_dropdowns_de_filtros_con_el_tesauro():
+    # Caso real observado en produccion: el pedido de "arbol_tesauro" no
+    # llego al panel real y el sitio devolvio la pagina de busqueda comun.
+    # Antes del fix, esto barria TODOS los <option> de la pagina (Fuero,
+    # Agregar Filtro, operadores) como si fueran materias juridicas.
+    nodos = P.parsear_arbol_tesauro(F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML)
+    assert nodos == [], (
+        "sin un contenedor de tesauro identificable, no hay que inventar "
+        "nodos barriendo dropdowns ajenos"
+    )
+
+
+def test_parece_tesauro_valido_detecta_el_menu_equivocado():
+    nodos = P.parsear_arbol_tesauro(
+        F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML.replace(
+            '<div id="panel_tesauro">', '<div id="panel_tesauro"><select name="x">'
+        ).replace("</body>", "</select></body>")
+    )
+    # Se fuerza un caso con contenido mezclado para probar el umbral, aun si
+    # el escaneo por contenedor ya evita la mayoria de estos casos en la
+    # practica (ver test de arriba).
+    es_valido, motivo = P.parece_tesauro_valido(
+        [P.NodoVoz(materia=e, nivel=0) for e in
+         ["contiene", "es igual a", "comienza con", "Sumario", "DERECHO CIVIL"]]
+    )
+    assert es_valido is False
+    assert "vocabulario de filtros" in motivo
+
+
+def test_parece_tesauro_valido_acepta_un_tesauro_real():
+    nodos = P.parsear_arbol_tesauro(F.TESAURO_UL_HTML)
+    es_valido, motivo = P.parece_tesauro_valido(nodos)
+    assert es_valido is True and motivo == ""
+
+
+def test_parece_tesauro_valido_con_lista_vacia():
+    es_valido, motivo = P.parece_tesauro_valido([])
+    assert es_valido is False and "ningun nodo" in motivo
+
+
 # ─── perfil ajustable ──────────────────────────────────────────────────────
 
 def test_el_perfil_se_puede_ajustar_sin_tocar_codigo(tmp_path):

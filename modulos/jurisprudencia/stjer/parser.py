@@ -734,17 +734,27 @@ def parsear_arbol_tesauro(cuerpo: str, materia: str = "", voz_principal: str = "
             vistos.add(nodo.ruta)
             nodos.append(nodo)
 
-    # Forma 2: <option> de un desplegable
+    # Forma 2: <option> de un desplegable.
+    #
+    # OJO: si se barren TODOS los <option> de la pagina sin acotar a un
+    # contenedor, se mezclan con los de menus que no tienen nada que ver
+    # (Fuero, "Agregar Filtro", operadores de busqueda) — se observo en la
+    # practica: sin el contenedor, este paso "encontraba" un tesauro con
+    # "Fuero Civil y Comercial" y "contiene" como si fueran voces juridicas.
+    # Por eso, si no se puede ubicar un contenedor razonable, se prefiere no
+    # devolver nada antes que devolver basura silenciosa.
     if not nodos:
-        for opt in sopa.find_all("option"):
-            etiqueta = colapsar(opt.get_text(" "))
-            valor = colapsar(opt.get("value") or "")
-            if not etiqueta or valor in ("", "0", "-1"):
-                continue
-            nodo = _nodo_en_nivel(etiqueta, nivel_base, materia, voz_principal, opt)
-            if nodo and nodo.ruta not in vistos:
-                vistos.add(nodo.ruta)
-                nodos.append(nodo)
+        contenedor = _contenedor_tesauro(sopa)
+        if contenedor is not None:
+            for opt in contenedor.find_all("option"):
+                etiqueta = colapsar(opt.get_text(" "))
+                valor = colapsar(opt.get("value") or "")
+                if not etiqueta or valor in ("", "0", "-1"):
+                    continue
+                nodo = _nodo_en_nivel(etiqueta, nivel_base, materia, voz_principal, opt)
+                if nodo and nodo.ruta not in vistos:
+                    vistos.add(nodo.ruta)
+                    nodos.append(nodo)
 
     # Forma 3: filas de tabla con Materia / Voz Principal / Voz
     if not nodos:
@@ -790,6 +800,62 @@ def _ref_de(elemento) -> str:
         if v:
             return colapsar(str(v))
     return ""
+
+
+def _contenedor_tesauro(sopa):
+    """
+    Ubica el contenedor del panel de Tesauro, si es identificable.
+
+    Se busca por id/clase/atributos que mencionen "tesauro", o un <select>
+    cuyo name/id sugiera materia/voz juridica. Devuelve None si no hay nada
+    razonable — y en ese caso el llamador NO debe barrer todos los <option>
+    de la pagina, porque mezcla dropdowns que no tienen nada que ver.
+    """
+    for patron in (r"tesaur", r"voz.?juridic", r"arbol.?voces"):
+        candidato = sopa.find(attrs={"id": re.compile(patron, re.I)})
+        if candidato is None:
+            candidato = sopa.find(attrs={"class": re.compile(patron, re.I)})
+        if candidato is not None:
+            return candidato
+    return None
+
+
+# Vocabulario de la UI de filtros que NO es tesauro. Si lo que se cosechó se
+# parece demasiado a esto, es señal de que se barrio el menu equivocado.
+_VOCABULARIO_NO_TESAURO = frozenset(
+    normalizar_texto(t) for t in (
+        "seleccione", "comienza con", "contiene", "desde", "entre",
+        "es distinto de", "es igual a", "hasta", "no contiene", "termina con",
+        "busqueda libre", "caratula", "fecha del fallo", "nro expediente",
+        "organismos", "organismos x fuero", "otra voz", "tipo de voto",
+    )
+)
+
+
+def parece_tesauro_valido(nodos, umbral: float = 0.3) -> tuple:
+    """
+    Chequeo de cordura: ¿esto se parece a un tesauro juridico real, o a un
+    menu de filtros barrido por error?
+
+    Devuelve (es_valido, motivo). No es infalible, pero agarra exactamente el
+    caso que paso en la practica: cosechar el Fuero + "Agregar Filtro" +
+    operadores de busqueda como si fueran materias.
+    """
+    if not nodos:
+        return False, "no se encontro ningun nodo"
+
+    etiquetas = [normalizar_texto(n.voz or n.voz_principal or n.materia) for n in nodos]
+    sospechosas = sum(1 for e in etiquetas if e in _VOCABULARIO_NO_TESAURO)
+    proporcion = sospechosas / len(etiquetas)
+
+    if proporcion > umbral:
+        return False, (
+            f"{sospechosas} de {len(etiquetas)} nodos ({proporcion:.0%}) son "
+            f"vocabulario de filtros (Fuero/Agregar Filtro/operadores), no "
+            f"voces juridicas. Probablemente no se llego al panel del "
+            f"Tesauro real y se termino leyendo la pagina de busqueda comun."
+        )
+    return True, ""
 
 
 def _nodo_en_nivel(etiqueta, nivel, materia, voz_principal, elemento):

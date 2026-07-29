@@ -247,11 +247,14 @@ def cmd_tesauro(args) -> int:
         t = T.Tesauro.cargar()
 
     if not t:
-        print(
-            "\n  No hay tesauro. Cosechalo con:\n"
-            "      python -m scripts.stjer tesauro --cosechar\n",
-            file=sys.stderr,
-        )
+        if t.version.startswith("INVALIDO"):
+            print(f"\n  {t.version}\n", file=sys.stderr)
+        else:
+            print(
+                "\n  No hay tesauro. Cosechalo con:\n"
+                "      python -m scripts.stjer tesauro --cosechar\n",
+                file=sys.stderr,
+            )
         return 1
 
     print(f"\n  Tesauro v{t.version}")

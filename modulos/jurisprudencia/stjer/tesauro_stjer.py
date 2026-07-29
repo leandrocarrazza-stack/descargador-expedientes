@@ -29,7 +29,7 @@ from pathlib import Path
 
 from . import ajustes
 from .normalizacion import normalizar_texto, tokenizar
-from .parser import parsear_arbol_tesauro
+from .parser import parece_tesauro_valido, parsear_arbol_tesauro
 
 logger = logging.getLogger(__name__)
 
@@ -282,6 +282,23 @@ def cosechar_arbol(cliente, destino=None, max_nodos: int = MAX_NODOS_A_EXPANDIR)
                 "seguridad). Subilo con --max-nodos si el arbol es mas grande.",
                 max_nodos,
             )
+
+    es_valido, motivo = parece_tesauro_valido(nodos)
+    if not es_valido:
+        logger.error(
+            "Lo cosechado NO parece un tesauro juridico real: %s\n"
+            "No se guarda para no pisar un tesauro anterior con basura. "
+            "Esto suele pasar cuando el pedido no llega al panel real del "
+            "Tesauro (con --motor http) y el sitio devuelve la pagina de "
+            "busqueda comun en su lugar. Probá con --motor navegador "
+            "--visible para ver la pagina real y ajustar el selector "
+            "'panel_tesauro' en descubrimiento/selectores.json si hace "
+            "falta.",
+            motivo,
+        )
+        tesauro = Tesauro.desde_nodos([])
+        tesauro.version = f"INVALIDO: {motivo}"
+        return tesauro
 
     tesauro = Tesauro.desde_nodos(nodos)
     ruta = tesauro.guardar(destino)

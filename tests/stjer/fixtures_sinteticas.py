@@ -124,11 +124,46 @@ TESAURO_UL_HTML = """
 
 TESAURO_SELECT_HTML = """
 <html><body>
-<select name="materia">
+<div id="panel_tesauro">
+  <select name="materia">
+    <option value="">-- Seleccione --</option>
+    <option value="1">DERECHO CIVIL</option>
+    <option value="2">DERECHO PENAL</option>
+    <option value="3">DERECHOS HUMANOS</option>
+  </select>
+</div>
+</body></html>
+"""
+
+# Caso real observado en produccion: el pedido de "arbol_tesauro" no llego al
+# panel real y el sitio devolvio la pagina de busqueda comun, cuyos <option>
+# de Fuero/Agregar Filtro/operadores NO estan dentro de ningun contenedor de
+# tesauro identificable.
+PAGINA_BUSQUEDA_SIN_TESAURO_HTML = """
+<html><body>
+<select name="fuero">
   <option value="">-- Seleccione --</option>
-  <option value="1">DERECHO CIVIL</option>
-  <option value="2">DERECHO PENAL</option>
-  <option value="3">DERECHOS HUMANOS</option>
+  <option value="1">Amparos del STJER</option>
+  <option value="2">Contencioso Administrativo</option>
+  <option value="3">Fuero Civil y Comercial</option>
+  <option value="4">Fuero Laboral</option>
+  <option value="5">Fuero Penal</option>
+</select>
+<select name="agregar_filtro">
+  <option value="">-- Seleccione --</option>
+  <option value="1">Carátula</option>
+  <option value="2">Fecha del Fallo</option>
+  <option value="3">Juez/a</option>
+  <option value="4">Nro. Expediente</option>
+  <option value="5">Organismos</option>
+  <option value="6">Sumario</option>
+  <option value="7">Tipo de Voto</option>
+</select>
+<select name="operador">
+  <option value="">-- Seleccione --</option>
+  <option value="1">contiene</option>
+  <option value="2">es igual a</option>
+  <option value="3">comienza con</option>
 </select>
 </body></html>
 """
