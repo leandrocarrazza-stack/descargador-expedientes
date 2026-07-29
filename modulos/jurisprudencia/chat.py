@@ -117,7 +117,7 @@ Sé conciso y preciso. El JSON debe ser parseable."""
 
             # Llamar a Claude
             response = self.client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-sonnet-5",
                 max_tokens=500,
                 system=self.SYSTEM_PROMPT,
                 messages=messages
