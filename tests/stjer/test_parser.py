@@ -60,6 +60,46 @@ def test_una_pagina_de_resultados_no_es_captcha():
     assert P.hay_captcha(F.LISTADO_HTML) is False
 
 
+def test_la_palabra_verificacion_suelta_no_es_captcha():
+    # Caso real observado: despues de resolver el captcha correctamente, la
+    # pagina de busqueda seguia teniendo la palabra "Verificación" como
+    # titulo de seccion, sin imagen ni campo de captcha. Antes del fix esto
+    # disparaba un falso positivo que rompia el reintento.
+    html = """
+    <html><body>
+      <h3>Verificación</h3>
+      <form>
+        <select name="fuero"><option>Civil y Comercial</option></select>
+        <button>Buscar</button>
+      </form>
+    </body></html>
+    """
+    assert P.hay_captcha(html) is False
+
+
+def test_captcha_real_con_imagen_si_se_detecta():
+    html = """
+    <html><body>
+      <label>Verificación (*)</label>
+      <img src="captcha.php?id=1" alt="captcha">
+      <input name="codigo_captcha" type="text">
+    </body></html>
+    """
+    assert P.hay_captcha(html) is True
+
+
+def test_captcha_real_con_solo_el_campo_tambien_se_detecta():
+    # Por si la imagen es un data: URI sin la palabra 'captcha' en el src.
+    html = """
+    <html><body>
+      <label>Verificación (*)</label>
+      <img src="data:image/png;base64,aGVsbG8=" alt="codigo de seguridad">
+      <input name="txt_captcha" type="text">
+    </body></html>
+    """
+    assert P.hay_captcha(html) is True
+
+
 # ─── listado ───────────────────────────────────────────────────────────────
 
 def test_parsea_las_filas_del_listado():

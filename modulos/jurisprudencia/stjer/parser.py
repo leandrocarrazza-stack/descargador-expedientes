@@ -261,23 +261,41 @@ def extraer_token_ah(cuerpo: str):
     return m.group(1) if m else None
 
 
+_IMG_CAPTCHA = re.compile(r"<img\b[^>]*(?:captcha|verifica)[^>]*>", re.IGNORECASE)
+_CAMPO_CAPTCHA = re.compile(
+    r'name=["\'][^"\']*(?:captcha|codigo)[^"\']*["\']', re.IGNORECASE
+)
+
+
 def hay_captcha(cuerpo: str) -> bool:
     """
     True si la respuesta es la pared de verificacion en vez de datos.
 
     La cosecha la usa para devolver la tarea a la cola sin contarla como
     fallo: no fallo la tarea, se corto la sesion.
+
+    OJO con los falsos positivos: en sitios Toba, la etiqueta "Verificación"
+    puede quedar como titulo de seccion en el DOM aunque el desafio ya este
+    resuelto (se observo en la practica: despues de un captcha correcto, la
+    pagina de busqueda seguia disparando esto por la sola palabra suelta).
+    Por eso no alcanza con el texto: se pide ademas evidencia del desafio en
+    si — una imagen o un campo para escribir el codigo — en el HTML crudo.
     """
     if not cuerpo:
         return False
     texto = _texto_suave(_sopa(cuerpo))
     if not texto:
         return False
-    # "verificacion" sola aparece en textos legitimos; se pide que ademas no
-    # haya llegado una tabla de resultados.
+
     tiene_marcador = any(m in texto for m in PERFIL.marcadores_captcha)
+    if not tiene_marcador:
+        return False
+
     tiene_resultados = bool(re.search(PERFIL.patron_total, texto))
-    return tiene_marcador and not tiene_resultados
+    if tiene_resultados:
+        return False
+
+    return bool(_IMG_CAPTCHA.search(cuerpo) or _CAMPO_CAPTCHA.search(cuerpo))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

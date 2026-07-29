@@ -323,6 +323,19 @@ class SesionSTJER:
         except OSError:
             pass
 
+    def _guardar_diagnostico(self, motivo: str) -> None:
+        """
+        Vuelca el HTML actual a un archivo, para poder diagnosticar sin tener
+        que repetir todo el flujo del captcha.
+        """
+        ruta = ajustes.DESCUBRIMIENTO_DIR / f"diagnostico_{motivo}.html"
+        try:
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_text(self.html(), encoding="utf-8")
+            logger.warning("HTML de diagnostico guardado en %s", ruta)
+        except Exception as e:
+            logger.debug("No se pudo guardar el diagnostico: %s", e)
+
     # ── helpers de pagina ─────────────────────────────────────────────────
 
     @property
@@ -418,7 +431,24 @@ class SesionSTJER:
         Reintentar es barato: un codigo errado solo hace que se dibuje otro.
         """
         for intento in range(1, intentos + 1):
-            png = self.imagen_captcha()
+            try:
+                png = self.imagen_captcha()
+            except ErrorSesion:
+                # No hay imagen para reintentar. Lo mas probable es que el
+                # intento anterior en realidad SI funciono (la pagina navego
+                # a la busqueda real) y `hay_captcha()` disparo por error en
+                # el chequeo previo. Se vuelve a preguntar con calma antes de
+                # darlo por fallido.
+                if not self.hay_captcha():
+                    logger.info(
+                        "No hay una imagen nueva para reintentar, pero la "
+                        "pagina ya no pide verificacion: se da por resuelto."
+                    )
+                    self.guardar_estado()
+                    return True
+                self._guardar_diagnostico("sin_imagen_pero_pide_captcha")
+                raise
+
             codigo = self.resolvedor.resolver(png)
             if not codigo:
                 logger.info("Codigo vacio: se pide otro captcha (%d/%d)", intento, intentos)
