@@ -19,6 +19,21 @@ data/jurisprudencia/pdfs/*
 !data/jurisprudencia/tesauro.json
 !data/jurisprudencia/tesauro_compacto.json
 
+# Corpus STJER cosechado (se regenera con: python -m scripts.stjer cosechar)
+data/jurisprudencia/*.sqlite
+data/jurisprudencia/*.sqlite-wal
+data/jurisprudencia/*.sqlite-shm
+# Sesion de Playwright y credenciales exportadas: CONTIENEN COOKIES.
+data/jurisprudencia/.stjer_estado.json
+data/jurisprudencia/.stjer_credenciales.json
+# Artefactos de la Fase 0: los .har y los curl llevan cookies de sesion.
+# Las fixtures .html si se versionan, son las que testean el parser.
+data/jurisprudencia/descubrimiento/*
+!data/jurisprudencia/descubrimiento/.gitkeep
+!data/jurisprudencia/descubrimiento/*.html
+# El tesauro real cosechado SI se versiona (es el que arregla el mapeo a voces)
+!data/jurisprudencia/tesauro_stjer.json
+
 # Archivos de debug generados
 debug_*.html
 debug_resultados*.html

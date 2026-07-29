@@ -226,6 +226,42 @@ TESAURO_COMPACTO_PATH = JURISPRUDENCIA_DIR / "tesauro_compacto.json"
 TESAURO = None
 TESAURO_COMPACTO = None
 
+# ───────────────────────────────────────────────────────────────────────────
+#  Corpus local cosechado desde jur.jusentrerios.gov.ar
+#  (ver scripts/stjer.py y modulos/jurisprudencia/stjer/)
+# ───────────────────────────────────────────────────────────────────────────
+
+STJER_BASE_URL = os.getenv('STJER_BASE_URL', 'https://jur.jusentrerios.gov.ar/jur/')
+
+# Corpus SQLite portable: es la fuente de verdad del buscador local.
+# No depende de Flask ni de Postgres; el CLI lo abre directo.
+CORPUS_STJER_PATH = JURISPRUDENCIA_DIR / "corpus_stjer.sqlite"
+
+# Tesauro REAL cosechado del sitio (reemplaza al placeholder de 10 entradas
+# de tesauro.json, que se conserva por compatibilidad con la via Gmail).
+TESAURO_STJER_PATH = JURISPRUDENCIA_DIR / "tesauro_stjer.json"
+
+# Estado de sesion de Playwright (cookies): gitignoreado.
+STJER_ESTADO_PATH = JURISPRUDENCIA_DIR / ".stjer_estado.json"
+
+# Artefactos de la Fase 0 (capturas de DevTools que definen los selectores).
+STJER_DESCUBRIMIENTO_DIR = JURISPRUDENCIA_DIR / "descubrimiento"
+
+# Cortesia con el servidor del Poder Judicial: una sola conexion, con espera
+# jitteada entre requests y un techo duro por hora.
+STJER_ESPERA_SEG = float(os.getenv('STJER_ESPERA_SEG', '1.5'))
+STJER_JITTER_SEG = float(os.getenv('STJER_JITTER_SEG', '0.8'))
+STJER_MAX_REQ_HORA = int(os.getenv('STJER_MAX_REQ_HORA', '1800'))
+STJER_MAX_REINTENTOS = int(os.getenv('STJER_MAX_REINTENTOS', '4'))
+
+# User-Agent identificable. Poner un mail de contacto real es lo correcto:
+# si molestamos, que puedan avisar en vez de bloquear a ciegas.
+STJER_UA = os.getenv(
+    'STJER_UA',
+    'descargador-expedientes/1.0 (cosecha de jurisprudencia publica; '
+    'contacto: leofard@gmail.com)'
+)
+
 # Gmail OAuth2 (para descargar adjuntos)
 GMAIL_TARGET_ACCOUNT = os.getenv('GMAIL_TARGET_ACCOUNT', 'leofard@gmail.com')
 GMAIL_SOURCE_EMAIL = os.getenv('GMAIL_SOURCE_EMAIL', 'scamaragualeguaychu@gmail.com')
