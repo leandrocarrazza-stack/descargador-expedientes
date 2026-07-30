@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
@@ -48,6 +49,15 @@ VIDA_ESTADO = timedelta(hours=12)
 
 class ErrorSesion(Exception):
     """No se pudo abrir o sostener la sesion."""
+
+
+def _parece_llamada_js(ref: str) -> bool:
+    """
+    True si `ref` parece una llamada de funcion JS ejecutable
+    (ej. "toba.arbol_expandir('mat_1')"), no un simple id o value
+    (ej. "123", "mat_1") que evaluar como JS seria un no-op silencioso.
+    """
+    return bool(re.search(r"[a-zA-Z_]\w*\s*\(", ref))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -577,8 +587,18 @@ class SesionSTJER:
         self.esperar_quieto(2500)
 
     def abrir_tesauro(self, ref=None) -> None:
-        """Abre el panel del tesauro (o expande un nodo)."""
-        if ref:
+        """
+        Abre el panel del tesauro (o expande un nodo).
+
+        OJO: `ref` puede ser el `value` de un <option> (un numero suelto como
+        "123"), no una llamada JS. Evaluar "123" con `page.evaluate()` no
+        tira error y no hace NADA — es un no-op silencioso. Se observo en la
+        practica: eso hacia que "expandir" un nodo dejara la pagina intacta,
+        y la misma lista de siempre se releia una y otra vez como si fueran
+        hijos nuevos (explosion combinatoria). Por eso solo se intenta
+        `evaluate` si `ref` tiene pinta de llamada de funcion de verdad.
+        """
+        if ref and _parece_llamada_js(ref):
             try:
                 self.pagina.evaluate(ref.replace("javascript:", ""))
                 self.esperar_quieto(1500)

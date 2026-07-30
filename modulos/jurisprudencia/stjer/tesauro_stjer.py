@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 MAX_NODOS_A_EXPANDIR = 2000  # tope de seguridad si el arbol viene por AJAX
 
 
+def _etiqueta(nodo) -> str:
+    """La etiqueta 'hoja' de un NodoVoz, para comparar firmas de respuestas."""
+    return nodo.voz or nodo.voz_principal or nodo.materia
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Estructura
 # ═══════════════════════════════════════════════════════════════════════════
@@ -94,7 +99,17 @@ class Tesauro:
     def _reconstruir_indices(self) -> None:
         self.indice_plano = {}
         for m in self.materias:
-            for vp in m.get("voces_principales", []):
+            vps = m.get("voces_principales", [])
+            if not vps:
+                # Sin nada debajo: el nombre de la materia YA es un termino
+                # buscable en si mismo. Pasa si el tesauro del sitio es una
+                # lista plana en vez de un arbol de 3 niveles — mejor
+                # aprovechar el termino que descartarlo como si no sirviera.
+                self.indice_plano.setdefault(
+                    m["nombre"], {"materia": "", "voz_principal": ""}
+                )
+                continue
+            for vp in vps:
                 nombre_vp = vp.get("nombre") or ""
                 voces = vp.get("voces") or []
                 if nombre_vp and not voces:
@@ -239,6 +254,17 @@ def cosechar_arbol(cliente, destino=None, max_nodos: int = MAX_NODOS_A_EXPANDIR)
     nodos = list(parsear_arbol_tesauro(respuesta.html))
     logger.info("Tesauro: %d nodos en la respuesta inicial", len(nodos))
 
+    # Firma (conjunto de etiquetas) de la respuesta inicial. Si "expandir" un
+    # nodo devuelve esta MISMA firma, es que el sitio no diferencio el pedido
+    # y volvio a mandar la lista de siempre — no son hijos reales.
+    #
+    # Se observo en la practica: sin esta guarda, cada "expansion" que en
+    # realidad no hacia nada releia los mismos ~160 items de siempre y los
+    # contaba como hijos nuevos de cada nodo — 160 x 160 x 160 = una cola de
+    # cientos de miles y mas de dos horas de corrida para terminar
+    # descartando todo en la validacion final.
+    firma_raiz = frozenset(_etiqueta(n) for n in nodos)
+
     # Si ya vinieron hojas, el arbol llego entero y no hay nada que expandir.
     if any(n.nivel >= 2 for n in nodos):
         logger.info("El arbol vino completo en una sola respuesta")
@@ -246,6 +272,7 @@ def cosechar_arbol(cliente, destino=None, max_nodos: int = MAX_NODOS_A_EXPANDIR)
         pendientes = [n for n in nodos if n.ref and n.nivel < 2]
         vistos = {n.ruta for n in nodos}
         expandidos = 0
+        omitidos_por_eco = 0
 
         while pendientes and expandidos < max_nodos:
             nodo = pendientes.pop(0)
@@ -263,6 +290,12 @@ def cosechar_arbol(cliente, destino=None, max_nodos: int = MAX_NODOS_A_EXPANDIR)
                     nodo.materia and nodo.nivel == 1 and nodo.voz_principal
                 ) or "",
             )
+
+            firma_hijos = frozenset(_etiqueta(h) for h in hijos)
+            if firma_hijos and firma_hijos == firma_raiz:
+                omitidos_por_eco += 1
+                continue
+
             for h in hijos:
                 if h.ruta and h.ruta not in vistos:
                     vistos.add(h.ruta)
@@ -275,6 +308,18 @@ def cosechar_arbol(cliente, destino=None, max_nodos: int = MAX_NODOS_A_EXPANDIR)
                     "Tesauro: %d nodos expandidos, %d en cola, %d voces",
                     expandidos, len(pendientes), len(nodos),
                 )
+
+        if omitidos_por_eco:
+            logger.warning(
+                "%d de %d expansiones devolvieron la misma lista de siempre "
+                "(el sitio no diferencio el pedido): se descartaron para no "
+                "inflar el arbol con duplicados. El 'ref' que se usa para "
+                "expandir un nodo probablemente no esta funcionando — mira "
+                "docs/STJER_FASE0.md para capturar el pedido real con "
+                "DevTools y ajustar descubrimiento/selectores.json o "
+                "formato_consulta.json.",
+                omitidos_por_eco, expandidos,
+            )
 
         if expandidos >= max_nodos:
             logger.warning(
