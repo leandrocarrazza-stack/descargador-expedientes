@@ -131,7 +131,14 @@ class ResolvedorArchivo:
     def resolver(self, png: bytes) -> str:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.png.write_bytes(png)
+
+        # Si ya hay un codigo pre-escrito (ej. pasado con --captcha), usarlo
+        # directo sin borrar y re-esperar.
         if self.txt.exists():
+            codigo = self.txt.read_text(encoding="utf-8").strip()
+            if codigo:
+                self.txt.unlink()
+                return codigo
             self.txt.unlink()
 
         logger.warning(
@@ -182,7 +189,10 @@ SELECTORES = {
     ],
     "captcha_boton": [
         "input[type='submit'][value*='Aceptar' i]",
-        "button:has-text('Aceptar')", "input[value*='Aceptar' i]",
+        "input[value*='Aceptar' i]",
+        # Excluir botones data-dismiss (son los del modal_notificacion de Toba,
+        # no el submit del formulario del captcha):
+        "button:has-text('Aceptar'):not([data-dismiss])",
         "button[type='submit']", "input[type='submit']",
     ],
     "operador_fecha": [
@@ -484,6 +494,10 @@ class SesionSTJER:
         for intento in range(1, intentos + 1):
             try:
                 png = self.imagen_captcha()
+                # Guardar siempre para poder releer si el resolvedor no tiene stdin:
+                _ruta = ajustes.DESCUBRIMIENTO_DIR / "captcha.png"
+                _ruta.parent.mkdir(parents=True, exist_ok=True)
+                _ruta.write_bytes(png)
             except ErrorSesion:
                 # No hay imagen para reintentar. Lo mas probable es que el
                 # intento anterior en realidad SI funciono (la pagina navego

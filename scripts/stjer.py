@@ -90,12 +90,23 @@ def _construir_cliente(args):
     from modulos.jurisprudencia.stjer.cliente import (
         ClienteHTTP, ClienteNavegador, FormatoConsulta, Regulador,
     )
-    from modulos.jurisprudencia.stjer.sesion import SesionSTJER, cargar_credenciales
+    from modulos.jurisprudencia.stjer.sesion import (
+        ResolvedorFijo, SesionSTJER, cargar_credenciales,
+    )
 
     regulador = Regulador(espera=args.espera)
 
     if args.motor == "navegador":
-        sesion = SesionSTJER(headless=not args.visible)
+        from modulos.jurisprudencia.stjer.sesion import ResolvedorArchivo
+        captcha = getattr(args, "captcha", None)
+        _dir = ajustes.DESCUBRIMIENTO_DIR
+        _dir.mkdir(parents=True, exist_ok=True)
+        if captcha:
+            # Pre-escribe el codigo para que ResolvedorArchivo lo consuma
+            # inmediatamente sin bloquear en la espera interactiva.
+            (_dir / "captcha_codigo.txt").write_text(captcha, encoding="utf-8")
+        resolvedor = ResolvedorArchivo(dir_trabajo=_dir)
+        sesion = SesionSTJER(headless=not args.visible, resolvedor=resolvedor)
         sesion.__enter__()
         sesion.abrir()
         return ClienteNavegador(sesion, regulador=regulador), sesion
@@ -554,6 +565,8 @@ def construir_parser() -> argparse.ArgumentParser:
                         help="segundos entre requests (default: %(default)s)")
         sp.add_argument("--visible", action="store_true",
                         help="no usar headless (solo con --motor navegador)")
+        sp.add_argument("--captcha", metavar="CODIGO",
+                        help="codigo del captcha (evita la entrada interactiva)")
 
     # descubrir
     sub.add_parser("descubrir", help="Revisa los artefactos de la Fase 0").set_defaults(

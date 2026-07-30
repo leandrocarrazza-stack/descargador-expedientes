@@ -482,6 +482,43 @@ def reemplazar_sumarios(
     return insertados
 
 
+def agregar_extracto(con: sqlite3.Connection, fallo_id: int, texto: str) -> bool:
+    """
+    Agrega un extracto de sumario del listado sin borrar los ya existentes.
+
+    A diferencia de reemplazar_sumarios, esta funcion ACUMULA: un fallo con N
+    sumarios aparece N veces en el listado (una fila por sumario), y cada
+    llamada agrega el extracto si todavia no esta. Asi se preservan todos los
+    sumarios del fallo al paginar el listado.
+
+    No toca sumarios completos (truncado=0): si ya llego el detalle, no pisa.
+    """
+    texto = colapsar(texto or "")
+    if not texto:
+        return False
+    ya_completo = con.execute(
+        "SELECT 1 FROM sumarios WHERE fallo_id=? AND truncado=0 LIMIT 1",
+        (fallo_id,),
+    ).fetchone()
+    if ya_completo:
+        return False
+    ya_existe = con.execute(
+        "SELECT 1 FROM sumarios WHERE fallo_id=? AND texto=? LIMIT 1",
+        (fallo_id, texto),
+    ).fetchone()
+    if ya_existe:
+        return False
+    max_orden = con.execute(
+        "SELECT COALESCE(MAX(orden)+1, 0) FROM sumarios WHERE fallo_id=?",
+        (fallo_id,),
+    ).fetchone()[0]
+    con.execute(
+        "INSERT INTO sumarios(fallo_id, orden, texto, truncado) VALUES(?,?,?,1)",
+        (fallo_id, max_orden, texto),
+    )
+    return True
+
+
 def reemplazar_votos(con: sqlite3.Connection, fallo_id: int, votos: list) -> int:
     """Reemplaza los votos de un fallo. Mismo criterio que los sumarios."""
     n = 0

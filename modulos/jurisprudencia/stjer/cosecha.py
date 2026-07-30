@@ -309,13 +309,11 @@ class Cosechadora:
 
                 extracto = fila.get("sumario_extracto")
                 if extracto:
-                    # truncado=True: si despues llega el sumario completo del
-                    # detalle, este extracto no lo pisa.
-                    n = corpus.reemplazar_sumarios(
-                        self.con, fallo_id, [{"texto": extracto}], truncado=True
-                    )
-                    resumen.sumarios += n
-                    if n:
+                    # agregar_extracto acumula sin borrar: el mismo fallo
+                    # aparece N veces en el listado (una por sumario) y cada
+                    # llamada agrega solo si el texto es nuevo.
+                    if corpus.agregar_extracto(self.con, fallo_id, extracto):
+                        resumen.sumarios += 1
                         corpus.reconstruir_documentos(self.con, fallo_id)
 
     # ── pasada B: detalles ────────────────────────────────────────────────
