@@ -9,6 +9,7 @@ entiende el sitio de verdad.
 """
 
 import pytest
+from bs4 import BeautifulSoup
 
 from modulos.jurisprudencia.stjer import ajustes
 from modulos.jurisprudencia.stjer import parser as P
@@ -107,6 +108,42 @@ def test_pagina_busqueda_no_expone_tesauro():
         f"Se esperaban 0 nodos (la pagina de busqueda no es el arbol del tesauro) "
         f"pero se obtuvieron {len(nodos)}. Si el sitio cambio y ahora SI expone "
         f"el tesauro en esa URL, actualizar este test."
+    )
+
+
+# ─── selectores de sesion (formulario de busqueda) ─────────────────────────
+
+def test_selectores_de_fecha_encuentran_campos_toba():
+    """
+    Los selectores CSS que usa sesion.py para fecha_desde / fecha_hasta
+    deben hacer match con los campos reales del formulario Toba.
+
+    Bug encontrado: los defaults genericos ('fecha_desde', 'desde', etc.)
+    no coinciden con los nombres Toba (ef_ei_11000968_filtrofecha_fallo).
+    Como resultado el navegador no llenaba las fechas y el sitio devolvía
+    la pagina inicial sin filtrar — 0 fallos guardados aunque la tarea
+    se marcaba 'ok'.
+    """
+    sopa = BeautifulSoup(_fixture("04_tesauro.html"), "lxml")
+
+    campo_desde = sopa.select_one("input[name='ef_ei_11000968_filtrofecha_fallo']")
+    assert campo_desde is not None, (
+        "El campo de fecha 'desde' no se encontro. "
+        "Verificar que el selector de sesion.py coincide con el formulario."
+    )
+
+    campo_hasta = sopa.select_one(
+        "input[name='extra_ef_ei_11000968_filtrofecha_fallo']"
+    )
+    assert campo_hasta is not None, (
+        "El campo de fecha 'hasta' (extra) no se encontro. "
+        "Es el campo que aparece cuando el operador es 'entre'."
+    )
+
+    operador = sopa.select_one("select[name='col_ei_11000968_filtrofecha_fallo']")
+    assert operador is not None, "El select de operador de fecha no se encontro"
+    assert operador.find("option", {"value": "entre"}) is not None, (
+        "La opcion 'entre' no existe en el select de operador de fecha"
     )
 
 

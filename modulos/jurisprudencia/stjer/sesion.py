@@ -185,16 +185,39 @@ SELECTORES = {
         "button:has-text('Aceptar')", "input[value*='Aceptar' i]",
         "button[type='submit']", "input[type='submit']",
     ],
+    "operador_fecha": [
+        # Select de operador de comparacion de fecha — STJER/Toba 3.2:
+        "select[name='col_ei_11000968_filtrofecha_fallo']",
+        "select[name*='filtrofecha']",
+        "select[id*='filtrofecha']",
+    ],
     "fecha_desde": [
+        # Campo principal de fecha — STJER/Toba 3.2:
+        "input[name='ef_ei_11000968_filtrofecha_fallo']",
+        # Patron general Toba: ef_ = valor, sin 'extra':
+        "input[name*='filtrofecha']:not([name*='extra'])",
+        # Fallbacks genericos:
         "input[name*='fecha_desde' i]", "input[name*='desde' i]",
         "input[id*='desde' i]",
     ],
     "fecha_hasta": [
+        # Campo extra (aparece cuando el operador es 'entre') — STJER/Toba 3.2:
+        "input[name='extra_ef_ei_11000968_filtrofecha_fallo']",
+        "input[name*='filtrofecha'][name*='extra']",
+        # Fallbacks:
         "input[name*='fecha_hasta' i]", "input[name*='hasta' i]",
         "input[id*='hasta' i]",
     ],
-    "fuero": ["select[name*='fuero' i]", "select[id*='fuero' i]"],
+    "fuero": [
+        "select[name='ef_ei_11000968_filtrofuero']",
+        "select[name*='filtrofuero']",
+        "select[name*='fuero' i]", "select[id*='fuero' i]",
+    ],
     "boton_buscar": [
+        # Boton Buscar especifico de STJER (no el de 'Tesauro'):
+        "button#ei_11000968_filtro_filtrar",
+        "button[name='ei_11000968_filtro_filtrar']",
+        # Fallbacks genericos:
         "input[value*='Buscar' i]", "button:has-text('Buscar')",
         "a:has-text('Buscar')",
     ],
@@ -534,6 +557,22 @@ class SesionSTJER:
 
     def completar_busqueda(self, desde, hasta, fuero=None, pagina=1) -> None:
         """Llena el formulario y busca. Solo lo usa ClienteNavegador."""
+        # Poner el operador de fecha en "entre" ANTES de llenar los campos.
+        # En Toba, el campo extra (fecha_hasta) puede estar oculto hasta que
+        # se selecciona "entre"; ademas, sin el operador el sitio ignora los valores.
+        op_fecha = self._primero("operador_fecha")
+        if op_fecha is not None:
+            try:
+                op_fecha.select_option(value="entre")
+                self.esperar_quieto(1000)
+            except Exception as e:
+                logger.debug("No se pudo seleccionar operador 'entre' para fecha: %s", e)
+        else:
+            logger.warning(
+                "No se encontro el selector de operador de fecha. "
+                "Puede que el formulario no filtre por rango correctamente."
+            )
+
         campo_desde = self._primero("fecha_desde")
         campo_hasta = self._primero("fecha_hasta")
         if campo_desde is None or campo_hasta is None:
