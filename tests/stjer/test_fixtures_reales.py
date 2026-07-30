@@ -98,11 +98,15 @@ def test_los_votos_no_se_confunden_con_las_voces():
 
 # ─── tesauro ───────────────────────────────────────────────────────────────
 
-def test_el_tesauro_real_da_mas_de_diez_voces():
+def test_pagina_busqueda_no_expone_tesauro():
+    # La fixture 04_tesauro.html es la pagina de busqueda del STJER, que NO
+    # contiene el arbol del tesauro (solo selectores Toba de filtros). Con los
+    # fixes de parser el resultado correcto es 0 nodos, no garbage.
     nodos = P.parsear_arbol_tesauro(_fixture("04_tesauro.html"))
-    assert len(nodos) > 10, (
-        f"Solo {len(nodos)} nodos. Diez o menos es el tamaño del placeholder "
-        f"viejo: el parseo del arbol no esta funcionando."
+    assert len(nodos) == 0, (
+        f"Se esperaban 0 nodos (la pagina de busqueda no es el arbol del tesauro) "
+        f"pero se obtuvieron {len(nodos)}. Si el sitio cambio y ahora SI expone "
+        f"el tesauro en esa URL, actualizar este test."
     )
 
 
