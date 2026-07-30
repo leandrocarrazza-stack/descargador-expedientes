@@ -406,6 +406,24 @@ class SesionSTJER:
         except Exception:
             pass
         self.pagina.wait_for_timeout(ms)
+        self._cerrar_modal_notificacion()
+
+    def _cerrar_modal_notificacion(self) -> None:
+        # Toba deja abierto un modal Bootstrap (#modal_notificacion) despues de
+        # cada operacion AJAX. Si queda visible bloquea todos los clicks siguientes.
+        try:
+            self.pagina.evaluate(
+                "var m = document.getElementById('modal_notificacion');"
+                "if (m && (m.classList.contains('in') || m.classList.contains('show'))) {"
+                "  m.classList.remove('in', 'show');"
+                "  m.style.display = 'none';"
+                "  document.body.classList.remove('modal-open');"
+                "  var b = document.querySelector('.modal-backdrop');"
+                "  if (b) b.remove();"
+                "}"
+            )
+        except Exception as e:
+            logger.debug("No se pudo cerrar modal_notificacion: %s", e)
 
     # ── captcha ───────────────────────────────────────────────────────────
 
