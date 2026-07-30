@@ -43,6 +43,7 @@ class DescargadorArchivos:
         self.tamanio_lote = tamanio_lote  # Descargar N archivos, luego reciclar
         self.crear_cliente_fn = crear_cliente_fn  # Función para reciclar navegador
         self.contador_descargas = 0  # Contador de descargas para reciclaje preventivo
+        self._ultimo_fallo_fue_auth = False  # True si el último intento falló por sesión expirada
         self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
     def obtener_movimientos(self, expediente_id, max_movimientos=30):
@@ -553,6 +554,7 @@ class DescargadorArchivos:
                     content_type = response.headers.get('Content-Type', '')
                     if 'text/html' in content_type:
                         print(f"         [AUTH] Respuesta HTML recibida (sesión expirada), abortando")
+                        self._ultimo_fallo_fue_auth = True
                         return False
 
                     # Validar que tenemos contenido
@@ -644,6 +646,12 @@ class DescargadorArchivos:
         archivos_descargados = []
         pagina_actual = 1
         mov_idx_global = 0
+        fallos_auth_consecutivos = 0
+        # Si la sesión ya expiró, cada descarga falla con el mismo error de auth.
+        # Sin este freno, el pipeline seguiría navegando/intentando cientos de
+        # páginas inútilmente (agotando el timeout del worker y la RAM) en vez
+        # de abortar apenas detecta que la sesión no sirve.
+        MAX_FALLOS_AUTH_CONSECUTIVOS = 3
 
         try:
             driver = self.cliente.driver
@@ -690,7 +698,9 @@ class DescargadorArchivos:
 
                     print(f"    > [{mov_idx_global}] {url[:70]}...")
 
+                    self._ultimo_fallo_fue_auth = False
                     if self._descargar_archivo_selenium(url, ruta_archivo):
+                        fallos_auth_consecutivos = 0
                         # Detectar tipo real por magic bytes
                         tipo = "pdf"
                         try:
@@ -716,6 +726,16 @@ class DescargadorArchivos:
                     else:
                         print(f"      [WARN] No se pudo descargar mov {mov_idx_global}")
 
+                        if self._ultimo_fallo_fue_auth:
+                            fallos_auth_consecutivos += 1
+                            if fallos_auth_consecutivos >= MAX_FALLOS_AUTH_CONSECUTIVOS:
+                                raise Exception(
+                                    f"SESION_MV_EXPIRADA: {fallos_auth_consecutivos} descargas consecutivas "
+                                    f"rechazadas por sesión expirada (mov {mov_idx_global}), abortando"
+                                )
+                        else:
+                            fallos_auth_consecutivos = 0
+
                 # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
                 if not hay_siguiente:
@@ -726,6 +746,11 @@ class DescargadorArchivos:
         except Exception as e:
             print(f"[ERROR] descargar_todo_por_paginas: {str(e)[:100]}")
             logger.error(f"Error en descargar_todo_por_paginas: {e}", exc_info=True)
+            if "SESION_MV_EXPIRADA" in str(e):
+                # No tragar este error: pipeline.py lo detecta explícitamente para
+                # devolver tipo_error='auth_failed' ("Reconectá tu cuenta") en vez
+                # de un genérico "no se pudieron descargar archivos".
+                raise
 
         print(f"\n[OK] Total archivos descargados: {len(archivos_descargados)} ({pagina_actual} pagina(s))")
         return archivos_descargados
