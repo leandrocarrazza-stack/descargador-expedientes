@@ -153,6 +153,23 @@ def test_html_sin_tabla_de_resultados_no_explota():
     assert len(r) == 0
 
 
+def test_lee_paginacion_toba_con_input_pager():
+    # Caso real STJER: el nro de pagina esta en <input class="input-pager">,
+    # no como texto. La regex no hace match; se usa el fallback DOM.
+    r = P.parsear_listado(F.LISTADO_CON_PAGER_TOBA_HTML)
+    assert r.pagina == 1
+    assert r.total_paginas == 84
+    assert r.hay_siguiente is True
+    assert r.total_registros == 416
+
+
+def test_ultima_pagina_toba_no_tiene_siguiente():
+    r = P.parsear_listado(F.LISTADO_ULTIMA_PAGINA_TOBA_HTML)
+    assert r.pagina == 84
+    assert r.total_paginas == 84
+    assert r.hay_siguiente is False
+
+
 # ─── detalle ───────────────────────────────────────────────────────────────
 
 def test_parsea_los_campos_del_detalle():

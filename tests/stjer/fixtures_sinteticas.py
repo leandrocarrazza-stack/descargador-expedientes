@@ -139,6 +139,55 @@ TESAURO_SELECT_HTML = """
 # panel real y el sitio devolvio la pagina de busqueda comun, cuyos <option>
 # de Fuero/Agregar Filtro/operadores NO estan dentro de ningun contenedor de
 # tesauro identificable.
+# Paginacion real de Toba: el numero de pagina esta en un <input>, no como
+# texto plano. La regex "pagina 1 de 84" no hace match; hay que leer el DOM.
+_TABLA_RESULTADO = """
+<table>
+  <tr>
+    <th>Jurisdicción</th><th>Organismo</th><th>Fallo</th>
+    <th>Nº Expediente</th><th>Carátula</th><th>Sumario</th><th>Fuero</th>
+  </tr>
+  <tr onclick="js.ir('123')">
+    <td>Paraná</td><td>STJ</td><td>15/12/2023</td>
+    <td>1234</td><td>GARCIA c/ ESTADO s/ DAÑOS</td>
+    <td>El daño moral...</td><td>Civil</td>
+  </tr>
+</table>"""
+
+LISTADO_CON_PAGER_TOBA_HTML = f"""<html><body>
+<nav aria-label="pagination">
+  <ul class="pager">
+    <li class="disabled"><a href="#"><span>←</span> Anterior</a></li>
+    Página
+    <input class="form-control input-pager"
+           name="cuadro_11000967_cuadro__pagina_actual"
+           type="text" size="3" value="1">
+    de <strong>84</strong>
+    <li><a href="#" onclick="js_cuadro.set_evento(new evento_ei('cambiar_pagina','','','2'));">
+      Siguiente <span>→</span>
+    </a></li>
+  </ul>
+</nav>
+Se encontraron 416 registros
+{_TABLA_RESULTADO}
+</body></html>"""
+
+LISTADO_ULTIMA_PAGINA_TOBA_HTML = f"""<html><body>
+<nav aria-label="pagination">
+  <ul class="pager">
+    <li><a href="#"><span>←</span> Anterior</a></li>
+    Página
+    <input class="form-control input-pager"
+           name="cuadro_11000967_cuadro__pagina_actual"
+           type="text" size="3" value="84">
+    de <strong>84</strong>
+    <li class="disabled"><a href="#">Siguiente <span>→</span></a></li>
+  </ul>
+</nav>
+Se encontraron 416 registros
+{_TABLA_RESULTADO}
+</body></html>"""
+
 PAGINA_BUSQUEDA_SIN_TESAURO_HTML = """
 <html><body>
 <select name="fuero">

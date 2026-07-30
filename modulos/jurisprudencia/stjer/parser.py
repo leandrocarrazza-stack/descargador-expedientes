@@ -418,6 +418,34 @@ def parsear_listado(cuerpo: str) -> ListadoParseado:
         resultado.total_paginas = int(m.group(2))
         resultado.hay_siguiente = resultado.pagina < resultado.total_paginas
 
+    # Fallback DOM para Toba: el numero de pagina va en <input class="input-pager">
+    # dentro de <nav aria-label="pagination">, no como texto plano.
+    if resultado.total_paginas is None:
+        nav = sopa.find("nav", attrs={"aria-label": re.compile(r"paginat", re.I)})
+        if nav is None:
+            inp_pager = sopa.find("input", class_="input-pager")
+            if inp_pager:
+                nav = inp_pager.parent
+        if nav is not None:
+            inp = nav.find("input", class_="input-pager") or nav.find(
+                "input", attrs={"name": re.compile(r"pagina_actual", re.I)}
+            )
+            if inp and inp.get("value", "").strip().isdigit():
+                resultado.pagina = int(inp["value"])
+            strong = nav.find("strong")
+            if strong and strong.get_text(strip=True).isdigit():
+                resultado.total_paginas = int(strong.get_text(strip=True))
+            if resultado.pagina and resultado.total_paginas:
+                resultado.hay_siguiente = resultado.pagina < resultado.total_paginas
+            else:
+                # Verificar si el link Siguiente existe y no esta deshabilitado
+                for a in nav.find_all("a"):
+                    if re.search(r"siguiente|next|→|›", a.get_text(), re.I):
+                        li = a.find_parent("li")
+                        if li is None or "disabled" not in (li.get("class") or []):
+                            resultado.hay_siguiente = True
+                        break
+
     # La tabla de resultados es la que mas encabezados reconocidos tenga.
     mejor_tabla, mejor_mapa = None, {}
     for tabla in sopa.find_all("table"):
