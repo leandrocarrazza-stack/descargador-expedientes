@@ -280,11 +280,11 @@ def descargar_expediente_sync():
 def estado_descarga(job_id):
     """
     Long-polling endpoint: el frontend hace UN request que espera hasta que
-    el job complete (máx 5 minutos).
+    el job complete (máx ~4 min 40s, ver nota de timeout más abajo).
 
     El servidor retiene la request hasta que:
     - El job complete (devuelve el estado final)
-    - Pasen 5 minutos (devuelve estado actual)
+    - Pase el timeout (devuelve estado actual, el frontend vuelve a pedir)
     - El job sea inválido/expirado (devuelve 404)
 
     Respuestas posibles:
@@ -314,9 +314,12 @@ def estado_descarga(job_id):
         event = threading.Event()
         _job_events[job_id] = event
 
-    # Esperar 5 minutos a que el job complete (el thread lo despierta con .set())
+    # Esperar a que el job complete (el thread lo despierta con .set()).
+    # IMPORTANTE: este timeout debe quedar por debajo del --timeout de gunicorn
+    # (330s, ver Dockerfile) para que el long-poll responda por sí mismo antes
+    # de que gunicorn considere al worker colgado y lo mate.
     logger.info(f"[LONG-POLL] Request esperando el job {job_id[:8]}")
-    event.wait(timeout=300)  # 5 minutos máximo
+    event.wait(timeout=280)
     logger.info(f"[LONG-POLL] Request despertado o timeout para {job_id[:8]}")
 
     # Devolver el estado actual (puede ser completo o sigue procesando si hubo timeout)
