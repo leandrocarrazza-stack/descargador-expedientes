@@ -332,8 +332,15 @@ class ClienteNavegador:
 
     def buscar_listado(self, desde, hasta, fuero=None, pagina=1) -> RespuestaCruda:
         self.regulador.esperar()
+        etiqueta = f"listado {desde:%Y-%m} p{pagina}"
+        if self.sesion.hay_captcha():
+            # El captcha puede reaparecer en el formulario de busqueda (no
+            # solo en la pagina de resultados). Si no se detecta aca, el
+            # intento de llenar fecha_desde/fecha_hasta falla con un error
+            # generico de "campos no encontrados" que oculta la causa real.
+            raise ErrorCaptcha(f"{etiqueta}: el sitio pide verificacion")
         self.sesion.completar_busqueda(desde, hasta, fuero=fuero, pagina=pagina)
-        return self._leer_pagina(f"listado {desde:%Y-%m} p{pagina}")
+        return self._leer_pagina(etiqueta)
 
     def abrir_detalle(self, ref: str) -> RespuestaCruda:
         self.regulador.esperar()

@@ -300,6 +300,7 @@ class SesionSTJER:
         self._navegador = None
         self._contexto = None
         self._pagina = None
+        self._ultima_busqueda = None  # (desde, hasta, fuero, nro_pagina) del ultimo listado mostrado
 
     # ── ciclo de vida ─────────────────────────────────────────────────────
 
@@ -588,7 +589,33 @@ class SesionSTJER:
     # ── operaciones para la rama C ────────────────────────────────────────
 
     def completar_busqueda(self, desde, hasta, fuero=None, pagina=1) -> None:
-        """Llena el formulario y busca. Solo lo usa ClienteNavegador."""
+        """
+        Llena el formulario y busca. Solo lo usa ClienteNavegador.
+
+        `_cosechar_mes` pide las paginas de un mes en orden (1, 2, 3, ...). Si
+        la pagina pedida es la siguiente a la que ya esta en pantalla para la
+        misma busqueda, alcanza con un click en "Siguiente" en vez de rehacer
+        el Buscar y repetir todos los clicks anteriores (antes esto era
+        O(n^2): la pagina 60 volvia a hacer 59 clicks desde cero).
+        """
+        busqueda_actual = (desde, hasta, fuero)
+        if self._ultima_busqueda == (*busqueda_actual, pagina - 1):
+            siguiente = self._primero("siguiente")
+            if siguiente is not None:
+                siguiente.click()
+                self.esperar_quieto(3000)
+                self._ultima_busqueda = (*busqueda_actual, pagina)
+                return
+            # Si no hay boton "siguiente" (ultima pagina), se deja caer al
+            # camino normal: va a volver a buscar y reintentar el paginado.
+
+        # Recargar la pagina de busqueda antes de un mes nuevo. Encadenar
+        # muchos clicks de "Siguiente" sin pasar por "Buscar" (el atajo de
+        # arriba) deja el componente Toba en un estado donde el formulario de
+        # fecha desaparece para la proxima busqueda; recargar lo resetea.
+        self.pagina.goto(ajustes.URL_INICIO, wait_until="domcontentloaded")
+        self.esperar_quieto(1000)
+
         # Poner el operador de fecha en "entre" ANTES de llenar los campos.
         # En Toba, el campo extra (fecha_hasta) puede estar oculto hasta que
         # se selecciona "entre"; ademas, sin el operador el sitio ignora los valores.
@@ -630,12 +657,16 @@ class SesionSTJER:
         self.esperar_quieto(3000)
 
         # Paginar hasta la pagina pedida.
+        pagina_actual = 1
         for _ in range(max(0, pagina - 1)):
             siguiente = self._primero("siguiente")
             if siguiente is None:
                 break
             siguiente.click()
             self.esperar_quieto(3000)
+            pagina_actual += 1
+
+        self._ultima_busqueda = (*busqueda_actual, pagina_actual)
 
     def abrir_detalle(self, ref: str) -> None:
         """
