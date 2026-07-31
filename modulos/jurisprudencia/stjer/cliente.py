@@ -62,7 +62,7 @@ class ClienteSTJER(Protocol):
         self, desde: date, hasta: date, fuero=None, pagina: int = 1
     ) -> RespuestaCruda: ...
 
-    def abrir_detalle(self, ref: str) -> RespuestaCruda: ...
+    def abrir_detalle(self, ref: str, mes: str = None, pagina: int = None) -> RespuestaCruda: ...
 
     def arbol_tesauro(self, ref=None) -> RespuestaCruda: ...
 
@@ -288,7 +288,9 @@ class ClienteHTTP:
         datos.update(f.extra)
         return self._pedir(datos, f"listado {desde:%Y-%m} p{pagina}")
 
-    def abrir_detalle(self, ref: str) -> RespuestaCruda:
+    def abrir_detalle(self, ref: str, mes: str = None, pagina: int = None) -> RespuestaCruda:
+        # mes/pagina no hacen falta aca: el POST no depende de estar parado
+        # en ningun listado en pantalla (a diferencia de la rama navegador).
         datos = {self.formato.campo_accion: "detalle", "ref": ref}
         datos.update(self.formato.extra)
         return self._pedir(datos, f"detalle {ref[:40]}")
@@ -342,8 +344,17 @@ class ClienteNavegador:
         self.sesion.completar_busqueda(desde, hasta, fuero=fuero, pagina=pagina)
         return self._leer_pagina(etiqueta)
 
-    def abrir_detalle(self, ref: str) -> RespuestaCruda:
+    def abrir_detalle(self, ref: str, mes: str = None, pagina: int = None) -> RespuestaCruda:
         self.regulador.esperar()
+        if mes and pagina:
+            # ref es el onclick de una fila del listado: solo tiene sentido
+            # con ese listado (mes+pagina) en pantalla, no en una sesion
+            # recien abierta. Import diferido para evitar import circular
+            # (cosecha.py ya importa este modulo).
+            from .cosecha import rango_del_mes
+
+            desde, hasta = rango_del_mes(mes)
+            self.sesion.completar_busqueda(desde, hasta, pagina=pagina)
         self.sesion.abrir_detalle(ref)
         return self._leer_pagina(f"detalle {ref[:40]}")
 

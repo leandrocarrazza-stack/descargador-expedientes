@@ -37,7 +37,7 @@ class ClienteFalso:
             return RespuestaCruda(estado=200, html="<html></html>", crudo="<html></html>")
         return RespuestaCruda(estado=200, html=self.listado, crudo=self.listado)
 
-    def abrir_detalle(self, ref):
+    def abrir_detalle(self, ref, mes=None, pagina=None):
         self.llamadas.append(("detalle", ref, 1))
         return RespuestaCruda(estado=200, html=self.detalle, crudo=self.detalle)
 

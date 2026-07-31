@@ -274,7 +274,7 @@ class Cosechadora:
             if not listado.filas:
                 break
 
-            self._guardar_filas(listado.filas, resumen)
+            self._guardar_filas(listado.filas, pagina, resumen)
 
             if listado.total_paginas is not None:
                 if pagina >= listado.total_paginas:
@@ -292,7 +292,7 @@ class Cosechadora:
             mes, pagina, esperados if esperados is not None else "?",
         )
 
-    def _guardar_filas(self, filas: list, resumen: Resumen) -> None:
+    def _guardar_filas(self, filas: list, pagina: int, resumen: Resumen) -> None:
         """Guarda las filas de una pagina de resultados."""
         with corpus.transaccion(self.con):
             for fila in filas:
@@ -301,6 +301,7 @@ class Cosechadora:
                     (corpus.clave_natural(fila),),
                 ).fetchone()
 
+                fila["pagina"] = pagina
                 fallo_id = corpus.upsert_fallo(self.con, fila)
                 if existia:
                     resumen.fallos_actualizados += 1
@@ -321,13 +322,15 @@ class Cosechadora:
     def _cosechar_detalle(self, clave: str, resumen: Resumen) -> None:
         """Abre un fallo y guarda sumarios completos, voces y votos."""
         fila = self.con.execute(
-            "SELECT id, ref_detalle FROM fallos WHERE clave_natural=?", (clave,)
+            "SELECT id, ref_detalle, mes, pagina FROM fallos WHERE clave_natural=?", (clave,)
         ).fetchone()
         if fila is None:
             logger.warning("El fallo %s ya no esta en el corpus", clave)
             return
 
-        respuesta = self.cliente.abrir_detalle(fila["ref_detalle"] or clave)
+        respuesta = self.cliente.abrir_detalle(
+            fila["ref_detalle"] or clave, mes=fila["mes"], pagina=fila["pagina"]
+        )
         resumen.requests += 1
 
         if self.guardar_crudo:

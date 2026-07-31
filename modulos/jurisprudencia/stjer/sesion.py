@@ -672,20 +672,28 @@ class SesionSTJER:
         """
         Abre el detalle de un fallo.
 
-        Las filas no son <a href> normales, asi que primero se intenta
-        ejecutar el handler que trae la referencia y recien despues se cae a
-        buscar la fila por texto.
+        `ref` es el valor crudo del onclick/href de un elemento de la fila
+        (ver `_ref_detalle` en parser.py) — tipicamente algo como
+        `js_cuadro_X.set_evento(new evento_ei('seleccion', true, '', 'N'), ...)`,
+        donde N es el indice de esa fila EN LA PAGINA QUE ESTA EN PANTALLA.
+        Por eso hace falta buscar el elemento real y clickearlo (no evaluar
+        el handler a mano): el codigo interno de Toba usa `this` para saber
+        que fila selecciono, y `this` se pierde al invocar la funcion desde
+        `page.evaluate()` en vez de con un click real sobre el elemento.
         """
-        if ref and ("(" in ref or "javascript" in ref.lower()):
-            try:
-                self.pagina.evaluate(ref.replace("javascript:", ""))
-                self.esperar_quieto(2500)
-                return
-            except Exception as e:
-                logger.debug("No se pudo ejecutar la referencia %r: %s", ref, e)
-
-        fila = self.pagina.locator(f"tr:has-text({ref!r})").first
-        fila.click()
+        encontrado = self.pagina.evaluate(
+            """(ref) => {
+                const el = Array.from(document.querySelectorAll('[onclick], [href]'))
+                    .find(e => e.getAttribute('onclick') === ref || e.getAttribute('href') === ref);
+                if (el) { el.click(); return true; }
+                return false;
+            }""",
+            ref,
+        )
+        if not encontrado:
+            raise ErrorSesion(
+                f"No se encontro ningun elemento con esa referencia de detalle: {ref[:80]!r}"
+            )
         self.esperar_quieto(2500)
 
     def abrir_tesauro(self, ref=None) -> None:

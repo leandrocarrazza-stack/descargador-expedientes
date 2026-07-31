@@ -41,7 +41,7 @@ from .normalizacion import colapsar, normalizar_expediente, normalizar_texto
 
 logger = logging.getLogger(__name__)
 
-ESQUEMA_VERSION = 1
+ESQUEMA_VERSION = 2
 
 ESTADOS_TAREA = ("pendiente", "en_curso", "ok", "error", "omitido")
 
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS fallos (
     fecha_fallo     TEXT,              -- ISO 'YYYY-MM-DD' (SQLite no tiene DATE)
     anio            INTEGER,
     mes             TEXT,              -- 'YYYY-MM', para reconciliar la cosecha
+    pagina          INTEGER,           -- pagina del listado donde aparecio, para reabrir el detalle
     enlace_pdf      TEXT,
     pdf_ruta        TEXT,
     pdf_sha256      TEXT,
@@ -281,18 +282,20 @@ def crear_esquema(con: sqlite3.Connection) -> None:
 
 
 def migrar(con: sqlite3.Connection) -> None:
-    """
-    Migraciones entre versiones de esquema.
-
-    Todavia no hay ninguna (version 1). El gancho existe para que la primera
-    no obligue a re-cosechar.
-    """
+    """Migraciones entre versiones de esquema."""
     version = int(leer_meta(con, "esquema_version") or ESQUEMA_VERSION)
     if version > ESQUEMA_VERSION:
         raise RuntimeError(
             f"El corpus fue escrito con esquema v{version} y este codigo "
             f"entiende hasta v{ESQUEMA_VERSION}. Actualiza el codigo."
         )
+
+    if version < 2:
+        # v2: agrega fallos.pagina (pagina del listado donde aparecio cada
+        # fallo), necesaria para poder reabrir su detalle mas adelante.
+        con.execute("ALTER TABLE fallos ADD COLUMN pagina INTEGER")
+        con.commit()
+        escribir_meta(con, "esquema_version", "2")
 
 
 def leer_meta(con: sqlite3.Connection, clave: str, defecto=None):
@@ -361,6 +364,7 @@ def upsert_fallo(con: sqlite3.Connection, datos: dict) -> int:
         "expediente_norm": normalizar_expediente(datos.get("nro_expediente") or ""),
         "anio": int(fecha[:4]) if fecha and len(fecha) >= 4 and fecha[:4].isdigit() else None,
         "mes": fecha[:7] if fecha and len(fecha) >= 7 else None,
+        "pagina": int(datos["pagina"]) if datos.get("pagina") else None,
         "capturado_en": ahora(),
         "actualizado_en": ahora(),
     }
