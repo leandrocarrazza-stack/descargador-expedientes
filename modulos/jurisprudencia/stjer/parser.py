@@ -583,6 +583,23 @@ def _parsear_voces(sopa) -> list:
                 if not v["voz"]:  # sin hoja, la voz principal es la hoja
                     v["voz"], v["voz_principal"] = v["voz_principal"], ""
                 voces.append(v)
+    if voces:
+        return voces
+
+    # Fallback: el campo "sumariovoces" no siempre es una tabla. En la vista
+    # de detalle real es un <div> con lineas "Materia - Voz Principal - Voz"
+    # separadas por <br>, con un encabezado igual al literal de esa frase.
+    campo = sopa.find(attrs={"id": re.compile(r"sumariovoces$", re.I)})
+    if campo is None:
+        return voces
+    for linea in campo.get_text("\n").split("\n"):
+        partes = [colapsar(p) for p in linea.split(" - ")]
+        partes = [p for p in partes if p]
+        if len(partes) < 2 or normalizar_texto(linea) == "materia voz principal voz":
+            continue
+        voz, voz_principal = partes[-1], partes[-2]
+        materia = " - ".join(partes[:-2])
+        voces.append({"materia": materia, "voz_principal": voz_principal, "voz": voz})
     return voces
 
 
@@ -631,16 +648,33 @@ def _parsear_sumarios(sopa) -> list:
     Se prefieren los delimitados por el propio sitio. No se intenta tallar el
     sumario del texto del PDF con regex: los sumarios que publica el STJER ya
     vienen curados y separados, y son mejores que cualquier heuristica.
+
+    OJO: Toba nombra el FORMULARIO entero "sumario" (sumariomemo, sumariovoces,
+    sumariovotos, sumariodossier, sumariopdfN...), no solo el campo de texto.
+    Buscar cualquier id/class que solo *contenga* "sumario" trae los 7 campos
+    del formulario como si cada uno fuera un sumario distinto. El texto real
+    esta unicamente en el campo "memo"; ademas viene envuelto en nodo_/cont_
+    (mismo texto, con mas o menos ruido alrededor), asi que se prefiere el
+    nodo sin ese prefijo.
     """
     textos = []
 
-    # Nodos marcados explicitamente como sumario.
-    for nodo in sopa.find_all(
-        attrs={"class": re.compile(r"sumario", re.I)}
-    ) + sopa.find_all(attrs={"id": re.compile(r"sumario", re.I)}):
+    # Nodos marcados explicitamente como sumario por su class (no choca con
+    # el caso Toba de abajo: ese usa id, nunca class, para este campo).
+    for nodo in sopa.find_all(attrs={"class": re.compile(r"sumario", re.I)}):
         t = colapsar(nodo.get_text(" "))
         if len(t) > 40:
             textos.append(t)
+
+    if not textos:
+        candidatos = sopa.find_all(attrs={"id": re.compile(r"sumariomemo$", re.I)})
+        sin_wrapper = [
+            n for n in candidatos if not re.match(r"^(nodo_|cont_)", n.get("id", ""))
+        ]
+        for nodo in sin_wrapper or candidatos:
+            t = colapsar(nodo.get_text(" "))
+            if len(t) > 40:
+                textos.append(t)
 
     if not textos:
         # Celda a la derecha de una etiqueta SUMARIO.
