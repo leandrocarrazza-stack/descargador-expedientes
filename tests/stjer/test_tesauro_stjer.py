@@ -24,19 +24,19 @@ class ClienteFalsoTesauro:
         )
 
 
-def test_cosechar_arbol_con_tesauro_real_funciona():
+def test_cosechar_arbol_con_tesauro_real_funciona(tmp_path):
     cliente = ClienteFalsoTesauro(F.TESAURO_UL_HTML)
-    t = T.cosechar_arbol(cliente)
+    t = T.cosechar_arbol(cliente, destino=tmp_path / "tesauro_stjer.json")
     assert t and len(t) > 0
     assert not t.version.startswith("INVALIDO")
 
 
-def test_cosechar_arbol_rechaza_el_menu_de_filtros_equivocado():
+def test_cosechar_arbol_rechaza_el_menu_de_filtros_equivocado(tmp_path):
     # Este es el caso real: el sitio no entendio el pedido y devolvio la
     # pagina de busqueda comun, con los <option> de Fuero/Agregar
     # Filtro/operadores sueltos, sin ningun contenedor de tesauro.
     cliente = ClienteFalsoTesauro(F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML)
-    t = T.cosechar_arbol(cliente)
+    t = T.cosechar_arbol(cliente, destino=tmp_path / "tesauro_stjer.json")
     assert not t, "no tiene que guardar nada como si fuera un tesauro valido"
     assert t.version.startswith("INVALIDO")
 
@@ -63,24 +63,28 @@ class ClienteFalsoTesauroEco:
         )
 
 
-def test_cosechar_arbol_detecta_el_eco_y_no_explota():
+def test_cosechar_arbol_detecta_el_eco_y_no_explota(tmp_path):
     # Caso real: 161 categorias iniciales, cada intento de "abrir" una
     # devolvia la misma lista de 161 de siempre. Sin la deteccion de eco,
     # esto tardaba mas de dos horas y generaba una cola de cientos de miles.
     cliente = ClienteFalsoTesauroEco(F.TESAURO_SELECT_HTML)
-    t = T.cosechar_arbol(cliente, max_nodos=500)
+    t = T.cosechar_arbol(
+        cliente, destino=tmp_path / "tesauro_stjer.json", max_nodos=500
+    )
 
     # Se intenta expandir cada uno de los 3 nodos originales UNA vez, se
     # detecta el eco, y se corta — no una explosion combinatoria.
     assert cliente.llamadas <= 4, f"se hicieron {cliente.llamadas} pedidos, algo no corto a tiempo"
 
 
-def test_una_lista_plana_sin_sub_niveles_queda_aprovechada():
+def test_una_lista_plana_sin_sub_niveles_queda_aprovechada(tmp_path):
     # Si el tesauro real no tiene mas profundidad (es una lista plana de
     # terminos, no un arbol de 3 niveles), los terminos igual tienen que
     # quedar buscables — no descartados como si "no hubiera voces".
     cliente = ClienteFalsoTesauroEco(F.TESAURO_SELECT_HTML)
-    t = T.cosechar_arbol(cliente, max_nodos=500)
+    t = T.cosechar_arbol(
+        cliente, destino=tmp_path / "tesauro_stjer.json", max_nodos=500
+    )
 
     assert len(t) == 3, "las 3 categorias planas deberian quedar como voces buscables"
     assert set(t.voces()) == {"DERECHO CIVIL", "DERECHO PENAL", "DERECHOS HUMANOS"}
