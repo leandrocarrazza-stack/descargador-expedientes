@@ -180,6 +180,11 @@
                     <button id="sendBtn" onclick="enviarMensaje()">
                         Enviar
                     </button>
+                    <input type="file" id="archivoInput" accept=".pdf,.docx" style="display:none">
+                    <button id="adjuntarBtn" type="button" title="Subir un escrito (PDF o DOCX) para que sugiera jurisprudencia"
+                            onclick="document.getElementById('archivoInput').click()">
+                        📎 Adjuntar escrito
+                    </button>
                 </div>
             </div>
         </div>
@@ -222,36 +227,70 @@
             body: JSON.stringify({ mensaje })
         })
         .then(r => r.json())
-        .then(data => {
-            // Remover indicador de carga
-            chatMessages.removeChild(chatMessages.lastChild);
-
-            // Agregar respuesta
-            let html = data.respuesta;
-
-            if (data.sumarios && data.sumarios.length > 0) {
-                html += '<div class="sumarios-section">';
-                html += `<strong>📄 Fallos encontrados (${data.sumarios.length}):</strong>`;
-                for (const sum of data.sumarios) {
-                    html += `
-                        <div class="sumario-item">
-                            <div class="sumario-titulo">${sum.nombre_archivo}</div>
-                            <small>${sum.tribunal} | ${sum.materia}</small>
-                            <div style="margin-top: 0.5rem;">${sum.texto_sumario.substring(0, 200)}...</div>
-                        </div>
-                    `;
-                }
-                html += '</div>';
-            }
-
-            agregarMensaje(html, 'assistant');
-            sendBtn.disabled = false;
-        })
+        .then(data => mostrarRespuesta(data))
         .catch(e => {
             chatMessages.removeChild(chatMessages.lastChild);
             agregarMensaje('Error: ' + e.message, 'assistant');
             sendBtn.disabled = false;
         });
+    }
+
+    // Subida de un escrito (PDF/DOCX) para que sugiera jurisprudencia
+    const archivoInput = document.getElementById('archivoInput');
+    archivoInput.addEventListener('change', () => {
+        const archivo = archivoInput.files[0];
+        archivoInput.value = '';
+        if (!archivo) return;
+
+        agregarMensaje(`📎 <em>${archivo.name}</em>`, 'user');
+        agregarMensaje('<span class="loading"></span> Analizando el escrito, puede tardar un poco...', 'assistant');
+        sendBtn.disabled = true;
+
+        const formData = new FormData();
+        formData.append('archivo', archivo);
+
+        fetch('/jurisprudencia/chat/escrito', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => mostrarRespuesta(data))
+            .catch(e => {
+                chatMessages.removeChild(chatMessages.lastChild);
+                agregarMensaje('Error: ' + e.message, 'assistant');
+                sendBtn.disabled = false;
+            });
+    });
+
+    function mostrarRespuesta(data) {
+        // Remover indicador de carga
+        chatMessages.removeChild(chatMessages.lastChild);
+
+        if (data.error) {
+            agregarMensaje('⚠️ ' + data.error, 'assistant');
+            sendBtn.disabled = false;
+            return;
+        }
+
+        let html = (data.respuesta || '').replace(/\n/g, '<br>');
+
+        if (data.resultados && data.resultados.length > 0) {
+            html += '<div class="sumarios-section">';
+            html += `<strong>📄 Fallos encontrados (${data.resultados.length}):</strong>`;
+            for (const r of data.resultados) {
+                const voces = (r.voces || []).join(' · ');
+                html += `
+                    <div class="sumario-item">
+                        <div class="sumario-titulo">${r.caratula || r.clave}</div>
+                        <small>${r.organismo || ''} ${r.fuero ? '· ' + r.fuero : ''} ${r.fecha ? '· ' + r.fecha : ''}</small>
+                        <div style="margin-top: 0.5rem;">${r.fragmento || ''}</div>
+                        ${voces ? `<div style="margin-top: 0.3rem;"><small><strong>Voces:</strong> ${voces}</small></div>` : ''}
+                        ${r.url_pdf ? `<div style="margin-top: 0.3rem;"><a href="${r.url_pdf}" target="_blank" rel="noopener">Ver PDF</a></div>` : ''}
+                    </div>
+                `;
+            }
+            html += '</div>';
+        }
+
+        agregarMensaje(html, 'assistant');
+        sendBtn.disabled = false;
     }
 
     function agregarMensaje(contenido, tipo) {

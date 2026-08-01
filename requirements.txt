@@ -25,6 +25,9 @@ beautifulsoup4==4.12.2
 PyPDF2==3.0.1
 pdfplumber==0.11.0
 
+# Word Processing (escritos subidos al chat de jurisprudencia)
+python-docx==1.1.2
+
 # Async Tasks & Queue
 celery==5.3.1
 redis==5.0.0
