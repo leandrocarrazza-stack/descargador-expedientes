@@ -14,21 +14,34 @@ respuesta final es el propio Claude que esta corriendo estas herramientas
 (Claude Desktop, con tu suscripcion) -no se consume API por separado, mas
 alla del uso normal de tu plan-.
 
-Transporte: stdio (servidor local)
-Uso:  python mcp_server_jurisprudencia.py
+Dos formas de transporte, segun como lo conectes:
 
-Configuracion en Claude Desktop
-(%APPDATA%/Claude/claude_desktop_config.json en Windows,
-~/Library/Application Support/Claude/claude_desktop_config.json en Mac):
-{
-  "mcpServers": {
-    "jurisprudencia_stjer": {
-      "command": "python",
-      "args": ["C:/ruta/a/este/mcp_server_jurisprudencia.py"],
-      "cwd": "C:/ruta/al/proyecto"
-    }
-  }
-}
+1. **stdio** (default) - para clientes que arrancan el proceso ellos mismos
+   via `command`/`args` en su config (Claude Code, o un
+   claude_desktop_config.json clasico):
+
+       python mcp_server_jurisprudencia.py
+
+   {
+     "mcpServers": {
+       "jurisprudencia_stjer": {
+         "command": "python",
+         "args": ["C:/ruta/a/este/mcp_server_jurisprudencia.py"],
+         "cwd": "C:/ruta/al/proyecto"
+       }
+     }
+   }
+
+2. **HTTP local** (`--http`) - para el dialogo "Agregar conector
+   personalizado" de Claude Desktop, que solo acepta una URL de servidor MCP
+   remoto (no un comando local). El proceso queda corriendo y escuchando en
+   http://127.0.0.1:8765/mcp -tiene que seguir corriendo mientras lo uses-:
+
+       python mcp_server_jurisprudencia.py --http
+
+   En "Agregar conector personalizado": Nombre = lo que quieras, URL del
+   servidor MCP remoto = http://127.0.0.1:8765/mcp, OAuth = dejar vacio (no
+   hace falta, es local).
 """
 
 import sys
@@ -53,7 +66,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("jurisprudencia_stjer_mcp")
 
-mcp = FastMCP("jurisprudencia_stjer_mcp")
+mcp = FastMCP("jurisprudencia_stjer_mcp", port=8765)
 
 
 # ─────────────────────────────────────────────
@@ -361,5 +374,12 @@ async def jurisprudencia_obtener_fallo(params: ObtenerFalloInput) -> str:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    logger.info("Iniciando MCP Server - Jurisprudencia STJER")
-    mcp.run()  # Transporte stdio por defecto
+    if "--http" in sys.argv:
+        logger.info(
+            "Iniciando MCP Server - Jurisprudencia STJER (HTTP en "
+            "http://127.0.0.1:8765/mcp, dejalo corriendo)"
+        )
+        mcp.run(transport="streamable-http")
+    else:
+        logger.info("Iniciando MCP Server - Jurisprudencia STJER (stdio)")
+        mcp.run()  # Transporte stdio por defecto
