@@ -134,7 +134,15 @@ class ChatSTJER:
             respuesta = self.cliente.messages.create(
                 model=MODELO, max_tokens=700, system=system, messages=messages,
             )
-            texto_respuesta = respuesta.content[0].text
+            # Con thinking extendido, el primer bloque es un ThinkingBlock
+            # sin `.text` -no siempre el bloque de texto es el content[0]-.
+            texto_respuesta = next(
+                (b.text for b in respuesta.content if getattr(b, "type", None) == "text"),
+                None,
+            )
+            if texto_respuesta is None:
+                logger.warning("Claude no devolvio ningun bloque de texto")
+                return None
 
             inicio, fin = texto_respuesta.find("{"), texto_respuesta.rfind("}") + 1
             if inicio < 0 or fin <= inicio:
@@ -166,18 +174,34 @@ class ChatSTJER:
     # ── busqueda + formato ───────────────────────────────────────────────
 
     def _buscar_y_formatear(self, interpretacion: dict, limite: int) -> dict:
-        terminos = interpretacion.get("terminos_busqueda") or []
+        terminos = [
+            str(t).strip() for t in (interpretacion.get("terminos_busqueda") or [])
+            if str(t).strip()
+        ]
         voces = interpretacion.get("voces_juridicas") or []
-        consulta = " ".join(str(t) for t in terminos).strip()
 
-        resultados = []
-        if consulta:
+        # Cada termino se busca por separado (no todos juntos con AND): son
+        # frases de conceptos juridicos DISTINTOS, no fragmentos de una sola
+        # frase. Buscarlos todos con AND exigia que las palabras de las 3
+        # frases aparecieran juntas en el mismo sumario, lo que dejaba afuera
+        # al fallo mas relevante cuando cada frase cubria un aspecto
+        # diferente de la consulta. Se combinan los resultados y se
+        # desduplica por (fallo, sumario), quedandose con el mejor puntaje.
+        mejores = {}
+        for termino in terminos:
             try:
-                resultados = self.buscador.buscar(
-                    consulta, voces=voces or None, limite=limite
+                encontrados = self.buscador.buscar(
+                    termino, voces=voces or None, limite=limite
                 )
             except ErrorBusqueda:
-                resultados = []
+                continue
+            for r in encontrados:
+                clave = (r["fallo_id"], r["sumario"])
+                actual = mejores.get(clave)
+                if actual is None or r["puntaje"] > actual["puntaje"]:
+                    mejores[clave] = r
+
+        resultados = sorted(mejores.values(), key=lambda r: -r["puntaje"])[:limite]
 
         respuesta = interpretacion.get("respuesta_usuario") or ""
         if resultados:

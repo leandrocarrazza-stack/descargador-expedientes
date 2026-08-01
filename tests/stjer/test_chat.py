@@ -21,7 +21,10 @@ class _MessagesFalso:
         self._llamadas.append(kwargs)
         if self._excepcion:
             raise self._excepcion
-        return SimpleNamespace(content=[SimpleNamespace(text=self._texto)])
+        return SimpleNamespace(content=[
+            SimpleNamespace(type="thinking"),  # sin `.text`, como con thinking extendido
+            SimpleNamespace(type="text", text=self._texto),
+        ])
 
 
 class ClienteClaudeFalso:
@@ -93,6 +96,21 @@ def test_json_invalido_cae_a_interpretacion_local(poblado):
 
     assert cliente.llamadas, "igual se intento llamar a Claude"
     assert r["resultados"], "el fallback local tiene que seguir encontrando el fallo"
+
+
+def test_respuesta_sin_bloque_de_texto_cae_a_interpretacion_local(poblado):
+    # Caso real: con thinking extendido, a veces Claude no llega a emitir
+    # ningun bloque de texto (se corta en el thinking, p.ej. por max_tokens).
+    tesauro = _tesauro_de(poblado)
+    cliente = ClienteClaudeFalso()
+    cliente.messages.create = lambda **kw: SimpleNamespace(
+        content=[SimpleNamespace(type="thinking")]
+    )
+    chat = CH.ChatSTJER(poblado, cliente_anthropic=cliente, tesauro=tesauro)
+
+    r = chat.procesar_mensaje("responsabilidad objetiva")
+
+    assert r["resultados"]
 
 
 def test_error_de_red_con_claude_cae_a_interpretacion_local(poblado):
