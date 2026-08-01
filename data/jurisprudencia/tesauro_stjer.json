@@ -1,31 +1,1348 @@
 {
- "version": "2026-07-30",
+ "version": "2026-08-01",
  "materias": [
   {
-   "nombre": "DERECHO CIVIL",
-   "voces_principales": []
+   "nombre": "Derecho Administrativo",
+   "voces_principales": [
+    {
+     "nombre": "Acto administrativo",
+     "voces": [
+      "Denegatoria tácita"
+     ]
+    },
+    {
+     "nombre": "Derecho previsional",
+     "voces": [
+      "Devengamiento"
+     ]
+    },
+    {
+     "nombre": "Empleo Público",
+     "voces": [
+      "Diferencias salariales"
+     ]
+    },
+    {
+     "nombre": "Municipalidad",
+     "voces": [
+      "Concejo deliberante"
+     ]
+    },
+    {
+     "nombre": "Proceso administrativo",
+     "voces": [
+      "Admisibilidad"
+     ]
+    },
+    {
+     "nombre": "Responsabilidad del Estado",
+     "voces": [
+      "Factor de atribución",
+      "Falta de servicio",
+      "Responsabilidad del Estado",
+      "Responsabilidad directa y objetiva"
+     ]
+    }
+   ]
   },
   {
-   "nombre": "DERECHO PENAL",
-   "voces_principales": []
+   "nombre": "Derecho Administrativo - Administración pública",
+   "voces_principales": [
+    {
+     "nombre": "Instituto de Obra Social de la Provincia de Entre Ríos",
+     "voces": [
+      "Iosper"
+     ]
+    }
+   ]
   },
   {
-   "nombre": "DERECHOS HUMANOS",
-   "voces_principales": []
+   "nombre": "Derecho Civil",
+   "voces_principales": [
+    {
+     "nombre": "Accidente de tránsito",
+     "voces": [
+      "Accidente de tránsito"
+     ]
+    },
+    {
+     "nombre": "Acciones reales",
+     "voces": [
+      "Acción reivindicatoria"
+     ]
+    },
+    {
+     "nombre": "Alimentos",
+     "voces": [
+      "Cuota alimentaria. Fijación por valor del salario mínimo, vital y móvil"
+     ]
+    },
+    {
+     "nombre": "Daños y perjuicios",
+     "voces": [
+      "Daño inmaterial",
+      "Daño moral",
+      "Daños derivados de la falta de reconocimiento paterno",
+      "Prueba del daño"
+     ]
+    },
+    {
+     "nombre": "Derechos personalísimos",
+     "voces": [
+      "Derecho a la salud"
+     ]
+    },
+    {
+     "nombre": "Derechos personalísimos. Derecho a la identidad",
+     "voces": [
+      "Derecho a conocer la identidad de origen. Padres biológicos"
+     ]
+    },
+    {
+     "nombre": "Derechos reales",
+     "voces": [
+      "Interversión del título",
+      "Tenedor"
+     ]
+    },
+    {
+     "nombre": "Derechos reales. Dominio",
+     "voces": [
+      "Prescripción adquisitiva. Prescripción veinteañal"
+     ]
+    },
+    {
+     "nombre": "Ejercicio de los derechos",
+     "voces": [
+      "Orden público"
+     ]
+    },
+    {
+     "nombre": "Enriquecimiento sin causa",
+     "voces": [
+      "Enriquecimiento sin causa"
+     ]
+    },
+    {
+     "nombre": "Factores de atribución de responsabilidad",
+     "voces": [
+      "Culpa",
+      "Dolo"
+     ]
+    },
+    {
+     "nombre": "Obligaciones de dar",
+     "voces": [
+      "Intereses. Capitalización de intereses. Anatocismo",
+      "Obligaciones de dar sumas de dinero. Actualización monetaria"
+     ]
+    },
+    {
+     "nombre": "Obligaciones de hacer",
+     "voces": [
+      "Ejecución forzada. Sanciones conminatorias. Astreintes"
+     ]
+    },
+    {
+     "nombre": "Prescripción y caducidad",
+     "voces": [
+      "Caducidad"
+     ]
+    },
+    {
+     "nombre": "Relaciones de familia",
+     "voces": [
+      "Parentesco por afinidad",
+      "Parentesco. Abuelos"
+     ]
+    },
+    {
+     "nombre": "Responsabilidad civil",
+     "voces": [
+      "Nexo de causalidad"
+     ]
+    },
+    {
+     "nombre": "Responsabilidad parental",
+     "voces": [
+      "Delegación del ejercicio de la responsabilidad parental"
+     ]
+    },
+    {
+     "nombre": "Sucesiones",
+     "voces": [
+      "Herederos forzosos",
+      "Proceso Sucesorio",
+      "Sucesión testamentaria. Testamento ológrafo",
+      "Vocación hereditaria"
+     ]
+    },
+    {
+     "nombre": "Uniones convivenciales",
+     "voces": [
+      "Conviviente"
+     ]
+    },
+    {
+     "nombre": "Vivienda familiar",
+     "voces": [
+      "Atribución de la vivienda"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Comercial",
+   "voces_principales": [
+    {
+     "nombre": "Seguros",
+     "voces": [
+      "Cobertura",
+      "Póliza",
+      "Seguro de responsabilidad civil. Citación en garantía"
+     ]
+    },
+    {
+     "nombre": "Sociedades comerciales",
+     "voces": [
+      "Sociedad de hecho"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Constitucional",
+   "voces_principales": [
+    {
+     "nombre": "Acción de amparo",
+     "voces": [
+      "Acción de amparo",
+      "Acción de ejecución",
+      "Admisibilidad de la acción"
+     ]
+    },
+    {
+     "nombre": "Garantías procesales",
+     "voces": [
+      "Doble conforme",
+      "In dubio pro reo",
+      "Jueces naturales"
+     ]
+    },
+    {
+     "nombre": "Principios",
+     "voces": [
+      "Igualdad de trato"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Laboral",
+   "voces_principales": [
+    {
+     "nombre": "Accidentes de trabajo",
+     "voces": [
+      "Acción sistémica",
+      "Comisiones médicas",
+      "Determinación de la incapacidad",
+      "Liquidación final",
+      "Presunción de la causa"
+     ]
+    },
+    {
+     "nombre": "Contrato de trabajo",
+     "voces": [
+      "Examen preocupacional",
+      "Indemnización. Liquidación",
+      "Jornada de trabajo",
+      "Jornada reducida",
+      "Presunción de contrato de trabajo",
+      "Prueba del contrato de trabajo",
+      "Subordinación técnica, jurídica y económica"
+     ]
+    },
+    {
+     "nombre": "Prescripción y caducidad",
+     "voces": [
+      "Accidentes y enfermedades profesionales"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Penal",
+   "voces_principales": [
+    {
+     "nombre": "Delitos",
+     "voces": [
+      "Delito continuado"
+     ]
+    },
+    {
+     "nombre": "Delitos contra la integridad sexual",
+     "voces": [
+      "Abuso sexual",
+      "Víctima menor de edad"
+     ]
+    },
+    {
+     "nombre": "Delitos contra la libertad",
+     "voces": [
+      "Amenazas",
+      "Amenazas calificadas"
+     ]
+    },
+    {
+     "nombre": "Delitos contra la propiedad",
+     "voces": [
+      "Hurto simple"
+     ]
+    },
+    {
+     "nombre": "Menores",
+     "voces": [
+      "Derecho Penal de Niños, Niñas y Adolescentes",
+      "Incidencia del tratamiento tutelar"
+     ]
+    },
+    {
+     "nombre": "Pena",
+     "voces": [
+      "Arresto domiciliario",
+      "Condena condicional",
+      "Determinación de pena",
+      "Finalidad de la pena",
+      "Individualización de la pena",
+      "Necesidad de pena",
+      "Progresividad del régimen penitenciario",
+      "Unificación de penas"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Procesal",
+   "voces_principales": [
+    {
+     "nombre": "Actos y diligencias procesales",
+     "voces": [
+      "Remisión de la causa a juicio"
+     ]
+    },
+    {
+     "nombre": "Competencia",
+     "voces": [
+      "Competencia por la materia"
+     ]
+    },
+    {
+     "nombre": "Etapas del proceso",
+     "voces": [
+      "Improponibilidad objetiva de la demanda",
+      "Reconvención"
+     ]
+    },
+    {
+     "nombre": "Etapas del proceso. Excepciones procesales",
+     "voces": [
+      "Excepción de pago"
+     ]
+    },
+    {
+     "nombre": "Etapas del proceso. Prueba",
+     "voces": [
+      "Apreciación de la prueba",
+      "Apreciación de la prueba. Reglas de la sana crítica",
+      "Carga de la prueba",
+      "Valor probatorio"
+     ]
+    },
+    {
+     "nombre": "Etapas del proceso. Prueba. Prueba pericial",
+     "voces": [
+      "Dictamen pericial",
+      "Pericia informática",
+      "Pericia médica",
+      "Peritos. Cuerpos técnicos periciales"
+     ]
+    },
+    {
+     "nombre": "Gastos del proceso",
+     "voces": [
+      "Honorarios"
+     ]
+    },
+    {
+     "nombre": "Gastos del proceso. Costas",
+     "voces": [
+      "Costas"
+     ]
+    },
+    {
+     "nombre": "Gastos del proceso. Honorarios",
+     "voces": [
+      "Ejecución de honorarios",
+      "Honorarios del perito",
+      "Jurista",
+      "Regulación de honorarios . Fijación judicial equitativa",
+      "Regulación de honorarios. Apelación de honorarios"
+     ]
+    },
+    {
+     "nombre": "Gastos del proceso. Tasa de justicia",
+     "voces": [
+      "Tasa de justicia"
+     ]
+    },
+    {
+     "nombre": "Juicio de desalojo",
+     "voces": [
+      "Desalojo anticipado"
+     ]
+    },
+    {
+     "nombre": "Juicio de menores",
+     "voces": [
+      "Menor procesado"
+     ]
+    },
+    {
+     "nombre": "Juicio por Jurados",
+     "voces": [
+      "Juicio por Jurados"
+     ]
+    },
+    {
+     "nombre": "Medidas cautelares",
+     "voces": [
+      "Aseguramiento de prueba",
+      "Medidas cautelares",
+      "Verosimilitud del derecho invocado"
+     ]
+    },
+    {
+     "nombre": "Medios alternativos de solución de conflictos. Mediación",
+     "voces": [
+      "Audiencia de mediación",
+      "Honorarios del mediador",
+      "Mediación obligatoria"
+     ]
+    },
+    {
+     "nombre": "Ministerio público",
+     "voces": [
+      "Ministerio público de la defensa"
+     ]
+    },
+    {
+     "nombre": "Objeto del proceso",
+     "voces": [
+      "Pretensión"
+     ]
+    },
+    {
+     "nombre": "Organización de la justicia. Jueces",
+     "voces": [
+      "Deberes del juez",
+      "Facultades del juez. Facultades de saneamiento"
+     ]
+    },
+    {
+     "nombre": "Partes del proceso. Deberes procesales",
+     "voces": [
+      "Buena fe procesal"
+     ]
+    },
+    {
+     "nombre": "Principios procesales",
+     "voces": [
+      "Iura novit curia",
+      "Principio de colaboración",
+      "Principio de congruencia",
+      "Principio de eventualidad"
+     ]
+    },
+    {
+     "nombre": "Proceso judicial",
+     "voces": [
+      "Procesos de conocimiento. Acción meramente declarativa"
+     ]
+    },
+    {
+     "nombre": "Procesos de ejecución",
+     "voces": [
+      "Ley de Ejecución de penas y medidas de seguridad",
+      "Libertad condicional",
+      "Prescripción de la acción de ejecución de sentencia"
+     ]
+    },
+    {
+     "nombre": "Prueba",
+     "voces": [
+      "Cámara Gesell"
+     ]
+    },
+    {
+     "nombre": "Recurso de inaplicabilidad de ley",
+     "voces": [
+      "Beneficio de gratuidad",
+      "Doctrina legal",
+      "Responsabilidad del Estado",
+      "Sanciones disciplinarias"
+     ]
+    },
+    {
+     "nombre": "Recursos",
+     "voces": [
+      "Denegatoria del recurso",
+      "Efecto diferido",
+      "Facultades de la alzada",
+      "Fundamentación del recurso",
+      "Interposición del recurso. Interposición en subsidio. Apelación en subsidio",
+      "Recurso declarado desierto"
+     ]
+    },
+    {
+     "nombre": "Recursos. Recurso de apelación",
+     "voces": [
+      "Expresión de agravios. Insuficiencia del agravio",
+      "Inapelabilidad"
+     ]
+    },
+    {
+     "nombre": "Recursos. Recurso de casación",
+     "voces": [
+      "Recurso de casación penal"
+     ]
+    },
+    {
+     "nombre": "Recursos. Recurso de queja",
+     "voces": [
+      "Recurso de queja"
+     ]
+    },
+    {
+     "nombre": "Recusación y excusación",
+     "voces": [
+      "Excusación",
+      "Recusación"
+     ]
+    },
+    {
+     "nombre": "Resoluciones judiciales",
+     "voces": [
+      "Prejuzgamiento",
+      "Resoluciones apelables",
+      "Resoluciones irrecurribles"
+     ]
+    },
+    {
+     "nombre": "Sentencia",
+     "voces": [
+      "Cuestión abstracta",
+      "Sentencia absolutoria"
+     ]
+    },
+    {
+     "nombre": "Terminación del proceso",
+     "voces": [
+      "Conciliación"
+     ]
+    },
+    {
+     "nombre": "Terminación del proceso. Caducidad de instancia",
+     "voces": [
+      "Caducidad de instancia"
+     ]
+    },
+    {
+     "nombre": "Terminación del proceso. Transacción",
+     "voces": [
+      "Transacción de derechos litigiosos"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derecho Procesal - Juicio abreviado",
+   "voces_principales": [
+    {
+     "nombre": "Juicio abreviado",
+     "voces": [
+      "Revisión Judicial"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Derechos Humanos",
+   "voces_principales": [
+    {
+     "nombre": "Derechos Humanos",
+     "voces": [
+      "Desigualdad de género",
+      "Perspectiva de género"
+     ]
+    },
+    {
+     "nombre": "Derechos de la mujer",
+     "voces": [
+      "Protección de la mujer",
+      "Violencia de género"
+     ]
+    },
+    {
+     "nombre": "Derechos del niño",
+     "voces": [
+      "Derecho del menor a ser oído"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Salud Pública",
+   "voces_principales": [
+    {
+     "nombre": "Asistencia médica",
+     "voces": [
+      "Reintegro"
+     ]
+    },
+    {
+     "nombre": "Enfermedades",
+     "voces": [
+      "Cáncer",
+      "Diabetes",
+      "Trastornos alimentarios"
+     ]
+    },
+    {
+     "nombre": "Infraestructura sanitaria",
+     "voces": [
+      "Establecimientos geriátricos"
+     ]
+    },
+    {
+     "nombre": "Medicamentos",
+     "voces": [
+      "Medicamentos"
+     ]
+    },
+    {
+     "nombre": "Salud pública",
+     "voces": [
+      "Elementos ortopédicos",
+      "Maestra orientadora integradora",
+      "Tratamiento médico"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Seguridad Social",
+   "voces_principales": [
+    {
+     "nombre": "Obras sociales",
+     "voces": [
+      "Afiliación a obras sociales",
+      "Prestaciones de la obra social"
+     ]
+    },
+    {
+     "nombre": "Recursos de la seguridad social",
+     "voces": [
+      "Aportes y contribuciones previsionales"
+     ]
+    },
+    {
+     "nombre": "Régimen jubilatorio",
+     "voces": [
+      "Cajas profesionales"
+     ]
+    }
+   ]
+  },
+  {
+   "nombre": "Transporte",
+   "voces_principales": [
+    {
+     "nombre": "Reglas de tránsito",
+     "voces": [
+      "Giros"
+     ]
+    }
+   ]
   }
  ],
  "indice_plano": {
-  "DERECHO CIVIL": {
-   "materia": "",
-   "voz_principal": ""
+  "Denegatoria tácita": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Acto administrativo"
   },
-  "DERECHO PENAL": {
-   "materia": "",
-   "voz_principal": ""
+  "Devengamiento": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Derecho previsional"
   },
-  "DERECHOS HUMANOS": {
-   "materia": "",
-   "voz_principal": ""
+  "Diferencias salariales": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Empleo Público"
+  },
+  "Concejo deliberante": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Municipalidad"
+  },
+  "Admisibilidad": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Proceso administrativo"
+  },
+  "Factor de atribución": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Responsabilidad del Estado"
+  },
+  "Falta de servicio": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Responsabilidad del Estado"
+  },
+  "Responsabilidad del Estado": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recurso de inaplicabilidad de ley"
+  },
+  "Responsabilidad directa y objetiva": {
+   "materia": "Derecho Administrativo",
+   "voz_principal": "Responsabilidad del Estado"
+  },
+  "Iosper": {
+   "materia": "Derecho Administrativo - Administración pública",
+   "voz_principal": "Instituto de Obra Social de la Provincia de Entre Ríos"
+  },
+  "Accidente de tránsito": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Accidente de tránsito"
+  },
+  "Acción reivindicatoria": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Acciones reales"
+  },
+  "Cuota alimentaria. Fijación por valor del salario mínimo, vital y móvil": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Alimentos"
+  },
+  "Daño inmaterial": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Daños y perjuicios"
+  },
+  "Daño moral": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Daños y perjuicios"
+  },
+  "Daños derivados de la falta de reconocimiento paterno": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Daños y perjuicios"
+  },
+  "Prueba del daño": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Daños y perjuicios"
+  },
+  "Derecho a la salud": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Derechos personalísimos"
+  },
+  "Derecho a conocer la identidad de origen. Padres biológicos": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Derechos personalísimos. Derecho a la identidad"
+  },
+  "Interversión del título": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Derechos reales"
+  },
+  "Tenedor": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Derechos reales"
+  },
+  "Prescripción adquisitiva. Prescripción veinteañal": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Derechos reales. Dominio"
+  },
+  "Orden público": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Ejercicio de los derechos"
+  },
+  "Enriquecimiento sin causa": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Enriquecimiento sin causa"
+  },
+  "Culpa": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Factores de atribución de responsabilidad"
+  },
+  "Dolo": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Factores de atribución de responsabilidad"
+  },
+  "Intereses. Capitalización de intereses. Anatocismo": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Obligaciones de dar"
+  },
+  "Obligaciones de dar sumas de dinero. Actualización monetaria": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Obligaciones de dar"
+  },
+  "Ejecución forzada. Sanciones conminatorias. Astreintes": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Obligaciones de hacer"
+  },
+  "Caducidad": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Prescripción y caducidad"
+  },
+  "Parentesco por afinidad": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Relaciones de familia"
+  },
+  "Parentesco. Abuelos": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Relaciones de familia"
+  },
+  "Nexo de causalidad": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Responsabilidad civil"
+  },
+  "Delegación del ejercicio de la responsabilidad parental": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Responsabilidad parental"
+  },
+  "Herederos forzosos": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Sucesiones"
+  },
+  "Proceso Sucesorio": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Sucesiones"
+  },
+  "Sucesión testamentaria. Testamento ológrafo": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Sucesiones"
+  },
+  "Vocación hereditaria": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Sucesiones"
+  },
+  "Conviviente": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Uniones convivenciales"
+  },
+  "Atribución de la vivienda": {
+   "materia": "Derecho Civil",
+   "voz_principal": "Vivienda familiar"
+  },
+  "Cobertura": {
+   "materia": "Derecho Comercial",
+   "voz_principal": "Seguros"
+  },
+  "Póliza": {
+   "materia": "Derecho Comercial",
+   "voz_principal": "Seguros"
+  },
+  "Seguro de responsabilidad civil. Citación en garantía": {
+   "materia": "Derecho Comercial",
+   "voz_principal": "Seguros"
+  },
+  "Sociedad de hecho": {
+   "materia": "Derecho Comercial",
+   "voz_principal": "Sociedades comerciales"
+  },
+  "Acción de amparo": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Acción de amparo"
+  },
+  "Acción de ejecución": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Acción de amparo"
+  },
+  "Admisibilidad de la acción": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Acción de amparo"
+  },
+  "Doble conforme": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Garantías procesales"
+  },
+  "In dubio pro reo": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Garantías procesales"
+  },
+  "Jueces naturales": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Garantías procesales"
+  },
+  "Igualdad de trato": {
+   "materia": "Derecho Constitucional",
+   "voz_principal": "Principios"
+  },
+  "Acción sistémica": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Accidentes de trabajo"
+  },
+  "Comisiones médicas": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Accidentes de trabajo"
+  },
+  "Determinación de la incapacidad": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Accidentes de trabajo"
+  },
+  "Liquidación final": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Accidentes de trabajo"
+  },
+  "Presunción de la causa": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Accidentes de trabajo"
+  },
+  "Examen preocupacional": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Indemnización. Liquidación": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Jornada de trabajo": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Jornada reducida": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Presunción de contrato de trabajo": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Prueba del contrato de trabajo": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Subordinación técnica, jurídica y económica": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Contrato de trabajo"
+  },
+  "Accidentes y enfermedades profesionales": {
+   "materia": "Derecho Laboral",
+   "voz_principal": "Prescripción y caducidad"
+  },
+  "Delito continuado": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos"
+  },
+  "Abuso sexual": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos contra la integridad sexual"
+  },
+  "Víctima menor de edad": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos contra la integridad sexual"
+  },
+  "Amenazas": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos contra la libertad"
+  },
+  "Amenazas calificadas": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos contra la libertad"
+  },
+  "Hurto simple": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Delitos contra la propiedad"
+  },
+  "Derecho Penal de Niños, Niñas y Adolescentes": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Menores"
+  },
+  "Incidencia del tratamiento tutelar": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Menores"
+  },
+  "Arresto domiciliario": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Condena condicional": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Determinación de pena": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Finalidad de la pena": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Individualización de la pena": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Necesidad de pena": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Progresividad del régimen penitenciario": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Unificación de penas": {
+   "materia": "Derecho Penal",
+   "voz_principal": "Pena"
+  },
+  "Remisión de la causa a juicio": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Actos y diligencias procesales"
+  },
+  "Competencia por la materia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Competencia"
+  },
+  "Improponibilidad objetiva de la demanda": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso"
+  },
+  "Reconvención": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso"
+  },
+  "Excepción de pago": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Excepciones procesales"
+  },
+  "Apreciación de la prueba": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba"
+  },
+  "Apreciación de la prueba. Reglas de la sana crítica": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba"
+  },
+  "Carga de la prueba": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba"
+  },
+  "Valor probatorio": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba"
+  },
+  "Dictamen pericial": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba. Prueba pericial"
+  },
+  "Pericia informática": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba. Prueba pericial"
+  },
+  "Pericia médica": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba. Prueba pericial"
+  },
+  "Peritos. Cuerpos técnicos periciales": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Etapas del proceso. Prueba. Prueba pericial"
+  },
+  "Honorarios": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso"
+  },
+  "Costas": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Costas"
+  },
+  "Ejecución de honorarios": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Honorarios"
+  },
+  "Honorarios del perito": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Honorarios"
+  },
+  "Jurista": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Honorarios"
+  },
+  "Regulación de honorarios . Fijación judicial equitativa": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Honorarios"
+  },
+  "Regulación de honorarios. Apelación de honorarios": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Honorarios"
+  },
+  "Tasa de justicia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Gastos del proceso. Tasa de justicia"
+  },
+  "Desalojo anticipado": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Juicio de desalojo"
+  },
+  "Menor procesado": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Juicio de menores"
+  },
+  "Juicio por Jurados": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Juicio por Jurados"
+  },
+  "Aseguramiento de prueba": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medidas cautelares"
+  },
+  "Medidas cautelares": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medidas cautelares"
+  },
+  "Verosimilitud del derecho invocado": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medidas cautelares"
+  },
+  "Audiencia de mediación": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medios alternativos de solución de conflictos. Mediación"
+  },
+  "Honorarios del mediador": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medios alternativos de solución de conflictos. Mediación"
+  },
+  "Mediación obligatoria": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Medios alternativos de solución de conflictos. Mediación"
+  },
+  "Ministerio público de la defensa": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Ministerio público"
+  },
+  "Pretensión": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Objeto del proceso"
+  },
+  "Deberes del juez": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Organización de la justicia. Jueces"
+  },
+  "Facultades del juez. Facultades de saneamiento": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Organización de la justicia. Jueces"
+  },
+  "Buena fe procesal": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Partes del proceso. Deberes procesales"
+  },
+  "Iura novit curia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Principios procesales"
+  },
+  "Principio de colaboración": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Principios procesales"
+  },
+  "Principio de congruencia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Principios procesales"
+  },
+  "Principio de eventualidad": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Principios procesales"
+  },
+  "Procesos de conocimiento. Acción meramente declarativa": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Proceso judicial"
+  },
+  "Ley de Ejecución de penas y medidas de seguridad": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Procesos de ejecución"
+  },
+  "Libertad condicional": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Procesos de ejecución"
+  },
+  "Prescripción de la acción de ejecución de sentencia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Procesos de ejecución"
+  },
+  "Cámara Gesell": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Prueba"
+  },
+  "Beneficio de gratuidad": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recurso de inaplicabilidad de ley"
+  },
+  "Doctrina legal": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recurso de inaplicabilidad de ley"
+  },
+  "Sanciones disciplinarias": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recurso de inaplicabilidad de ley"
+  },
+  "Denegatoria del recurso": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Efecto diferido": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Facultades de la alzada": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Fundamentación del recurso": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Interposición del recurso. Interposición en subsidio. Apelación en subsidio": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Recurso declarado desierto": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos"
+  },
+  "Expresión de agravios. Insuficiencia del agravio": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos. Recurso de apelación"
+  },
+  "Inapelabilidad": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos. Recurso de apelación"
+  },
+  "Recurso de casación penal": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos. Recurso de casación"
+  },
+  "Recurso de queja": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recursos. Recurso de queja"
+  },
+  "Excusación": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recusación y excusación"
+  },
+  "Recusación": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Recusación y excusación"
+  },
+  "Prejuzgamiento": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Resoluciones judiciales"
+  },
+  "Resoluciones apelables": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Resoluciones judiciales"
+  },
+  "Resoluciones irrecurribles": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Resoluciones judiciales"
+  },
+  "Cuestión abstracta": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Sentencia"
+  },
+  "Sentencia absolutoria": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Sentencia"
+  },
+  "Conciliación": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Terminación del proceso"
+  },
+  "Caducidad de instancia": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Terminación del proceso. Caducidad de instancia"
+  },
+  "Transacción de derechos litigiosos": {
+   "materia": "Derecho Procesal",
+   "voz_principal": "Terminación del proceso. Transacción"
+  },
+  "Revisión Judicial": {
+   "materia": "Derecho Procesal - Juicio abreviado",
+   "voz_principal": "Juicio abreviado"
+  },
+  "Desigualdad de género": {
+   "materia": "Derechos Humanos",
+   "voz_principal": "Derechos Humanos"
+  },
+  "Perspectiva de género": {
+   "materia": "Derechos Humanos",
+   "voz_principal": "Derechos Humanos"
+  },
+  "Protección de la mujer": {
+   "materia": "Derechos Humanos",
+   "voz_principal": "Derechos de la mujer"
+  },
+  "Violencia de género": {
+   "materia": "Derechos Humanos",
+   "voz_principal": "Derechos de la mujer"
+  },
+  "Derecho del menor a ser oído": {
+   "materia": "Derechos Humanos",
+   "voz_principal": "Derechos del niño"
+  },
+  "Reintegro": {
+   "materia": "Salud Pública",
+   "voz_principal": "Asistencia médica"
+  },
+  "Cáncer": {
+   "materia": "Salud Pública",
+   "voz_principal": "Enfermedades"
+  },
+  "Diabetes": {
+   "materia": "Salud Pública",
+   "voz_principal": "Enfermedades"
+  },
+  "Trastornos alimentarios": {
+   "materia": "Salud Pública",
+   "voz_principal": "Enfermedades"
+  },
+  "Establecimientos geriátricos": {
+   "materia": "Salud Pública",
+   "voz_principal": "Infraestructura sanitaria"
+  },
+  "Medicamentos": {
+   "materia": "Salud Pública",
+   "voz_principal": "Medicamentos"
+  },
+  "Elementos ortopédicos": {
+   "materia": "Salud Pública",
+   "voz_principal": "Salud pública"
+  },
+  "Maestra orientadora integradora": {
+   "materia": "Salud Pública",
+   "voz_principal": "Salud pública"
+  },
+  "Tratamiento médico": {
+   "materia": "Salud Pública",
+   "voz_principal": "Salud pública"
+  },
+  "Afiliación a obras sociales": {
+   "materia": "Seguridad Social",
+   "voz_principal": "Obras sociales"
+  },
+  "Prestaciones de la obra social": {
+   "materia": "Seguridad Social",
+   "voz_principal": "Obras sociales"
+  },
+  "Aportes y contribuciones previsionales": {
+   "materia": "Seguridad Social",
+   "voz_principal": "Recursos de la seguridad social"
+  },
+  "Cajas profesionales": {
+   "materia": "Seguridad Social",
+   "voz_principal": "Régimen jubilatorio"
+  },
+  "Giros": {
+   "materia": "Transporte",
+   "voz_principal": "Reglas de tránsito"
   }
  }
 }

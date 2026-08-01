@@ -7,9 +7,21 @@ inventadas** (RESPONSABILIDAD CIVIL, ACCIDENTE DE TRANSITO, ...). No es el
 tesauro del STJER: es un placeholder. Por eso la skill no sabia traducir una
 consulta a voces juridicas — no tenia contra que traducir.
 
-Este modulo cosecha el arbol real (Materia > Voz Principal > Voz) a
+Este modulo arma el arbol real (Materia > Voz Principal > Voz) a
 `data/jurisprudencia/tesauro_stjer.json`, que **si se versiona en git**: pesa
 poco, cambia poco, y hace que el mapeo a voces funcione incluso sin corpus.
+
+**`cosechar_arbol()` (el `--cosechar` de la CLI) no sirve y no va a
+arreglarse**: se investigo con DevTools (ver `data/jurisprudencia/
+descubrimiento/toba_ei_11001001_filtro_voces_*.html`, capturado 2026-07-29) y
+"Buscar voces en el Tesauro" NO abre un arbol navegable por AJAX. Es el boton
+de un filtro de texto libre ("contiene") sobre 3 columnas de la grilla de
+resultados (Materia/Voz Principal/Voz) — no hay ningun endpoint con la lista
+completa de voces para recorrer. El sitio no expone un tesauro navegable.
+
+El unico camino real es `importar_desde_corpus()` (`--desde-corpus`): arma el
+arbol con las voces que ya se parsearon de los fallos cosechados. No es un
+plan B, es EL camino — no hace falta seguir intentando cosechar del sitio.
 
 Sobre el mapeo consulta -> voces
 --------------------------------
