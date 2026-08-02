@@ -729,6 +729,49 @@ def parsear_detalle(cuerpo: str) -> DetalleParseado:
     return d
 
 
+# Encabezados de columna de la grilla de busqueda comun ("Carátula", "Sumario",
+# "Fallo", "Fuero"...) que el parser puede confundir con datos reales cuando
+# abrir_detalle no llega a la fila exacta y el sitio devuelve esa pagina en
+# vez del detalle. Ver parece_detalle_valido().
+_CARATULA_INVALIDA = frozenset(
+    normalizar_texto(t) for t in ("sumario", "caratula", "fallo", "fuero")
+)
+
+
+def caratula_parece_invalida(caratula: str) -> bool:
+    """True si `caratula` parece un encabezado de columna filtrado por error
+    (ver parece_detalle_valido), no la caratula real de un fallo."""
+    caratula_norm = normalizar_texto(caratula or "")
+    return not caratula_norm or caratula_norm in _CARATULA_INVALIDA
+
+
+def parece_detalle_valido(d: DetalleParseado) -> tuple:
+    """
+    Chequeo de cordura: ¿esto es el detalle real de un fallo, o la pagina de
+    busqueda comun leida por error? (mismo patron que parece_tesauro_valido)
+
+    Caso real detectado en produccion: cuando abrir_detalle no re-navega a
+    la fila exacta, el sitio devuelve la pagina de busqueda de siempre, y
+    sin este chequeo el parser tomaba los ENCABEZADOS de columna de esa
+    grilla ("Sumario", "Carátula", "Fallo", "Fuero") como si fueran los
+    datos reales del fallo -y la cosecha lo marcaba como exito igual-.
+    Devuelve (es_valido, motivo).
+    """
+    if caratula_parece_invalida(d.caratula):
+        return False, (
+            f"caratula sospechosa ({d.caratula!r}): parece un encabezado de "
+            "columna de la grilla de busqueda, no la caratula real de un "
+            "fallo. Probablemente no se llego a la pagina de detalle real."
+        )
+    if not d.sumarios or all(len(s["texto"]) <= 40 for s in d.sumarios):
+        return False, (
+            "ningun sumario supera los 40 caracteres: probablemente se "
+            "extrajo un encabezado de la grilla (p.ej. 'Fuero') en vez del "
+            "sumario real."
+        )
+    return True, ""
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  Tesauro
 # ═══════════════════════════════════════════════════════════════════════════

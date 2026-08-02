@@ -10,6 +10,7 @@ import pytest
 
 from modulos.jurisprudencia.stjer import corpus as C
 from modulos.jurisprudencia.stjer import cosecha as H
+from modulos.jurisprudencia.stjer import parser as P
 from modulos.jurisprudencia.stjer.cliente import ErrorCaptcha, ErrorCliente, RespuestaCruda
 from tests.stjer import fixtures_sinteticas as F
 
@@ -178,6 +179,37 @@ def test_el_extracto_no_pisa_un_sumario_completo_ya_cosechado(con):
     assert C.estadisticas(con)["sumarios_truncados"] == 0
 
 
+def test_detalle_invalido_no_se_guarda_y_queda_en_error(con):
+    from datetime import date
+
+    # Caso real: abrir_detalle no re-navega a la fila exacta y el sitio
+    # devuelve la pagina de busqueda comun en vez del detalle.
+    cliente = ClienteFalso(detalle=F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML)
+    cos = H.Cosechadora(cliente, con)
+    cos.planificar_listados(date(2019, 3, 1), date(2019, 3, 31))
+    cos.ejecutar(H.TIPO_LISTA)
+    caratulas_antes = {
+        r["caratula"] for r in con.execute("SELECT caratula FROM fallos")
+    }
+
+    cos.planificar_detalles()
+    r = cos.ejecutar(H.TIPO_DETALLE)
+
+    assert r.tareas_ok == 0, "ningun detalle invalido deberia contarse como ok"
+    assert r.tareas_error == 2
+    assert con.execute(
+        "SELECT COUNT(*) FROM fallos WHERE detalle_ok=1"
+    ).fetchone()[0] == 0
+    # La caratula real del listado no se piso con basura del detalle invalido.
+    caratulas_despues = {
+        r["caratula"] for r in con.execute("SELECT caratula FROM fallos")
+    }
+    assert caratulas_despues == caratulas_antes
+    assert not any(
+        P.caratula_parece_invalida(c) for c in caratulas_despues
+    )
+
+
 # ─── resiliencia ───────────────────────────────────────────────────────────
 
 def test_el_disyuntor_corta_tras_fallos_seguidos(con):
@@ -288,6 +320,39 @@ def test_la_reconciliacion_detecta_que_faltan_filas(con):
     assert estado == "pendiente", "el mes descuadrado tiene que re-encolarse"
 
 
+def test_reparar_reencola_detalles_marcados_ok_con_datos_invalidos(con):
+    from datetime import date
+
+    # Simula el estado corrupto real: un fallo con detalle_ok=1 pero
+    # caratula/organismo de encabezado de columna en vez de datos reales
+    # (paso antes del chequeo de cordura, con corpus viejos).
+    cos = H.Cosechadora(ClienteFalso(), con)
+    cos.planificar_listados(date(2019, 3, 1), date(2019, 3, 31))
+    cos.ejecutar(H.TIPO_LISTA)
+    cos.planificar_detalles()
+    cos.ejecutar(H.TIPO_DETALLE)
+
+    fila = con.execute("SELECT id, clave_natural FROM fallos LIMIT 1").fetchone()
+    con.execute(
+        "UPDATE fallos SET caratula='Sumario', detalle_ok=1 WHERE id=?",
+        (fila["id"],),
+    )
+    con.commit()
+
+    resultado = cos.reparar()
+
+    assert resultado["detalles_corruptos_reencolados"] == 1
+    estado = con.execute(
+        "SELECT detalle_ok FROM fallos WHERE id=?", (fila["id"],)
+    ).fetchone()["detalle_ok"]
+    assert estado == 0
+    tarea = con.execute(
+        "SELECT estado FROM cosecha_tareas WHERE tipo=? AND clave=?",
+        (H.TIPO_DETALLE, fila["clave_natural"]),
+    ).fetchone()
+    assert tarea["estado"] == "pendiente"
+
+
 def test_reparsear_no_toca_la_red(con):
     from datetime import date
 
@@ -303,6 +368,36 @@ def test_reparsear_no_toca_la_red(con):
 
     assert r["procesados"] == 2 and r["errores"] == 0
     assert len(cliente.llamadas) == antes, "re-parsear no debe pedir nada"
+
+
+def test_reparsear_no_confirma_un_crudo_invalido(con):
+    from datetime import date
+    import gzip
+
+    cos = H.Cosechadora(ClienteFalso(), con, guardar_crudo=True)
+    cos.planificar_listados(date(2019, 3, 1), date(2019, 3, 31))
+    cos.ejecutar(H.TIPO_LISTA)
+    cos.planificar_detalles()
+    cos.ejecutar(H.TIPO_DETALLE)
+
+    # El HTML archivado en si es la pagina de busqueda comun (asi paso en
+    # produccion): reparsear no puede "arreglar" eso, solo no debe
+    # confirmarlo como si fuera un detalle valido.
+    con.execute(
+        "UPDATE respuestas_crudas SET cuerpo_gz=? WHERE tipo=?",
+        (
+            gzip.compress(F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML.encode("utf-8")),
+            H.TIPO_DETALLE,
+        ),
+    )
+    con.commit()
+
+    r = H.reparsear_crudos(con, H.TIPO_DETALLE)
+
+    assert r["errores"] == 2 and r["procesados"] == 0
+    assert con.execute(
+        "SELECT COUNT(*) FROM fallos WHERE caratula='Sumario'"
+    ).fetchone()[0] == 0, "reparsear no debe escribir la caratula invalida"
 
 
 def test_sin_guardar_crudo_no_se_archiva(con):

@@ -228,6 +228,66 @@ def test_como_fallo_da_un_dict_para_upsert():
     assert datos["caratula"] and datos["fecha_fallo"] == "2019-03-14"
 
 
+# ─── deteccion de detalle invalido (pagina de busqueda leida por error) ────
+
+def test_un_detalle_real_pasa_el_chequeo_de_cordura():
+    d = P.parsear_detalle(F.DETALLE_HTML)
+    es_valido, motivo = P.parece_detalle_valido(d)
+    assert es_valido and not motivo
+
+
+def test_detecta_encabezados_de_columna_como_caratula():
+    # Caso real: la caratula quedo con el encabezado de columna "Sumario" en
+    # vez de la caratula real del fallo.
+    d = P.DetalleParseado(
+        caratula="Sumario",
+        sumarios=[{"texto": "x" * 100, "voces": []}],
+    )
+    es_valido, motivo = P.parece_detalle_valido(d)
+    assert not es_valido
+    assert "encabezado" in motivo
+
+
+def test_detecta_caratula_vacia():
+    d = P.DetalleParseado(caratula="", sumarios=[{"texto": "x" * 100, "voces": []}])
+    es_valido, _ = P.parece_detalle_valido(d)
+    assert not es_valido
+
+
+def test_detecta_sumario_que_es_solo_un_encabezado():
+    # Caso real: el sumario quedo con el encabezado de columna "Fuero" (5
+    # caracteres) en vez del texto real.
+    d = P.DetalleParseado(
+        caratula="PEREZ c/ MUNICIPALIDAD s/ DAÑOS Y PERJUICIOS",
+        sumarios=[{"texto": "Fuero", "voces": []}],
+    )
+    es_valido, motivo = P.parece_detalle_valido(d)
+    assert not es_valido
+    assert "40 caracteres" in motivo
+
+
+def test_detecta_fallo_sin_ningun_sumario():
+    d = P.DetalleParseado(caratula="PEREZ c/ MUNICIPALIDAD s/ DAÑOS Y PERJUICIOS")
+    es_valido, _ = P.parece_detalle_valido(d)
+    assert not es_valido
+
+
+def test_la_pagina_de_busqueda_comun_no_pasa_como_detalle():
+    # Mismo fixture que ya se usa para el chequeo de cordura del tesauro.
+    d = P.parsear_detalle(F.PAGINA_BUSQUEDA_SIN_TESAURO_HTML)
+    es_valido, _ = P.parece_detalle_valido(d)
+    assert not es_valido
+
+
+@pytest.mark.parametrize("caratula", ["Sumario", "Carátula", "Fallo", "Fuero", "", None])
+def test_caratula_parece_invalida_reconoce_los_encabezados_conocidos(caratula):
+    assert P.caratula_parece_invalida(caratula)
+
+
+def test_caratula_parece_invalida_no_marca_una_caratula_real():
+    assert not P.caratula_parece_invalida("PEREZ c/ MUNICIPALIDAD s/ DAÑOS Y PERJUICIOS")
+
+
 # ─── tesauro ───────────────────────────────────────────────────────────────
 
 def test_parsea_el_arbol_anidado_del_tesauro():

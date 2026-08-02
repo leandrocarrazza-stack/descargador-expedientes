@@ -341,6 +341,10 @@ class Cosechadora:
 
         detalle = parser.parsear_detalle(respuesta.html)
 
+        es_valido, motivo = parser.parece_detalle_valido(detalle)
+        if not es_valido:
+            raise ErrorCliente(f"Detalle invalido para {clave}: {motivo}")
+
         with corpus.transaccion(self.con):
             datos = detalle.como_fallo()
             datos["clave_natural"] = clave
@@ -358,7 +362,8 @@ class Cosechadora:
     # ── mantenimiento ─────────────────────────────────────────────────────
 
     def reparar(self) -> dict:
-        """Vuelve a encolar los errores recuperables y los meses descuadrados."""
+        """Vuelve a encolar los errores recuperables, los meses descuadrados y
+        los detalles que habian quedado marcados 'ok' con datos invalidos."""
         reencoladas = corpus.reencolar_errores(self.con, self.max_reintentos)
 
         diferencias = corpus.diferencias_reconciliacion(self.con)
@@ -376,10 +381,58 @@ class Cosechadora:
                 len(diferencias), ", ".join(d["mes"] for d in diferencias[:10]),
             )
 
+        corruptos = self.detectar_y_reencolar_detalles_corruptos()
+
         return {
             "tareas_reencoladas": reencoladas,
             "meses_descuadrados": len(diferencias),
             "detalle": diferencias[:20],
+            "detalles_corruptos_reencolados": corruptos["cantidad"],
+        }
+
+    def detectar_y_reencolar_detalles_corruptos(self) -> dict:
+        """
+        Revalida los fallos marcados detalle_ok=1 y re-encola los invalidos.
+
+        Caso real: `abrir_detalle` no llegaba a re-navegar a la fila exacta
+        y el sitio devolvia la pagina de busqueda comun; sin chequeo de
+        cordura (ver parser.parece_detalle_valido) eso se guardaba con
+        detalle_ok=1 igual, con la caratula y el sumario reemplazados por
+        encabezados de columna ("Sumario", "Fuero", etc.). Esto revalida lo
+        ya guardado -no re-parsea el HTML archivado, porque en este caso el
+        HTML archivado YA es la pagina equivocada- y resetea + re-encola
+        para que `cosechar detalles` los vuelva a traer del sitio real.
+        """
+        filas = self.con.execute(
+            "SELECT id, clave_natural, caratula, fecha_fallo FROM fallos "
+            "WHERE detalle_ok=1"
+        ).fetchall()
+
+        afectados = [
+            f for f in filas if parser.caratula_parece_invalida(f["caratula"])
+        ]
+
+        if afectados:
+            with corpus.transaccion(self.con):
+                for f in afectados:
+                    self.con.execute(
+                        "UPDATE fallos SET detalle_ok=0 WHERE id=?", (f["id"],)
+                    )
+                    self.con.execute(
+                        "UPDATE cosecha_tareas SET estado='pendiente', intentos=0 "
+                        "WHERE tipo=? AND clave=?",
+                        (TIPO_DETALLE, f["clave_natural"]),
+                    )
+            logger.warning(
+                "%d fallos tenian detalle_ok=1 con datos invalidos (pagina de "
+                "busqueda leida por error en vez del detalle real); se "
+                "resetearon y re-encolaron.",
+                len(afectados),
+            )
+
+        return {
+            "cantidad": len(afectados),
+            "ids": [f["id"] for f in afectados[:20]],
         }
 
 
@@ -397,6 +450,9 @@ def reparsear_crudos(con, tipo: str = TIPO_DETALLE) -> dict:
         try:
             if tipo == TIPO_DETALLE:
                 detalle = parser.parsear_detalle(html)
+                es_valido, motivo = parser.parece_detalle_valido(detalle)
+                if not es_valido:
+                    raise ValueError(f"Detalle invalido para {clave}: {motivo}")
                 datos = detalle.como_fallo()
                 datos["clave_natural"] = clave
                 with corpus.transaccion(con):
