@@ -15,6 +15,11 @@ completo tarde varios minutos.
 
 Modelo: Cada descarga cuesta 1 crédito prepagado.
 
+CONCURRENCIA: sólo corre una descarga a la vez en toda la instancia
+(_semaforo_descarga) — dos Chrome + LibreOffice al mismo tiempo pueden
+agotar los 512 MB de RAM del plan Starter y tumbar la app entera. Una
+segunda solicitud mientras hay una en curso recibe 409 de inmediato.
+
 LIMPIEZA: El PDF final se borra del servidor después de que el usuario
 lo descarga. Además, al iniciar la app se borran PDFs con más de
 PDF_TTL_HOURS horas de antigüedad.
@@ -45,6 +50,17 @@ import config
 _jobs: dict = {}
 _job_events: dict = {}  # { job_id: threading.Event() } para long-polling
 JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo para que un job viva en memoria
+
+# Límite de descargas simultáneas. Cada descarga abre su propio Chrome +
+# LibreOffice; el plan Starter de Render tiene 512 MB de RAM en total, así
+# que dos pipelines corriendo a la vez (dos usuarios, o el mismo usuario dos
+# veces) son un candidato real a agotar la memoria y tumbar toda la instancia
+# — no solo la descarga que se queda sin RAM, sino la app entera para todos
+# los usuarios. _run_pipeline() libera el permiso en su finally, así que
+# queda tomado durante todo el pipeline (Chrome + conversión + unificación),
+# no solo mientras arranca.
+MAX_DESCARGAS_SIMULTANEAS = 1
+_semaforo_descarga = threading.Semaphore(MAX_DESCARGAS_SIMULTANEAS)
 
 
 def _limpiar_jobs_viejos():
@@ -178,6 +194,10 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             })
 
         finally:
+            # Liberar el permiso de concurrencia SIEMPRE, sea cual sea el resultado,
+            # para que la próxima descarga en espera pueda arrancar.
+            _semaforo_descarga.release()
+
             # Despertar cualquier request de long-polling que esté esperando este job
             if job_id in _job_events:
                 log.info(f"[JOB {job_id[:8]}] Despertando long-polling")
@@ -288,6 +308,17 @@ def descargar_expediente_sync():
                 'login_url': '/auth/mv-login?next=/descargas/expediente'
             }), 401
 
+        # Límite de concurrencia: si ya hay una descarga corriendo, rechazar
+        # rápido en vez de arrancar un segundo Chrome que puede tumbar la
+        # instancia entera (ver comentario junto a _semaforo_descarga).
+        if not _semaforo_descarga.acquire(blocking=False):
+            logger.warning(f"Descarga rechazada por concurrencia: user {current_user.id}, expediente {numero_expediente}")
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'descarga_en_curso',
+                'mensaje': 'Ya hay otra descarga en curso en el servidor. Esperá un momento e intentá de nuevo.',
+            }), 409
+
         # Registrar job y lanzar thread
         job_id = str(uuid.uuid4())
         _jobs[job_id] = {
@@ -297,12 +328,19 @@ def descargar_expediente_sync():
         }
 
         app = current_app._get_current_object()
-        t = threading.Thread(
-            target=_run_pipeline,
-            args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv),
-            daemon=True
-        )
-        t.start()
+        try:
+            t = threading.Thread(
+                target=_run_pipeline,
+                args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv),
+                daemon=True
+            )
+            t.start()
+        except Exception:
+            # El thread nunca arrancó, así que _run_pipeline no va a liberar
+            # el permiso en su finally: hay que soltarlo acá para no dejar
+            # la concurrencia bloqueada para siempre.
+            _semaforo_descarga.release()
+            raise
 
         logger.info(f"[JOB {job_id[:8]}] Lanzado para user {current_user.id}, expediente {numero_expediente}")
         return jsonify({'job_id': job_id}), 202
