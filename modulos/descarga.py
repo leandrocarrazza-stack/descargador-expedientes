@@ -11,8 +11,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
+import shutil
 import time
-import requests
 from urllib.parse import urljoin
 from typing import List, Optional
 
@@ -473,16 +473,101 @@ class DescargadorArchivos:
         except Exception as e:
             print(f"      [ERROR] Error reciclando navegador: {str(e)[:80]}")
 
+    def _esperar_archivo_descargado(self, carpeta, timeout=60):
+        """
+        Espera a que aparezca un archivo completo (no parcial) en `carpeta`.
+
+        Chrome escribe descargas en curso como "*.crdownload" y las renombra
+        al nombre final recién cuando terminan. Además, revisa que el tamaño
+        se mantenga estable entre dos lecturas para no devolver un archivo
+        que todavía se está escribiendo.
+
+        Retorna:
+            Path del archivo descargado, o None si no llegó nada a tiempo.
+        """
+        limite = time.time() + timeout
+        while time.time() < limite:
+            try:
+                candidatos = [
+                    f for f in carpeta.iterdir()
+                    if f.is_file() and not f.name.endswith((".crdownload", ".tmp"))
+                ]
+            except FileNotFoundError:
+                candidatos = []
+
+            if candidatos:
+                archivo = candidatos[0]
+                try:
+                    tam1 = archivo.stat().st_size
+                    time.sleep(0.5)
+                    tam2 = archivo.stat().st_size
+                except FileNotFoundError:
+                    time.sleep(0.5)
+                    continue
+                if tam1 == tam2 and tam1 > 0:
+                    return archivo
+
+            time.sleep(0.5)
+
+        return None
+
+    def _validar_archivo_descargado(self, ruta_destino, url, intento, max_intentos):
+        """
+        Valida que el archivo descargado sea un PDF/RTF utilizable.
+
+        Retorna:
+            True si es válido, False si hay que reintentar/abortar.
+        """
+        tamaño_descargado = ruta_destino.stat().st_size
+        if tamaño_descargado < 100:
+            return False
+
+        with open(ruta_destino, "rb") as f:
+            magic_bytes = f.read(10)
+
+        # Si es RTF, no validar como PDF (la validación falla correctamente)
+        if magic_bytes.startswith(b"{\\rtf"):
+            return True
+
+        # Verificar que sea un PDF válido (si es PDF)
+        if "pdf" in str(url).lower() or ruta_destino.name.endswith(".pdf"):
+            try:
+                from PyPDF2 import PdfReader
+
+                reader = PdfReader(str(ruta_destino))
+                if len(reader.pages) == 0:
+                    return False
+            except Exception:
+                # PDF con errores menores (EOF) puede ser usable
+                # Solo rechazar si es realmente pequeño
+                if tamaño_descargado < 200:
+                    return False
+
+        return True
+
     def _descargar_archivo_selenium(self, url, ruta_destino):
         """
-        Descarga un archivo usando requests con cookies de Selenium.
+        Descarga un archivo abriéndolo en una pestaña nueva del MISMO navegador
+        Selenium ya autenticado, en vez de reconstruir la sesión con `requests`.
+
+        Por qué: copiar las cookies (incluso con CDP, cross-domain) a un
+        `requests.Session()` seguía devolviendo la página de login ("sesión
+        expirada") aun con el driver de Selenium correctamente autenticado
+        y navegando con normalidad en la pestaña principal. Eso indica que el
+        problema no era falta de cookies sino que el gateway/WAF de Mesa
+        Virtual distingue el tráfico real del navegador (TLS/headers) del de
+        un cliente HTTP aparte. Al descargar DESDE el propio navegador se usa
+        exactamente el mismo contexto (cookies + fingerprint) que al navegar,
+        sin necesidad de replicarlo.
 
         MEJORAS:
-        - No usa driver.get() para evitar que se abra/visualice el archivo
-        - Usa requests directamente con cookies autenticadas
-        - Verifica completitud del descarga y validez del PDF
+        - Usa Page.setDownloadBehavior (CDP) para forzar la descarga a disco
+          en vez de abrir el visor de PDF interno
+        - Descarga en una pestaña nueva para no perder el estado (paginación)
+          de la tabla de movimientos en la pestaña principal
+        - Verifica completitud de la descarga y validez del PDF
         - Reintentos automáticos para descargas incompletas
-        - NUEVO: Detecta driver muerto y recicla automáticamente
+        - Detecta driver muerto y recicla automáticamente
 
         Args:
             url: URL del archivo
@@ -514,114 +599,100 @@ class DescargadorArchivos:
                 driver = self.cliente.driver
 
             ruta_destino.parent.mkdir(parents=True, exist_ok=True)
+            carpeta_dl_temp = ruta_destino.parent / f".dl_{ruta_destino.stem}"
+            carpeta_dl_temp.mkdir(parents=True, exist_ok=True)
 
-            # Obtener cookies para mantener sesión autenticada.
-            # driver.get_cookies() (API estándar de Selenium) sólo devuelve las
-            # cookies del dominio actualmente cargado (mesavirtual.jusentrerios.gov.ar).
-            # La sesión SSO de Keycloak vive en otro dominio (ol-sso.jusentrerios.gov.ar)
-            # y sin ella el servidor responde con la página de login ante requests.get()
-            # aunque el navegador Selenium sí esté autenticado. Por eso se usa CDP
-            # (Network.getAllCookies), que trae cookies de todos los dominios.
-            try:
-                try:
-                    resultado_cdp = driver.execute_cdp_cmd('Network.getAllCookies', {})
-                    cookies = resultado_cdp.get('cookies', [])
-                except Exception:
-                    cookies = driver.get_cookies()
-                cookie_dict = {c['name']: c['value'] for c in cookies}
-            except Exception as e:
-                print(f"         [COOKIES-ERROR] Error obteniendo cookies: {str(e)[:50]}")
-                # Si no podemos obtener cookies, reciclar y reintentar
-                self._reciclar_navegador()
-                return False
-
-            # Headers para simular navegador real y evitar problemas de descarga
-            # Accept amplio para no interferir con tipos RTF, DOC, etc.
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/pdf, application/rtf, application/msword, application/octet-stream, */*",
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-            }
-
-            # Intentar descarga con reintentos
             max_intentos = 3
-            for intento in range(max_intentos):
-                try:
-                    # Realizar descarga directa sin abrir en navegador
-                    response = requests.get(
-                        url,
-                        cookies=cookie_dict,
-                        headers=headers,
-                        timeout=self.timeout,
-                        stream=True,  # Descarga por chunks para archivos grandes
-                        allow_redirects=True,
-                    )
-                    response.raise_for_status()
+            try:
+                for intento in range(max_intentos):
+                    ventana_original = driver.current_window_handle
+                    ventana_nueva_abierta = False
+                    try:
+                        # Forzar descarga a disco (en vez de abrir el visor de PDF)
+                        # en la carpeta temporal de este movimiento.
+                        try:
+                            driver.execute_cdp_cmd('Page.setDownloadBehavior', {
+                                'behavior': 'allow',
+                                'downloadPath': str(carpeta_dl_temp),
+                            })
+                        except Exception:
+                            # Chrome más nuevo movió el comando a Browser.*
+                            driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
+                                'behavior': 'allow',
+                                'downloadPath': str(carpeta_dl_temp),
+                            })
 
-                    # Detectar si el servidor devolvió HTML de login en vez del archivo
-                    # (ocurre cuando la sesión de Keycloak expiró)
-                    content_type = response.headers.get('Content-Type', '')
-                    if 'text/html' in content_type:
-                        print(f"         [AUTH] Respuesta HTML recibida (sesión expirada), abortando")
-                        self._ultimo_fallo_fue_auth = True
-                        return False
+                        handles_antes = set(driver.window_handles)
+                        # Se abre la pestaña vía CDP (Target.createTarget) en vez de
+                        # window.open() por JS: este último puede ser silenciosamente
+                        # bloqueado por el popup blocker de Chrome al no originarse en
+                        # un gesto real del usuario.
+                        driver.execute_cdp_cmd('Target.createTarget', {'url': url})
+                        WebDriverWait(driver, 10).until(
+                            lambda d: len(set(d.window_handles) - handles_antes) > 0
+                        )
+                        ventana_nueva = list(set(driver.window_handles) - handles_antes)[0]
+                        driver.switch_to.window(ventana_nueva)
+                        ventana_nueva_abierta = True
 
-                    # Validar que tenemos contenido
-                    if not response.content or len(response.content) < 100:
+                        archivo = self._esperar_archivo_descargado(carpeta_dl_temp, timeout=self.timeout)
+
+                        if not archivo:
+                            # No llegó ningún archivo: puede ser que la sesión
+                            # expiró y la pestaña nueva quedó en el login.
+                            url_pestana = ""
+                            try:
+                                url_pestana = driver.current_url
+                            except Exception:
+                                pass
+                            if "ol-sso" in url_pestana or "/login" in url_pestana:
+                                print(f"         [AUTH] Pestaña redirigida a login (sesión expirada), abortando")
+                                self._ultimo_fallo_fue_auth = True
+                                driver.close()
+                                driver.switch_to.window(ventana_original)
+                                return False
+
+                            driver.close()
+                            driver.switch_to.window(ventana_original)
+                            ventana_nueva_abierta = False
+                            if intento < max_intentos - 1:
+                                time.sleep(2)
+                                continue
+                            return False
+
+                        driver.close()
+                        driver.switch_to.window(ventana_original)
+                        ventana_nueva_abierta = False
+
+                        archivo.replace(ruta_destino)
+
+                        if self._validar_archivo_descargado(ruta_destino, url, intento, max_intentos):
+                            return True
+
                         if intento < max_intentos - 1:
                             time.sleep(1)
                             continue
-                        else:
-                            return False
-
-                    # Descargar por chunks para archivos grandes
-                    with open(ruta_destino, "wb") as f:
-                        for chunk in response.iter_content(chunk_size=8192):
-                            if chunk:
-                                f.write(chunk)
-
-                    # Validar que el archivo se escribió completamente
-                    tamaño_descargado = ruta_destino.stat().st_size
-
-                    # Verificar el tipo de archivo antes de validar como PDF
-                    with open(ruta_destino, "rb") as f:
-                        magic_bytes = f.read(10)
-
-                    # Si es RTF, no validar como PDF (la validación falla correctamente)
-                    if magic_bytes.startswith(b"{\\rtf"):
-                        return True  # RTF válido, se procesará después
-
-                    # Verificar que sea un PDF válido (si es PDF)
-                    if "pdf" in str(url).lower() or ruta_destino.name.endswith(".pdf"):
-                        try:
-                            from PyPDF2 import PdfReader
-
-                            reader = PdfReader(str(ruta_destino))
-                            num_pages = len(reader.pages)
-                            if num_pages == 0:
-                                if intento < max_intentos - 1:
-                                    time.sleep(1)
-                                    continue
-                                else:
-                                    return False
-                        except Exception as pdf_err:
-                            # PDF con errores menores (EOF) puede ser usable
-                            # Solo rechazar si es realmente pequeño
-                            if tamaño_descargado < 200:
-                                return False
-                            # De lo contrario asumir que es parcialmente válido
-
-                    return True
-
-                except requests.exceptions.RequestException as e:
-                    if intento < max_intentos - 1:
-                        time.sleep(2)  # Esperar antes de reintentar
-                        continue
-                    else:
                         return False
 
-            return False
+                    except Exception as e:
+                        print(f"         [DOWNLOAD-ERROR] Intento {intento + 1}/{max_intentos}: {str(e)[:80]}")
+                        if ventana_nueva_abierta:
+                            try:
+                                driver.close()
+                            except Exception:
+                                pass
+                        try:
+                            driver.switch_to.window(ventana_original)
+                        except Exception:
+                            pass
+                        if intento < max_intentos - 1:
+                            time.sleep(2)
+                            continue
+                        return False
+
+                return False
+            finally:
+                shutil.rmtree(carpeta_dl_temp, ignore_errors=True)
 
         except Exception as e:
             print(f"         [DOWNLOAD-FATAL] Error fatal descargando: {str(e)[:80]}")
