@@ -109,6 +109,53 @@ def _crear_driver_headless():
     raise ultimo_error
 
 
+def _inyectar_cookies_cdp(driver, cookies):
+    """
+    Inyecta cookies de CUALQUIER dominio usando Chrome DevTools Protocol.
+
+    driver.add_cookie() (API estándar de Selenium) sólo permite setear cookies
+    cuyo dominio coincida con la página actualmente cargada, y falla en
+    silencio para el resto. Como Mesa Virtual delega el login en Keycloak
+    (dominio ol-sso.jusentrerios.gov.ar, distinto de mesavirtual.jusentrerios.gov.ar),
+    las cookies de sesión SSO nunca se llegaban a inyectar: la búsqueda podía
+    funcionar (con lo poco que quedaba seteado), pero cualquier descarga
+    devolvía la página de login → "sesión expirada" en el primer archivo,
+    incluso con cookies recién capturadas. CDP no tiene esa restricción.
+
+    Ver login.py::cargar_sesion() donde se detectó y resolvió el mismo problema.
+
+    Retorna la cantidad de cookies inyectadas correctamente.
+    """
+    try:
+        driver.execute_cdp_cmd('Network.enable', {})
+    except Exception as e:
+        logger.warning(f"[AUTH_MV] CDP no disponible para inyección de cookies: {e}")
+
+    cargadas = 0
+    for cookie in cookies:
+        try:
+            cdp_cookie = {
+                'name': cookie['name'],
+                'value': cookie['value'],
+                'domain': cookie.get('domain', ''),
+                'path': cookie.get('path', '/'),
+                'secure': cookie.get('secure', False),
+                'httpOnly': cookie.get('httpOnly', False),
+            }
+            # Expiración: formato Selenium usa 'expiry', CDP usa 'expires'
+            if 'expires' in cookie and cookie['expires'] and cookie['expires'] > 0:
+                cdp_cookie['expires'] = cookie['expires']
+            elif 'expiry' in cookie and cookie['expiry']:
+                cdp_cookie['expires'] = cookie['expiry']
+            driver.execute_cdp_cmd('Network.setCookie', cdp_cookie)
+            cargadas += 1
+        except Exception as e:
+            logger.warning(f"[AUTH_MV] No se pudo inyectar cookie '{cookie.get('name', '?')}': {e}")
+
+    logger.info(f"[AUTH_MV] {cargadas}/{len(cookies)} cookie(s) inyectada(s) via CDP")
+    return cargadas
+
+
 def _capturar_todas_las_cookies(driver):
     """
     Captura cookies de TODOS los dominios usando CDP.
@@ -357,22 +404,14 @@ def crear_cliente_desde_cookies(cookies: list):
     driver = None
     try:
         driver = _crear_driver_headless()
-        driver.execute_cdp_cmd('Network.enable', {})
 
-        # Navegar al dominio para poder inyectar cookies
+        # Navegar al dominio para tener un contexto donde inyectar cookies
         driver.get(URL_MESA_VIRTUAL)
         time.sleep(1)
 
-        # Inyectar cookies de TODOS los dominios capturados
-        for cookie in cookies:
-            try:
-                cookie_limpia = {
-                    k: v for k, v in cookie.items()
-                    if k in ('name', 'value', 'domain', 'path', 'secure', 'httpOnly', 'sameSite')
-                }
-                driver.add_cookie(cookie_limpia)
-            except Exception:
-                pass
+        # Inyectar cookies de TODOS los dominios capturados (via CDP: necesario
+        # porque las cookies de Keycloak son de otro dominio, ol-sso.jusentrerios.gov.ar)
+        _inyectar_cookies_cdp(driver, cookies)
 
         # Recargar con las cookies aplicadas
         driver.get(URL_MESA_VIRTUAL)
@@ -485,23 +524,13 @@ def verificar_sesion_usuario(user_id: int) -> bool:
     driver = None
     try:
         driver = _crear_driver_headless()
-        driver.execute_cdp_cmd('Network.enable', {})
 
-        # Navegar al dominio para poder inyectar cookies
+        # Navegar al dominio para tener un contexto donde inyectar cookies
         driver.get(URL_MESA_VIRTUAL)
         time.sleep(1)
 
-        # Inyectar cada cookie
-        for cookie in cookies:
-            try:
-                # Limpiar campos que Selenium no acepta
-                cookie_limpia = {
-                    k: v for k, v in cookie.items()
-                    if k in ('name', 'value', 'domain', 'path', 'secure', 'httpOnly', 'sameSite')
-                }
-                driver.add_cookie(cookie_limpia)
-            except Exception:
-                pass
+        # Inyectar cookies de TODOS los dominios (via CDP: ver _inyectar_cookies_cdp)
+        _inyectar_cookies_cdp(driver, cookies)
 
         # Recargar con las cookies aplicadas
         driver.get(URL_MESA_VIRTUAL)
