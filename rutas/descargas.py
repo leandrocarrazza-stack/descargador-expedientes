@@ -49,7 +49,13 @@ import config
 # Estructura: { job_id: { estado, user_id, timestamp, ... } }
 _jobs: dict = {}
 _job_events: dict = {}  # { job_id: threading.Event() } para long-polling
-JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo para que un job viva en memoria
+JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo que vive en memoria un job YA TERMINADO
+# Techo de seguridad para jobs que quedaron en 'procesando' (thread colgado/crasheado
+# sin pasar por su finally). Expedientes con cientos de movimientos pueden tardar
+# bastante más que JOB_TTL_SEGUNDOS en terminar de forma legítima: si se los borra
+# por antigüedad mientras siguen corriendo, el long-poll que los está esperando
+# revienta con KeyError -> 500 HTML -> "Unexpected token '<'" en el frontend.
+JOB_TTL_PROCESANDO_SEGUNDOS = 3600  # 1 hora
 
 # Límite de descargas simultáneas. Cada descarga abre su propio Chrome +
 # LibreOffice; el plan Starter de Render tiene 512 MB de RAM en total, así
@@ -64,12 +70,38 @@ _semaforo_descarga = threading.Semaphore(MAX_DESCARGAS_SIMULTANEAS)
 
 
 def _limpiar_jobs_viejos():
-    """Elimina jobs de más de 10 minutos para no acumular memoria."""
+    """
+    Elimina jobs viejos para no acumular memoria indefinidamente.
+
+    Un job 'procesando' NO se borra por antigüedad salvo que supere el techo
+    de seguridad JOB_TTL_PROCESANDO_SEGUNDOS (thread realmente colgado): borrar
+    la entrada de un job que sigue corriendo tira abajo su long-polling con un
+    KeyError en cuanto el thread (o el propio /estado) intente leerla.
+    """
     ahora = time.time()
-    ids_viejos = [jid for jid, j in list(_jobs.items()) if ahora - j.get('timestamp', 0) > JOB_TTL_SEGUNDOS]
+    ids_viejos = [
+        jid for jid, j in list(_jobs.items())
+        if ahora - j.get('timestamp', 0) > (
+            JOB_TTL_PROCESANDO_SEGUNDOS if j.get('estado') == 'procesando' else JOB_TTL_SEGUNDOS
+        )
+    ]
     for jid in ids_viejos:
         _jobs.pop(jid, None)
         _job_events.pop(jid, None)
+
+
+def _actualizar_job(job_id, cambios):
+    """
+    Actualiza el estado en memoria de un job, si todavía existe.
+
+    Usar esto en vez de `_jobs[job_id].update(...)` directo: si la entrada
+    ya no está (limpieza por TTL, reinicio del proceso), evita un KeyError
+    sin capturar dentro del thread de `_run_pipeline` (que además dejaría
+    sin despertar al long-polling que sigue esperando ese job).
+    """
+    job = _jobs.get(job_id)
+    if job is not None:
+        job.update(cambios)
 
 
 def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
@@ -148,7 +180,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 log.info(
                     f"[JOB {job_id[:8]}] Descarga OK: {numero_expediente}, créditos restantes: {creditos_restantes}"
                 )
-                _jobs[job_id].update({
+                _actualizar_job(job_id, {
                     'estado': 'completo',
                     'expediente_id': expediente_db.id,
                     'pdf_url': f'/descargas/expediente/{expediente_db.id}/descargar',
@@ -157,7 +189,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
 
             elif resultado.tipo_error == 'multiples_opciones':
                 log.info(f"[JOB {job_id[:8]}] Múltiples opciones encontradas")
-                _jobs[job_id].update({
+                _actualizar_job(job_id, {
                     'estado': 'multiples_opciones',
                     'opciones': resultado.opciones,
                 })
@@ -166,7 +198,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 log.warning(f"[JOB {job_id[:8]}] Sesión MV expirada")
                 mensaje = 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.'
                 _guardar_intento_fallido(user_id, numero_expediente, mensaje)
-                _jobs[job_id].update({
+                _actualizar_job(job_id, {
                     'estado': 'error',
                     'tipo_error': 'sesion_mv_requerida',
                     'mensaje': mensaje,
@@ -177,7 +209,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
                 mensaje = resultado.error or 'Error desconocido en la descarga'
                 _guardar_intento_fallido(user_id, numero_expediente, mensaje)
-                _jobs[job_id].update({
+                _actualizar_job(job_id, {
                     'estado': 'error',
                     'tipo_error': resultado.tipo_error or 'unknown',
                     'mensaje': mensaje,
@@ -187,7 +219,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
             mensaje = f'Error: {type(e).__name__}'
             _guardar_intento_fallido(user_id, numero_expediente, mensaje)
-            _jobs[job_id].update({
+            _actualizar_job(job_id, {
                 'estado': 'error',
                 'tipo_error': 'exception',
                 'mensaje': mensaje,
@@ -409,8 +441,15 @@ def estado_descarga(job_id):
     event.wait(timeout=25)
     logger.info(f"[LONG-POLL] Request despertado o timeout para {job_id[:8]}")
 
-    # Devolver el estado actual (puede ser completo o sigue procesando si hubo timeout)
-    return jsonify(_jobs[job_id]), 200
+    # Devolver el estado actual (puede ser completo o sigue procesando si hubo timeout).
+    # Se relee con .get() en vez de indexar directo: si el job se limpió mientras
+    # esta request esperaba (proceso reiniciado, TTL de seguridad, etc.), evita un
+    # KeyError sin capturar que el errorhandler 500 global convertiría en HTML
+    # ("Unexpected token '<'" en el frontend) en vez de la respuesta JSON esperada.
+    job_actual = _jobs.get(job_id)
+    if not job_actual:
+        return jsonify({'estado': 'no_encontrado'}), 404
+    return jsonify(job_actual), 200
 
 
 @descargas_bp.route('/expediente/<int:expediente_id>/descargar', methods=['GET'])
