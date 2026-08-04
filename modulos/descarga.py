@@ -515,9 +515,19 @@ class DescargadorArchivos:
 
             ruta_destino.parent.mkdir(parents=True, exist_ok=True)
 
-            # Obtener cookies de Selenium para mantener sesión autenticada
+            # Obtener cookies para mantener sesión autenticada.
+            # driver.get_cookies() (API estándar de Selenium) sólo devuelve las
+            # cookies del dominio actualmente cargado (mesavirtual.jusentrerios.gov.ar).
+            # La sesión SSO de Keycloak vive en otro dominio (ol-sso.jusentrerios.gov.ar)
+            # y sin ella el servidor responde con la página de login ante requests.get()
+            # aunque el navegador Selenium sí esté autenticado. Por eso se usa CDP
+            # (Network.getAllCookies), que trae cookies de todos los dominios.
             try:
-                cookies = driver.get_cookies()
+                try:
+                    resultado_cdp = driver.execute_cdp_cmd('Network.getAllCookies', {})
+                    cookies = resultado_cdp.get('cookies', [])
+                except Exception:
+                    cookies = driver.get_cookies()
                 cookie_dict = {c['name']: c['value'] for c in cookies}
             except Exception as e:
                 print(f"         [COOKIES-ERROR] Error obteniendo cookies: {str(e)[:50]}")
