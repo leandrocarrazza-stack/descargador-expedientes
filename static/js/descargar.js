@@ -215,8 +215,11 @@ async function enviarDescarga(numero, indice) {
     }
 }
 
-// Long-polling: un único request que espera en el servidor hasta que el job complete
-async function longPolling(jobId) {
+// Long-polling: cadena de requests cortos (~25s c/u en el servidor) hasta que el job complete.
+// startTime se preserva entre llamadas recursivas para saber cuánto tiempo real pasó
+// y recién entonces mostrar el aviso de "expediente con muchos movimientos".
+async function longPolling(jobId, startTime) {
+    if (!startTime) startTime = Date.now();
     try {
         console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
 
@@ -263,10 +266,14 @@ async function longPolling(jobId) {
             return;
 
         } else if (data.estado === 'procesando') {
-            // Timeout del server (5 minutos): el job sigue en progreso
-            mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
+            // Timeout corto del server (~25s): el job sigue en progreso, se vuelve a pedir.
+            // El aviso de "muchos movimientos" recién se muestra pasado 1:30 real
+            // de espera acumulada, no en cada vuelta de este polling corto.
+            if (Date.now() - startTime > 90000) {
+                mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
+            }
             console.log('[LONG-POLL] Timeout del servidor, reintentando...');
-            await longPolling(jobId);
+            await longPolling(jobId, startTime);
             return;
         }
 

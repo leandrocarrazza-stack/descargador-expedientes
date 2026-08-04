@@ -4,9 +4,14 @@ Rutas para descarga de expedientes (con polling asincrónico).
 
 Arquitectura: el pipeline corre en un thread background.
 - POST /descargas/expediente  → valida, lanza thread, devuelve job_id (respuesta inmediata)
-- GET  /descargas/estado/<id> → el frontend consulta el estado cada 3s (polling)
+- GET  /descargas/estado/<id> → long-poll corto: cada request espera hasta ~25s en el
+  servidor por una respuesta, y si el job sigue en curso el frontend vuelve a pedir
+  de inmediato (ver estado_descarga()).
 
-Esto evita el timeout de ~60s del proxy de Render en expedientes extensos.
+Esto evita el timeout de ~60s del proxy de Render en expedientes extensos: ese límite
+es el que manda sobre cualquier request individual (no el timeout de gunicorn, que es
+mucho más laxo), así que ningún GET a /estado puede acercarse a los 60s aunque el job
+completo tarde varios minutos.
 
 Modelo: Cada descarga cuesta 1 crédito prepagado.
 
@@ -49,6 +54,32 @@ def _limpiar_jobs_viejos():
     for jid in ids_viejos:
         _jobs.pop(jid, None)
         _job_events.pop(jid, None)
+
+
+def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
+    """
+    Registra en BD un intento de descarga que terminó en error.
+
+    Antes esto sólo quedaba en el dict en memoria _jobs, que se borra a los
+    10 minutos (JOB_TTL_SEGUNDOS) o al reiniciarse el proceso: una descarga
+    fallida no dejaba ningún rastro. Ahora también queda una fila en
+    ExpedienteDescargado (estado='failed'), visible en el Historial del
+    usuario igual que una descarga completada.
+    """
+    try:
+        db.session.add(ExpedienteDescargado(
+            user_id=user_id,
+            numero=numero_expediente,
+            estado='failed',
+            error_msg=mensaje,
+        ))
+        db.session.commit()
+    except Exception:
+        logging.getLogger(__name__).error(
+            f"No se pudo guardar el intento fallido de '{numero_expediente}' en el historial",
+            exc_info=True
+        )
+        db.session.rollback()
 
 
 def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv):
@@ -117,27 +148,33 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
 
             elif resultado.tipo_error == 'auth_failed':
                 log.warning(f"[JOB {job_id[:8]}] Sesión MV expirada")
+                mensaje = 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.'
+                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
                 _jobs[job_id].update({
                     'estado': 'error',
                     'tipo_error': 'sesion_mv_requerida',
-                    'mensaje': 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.',
+                    'mensaje': mensaje,
                     'login_url': '/auth/mv-login?next=/descargas/expediente',
                 })
 
             else:
                 log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
+                mensaje = resultado.error or 'Error desconocido en la descarga'
+                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
                 _jobs[job_id].update({
                     'estado': 'error',
                     'tipo_error': resultado.tipo_error or 'unknown',
-                    'mensaje': resultado.error or 'Error desconocido en la descarga',
+                    'mensaje': mensaje,
                 })
 
         except Exception as e:
             log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
+            mensaje = f'Error: {type(e).__name__}'
+            _guardar_intento_fallido(user_id, numero_expediente, mensaje)
             _jobs[job_id].update({
                 'estado': 'error',
                 'tipo_error': 'exception',
-                'mensaje': f'Error: {type(e).__name__}',
+                'mensaje': mensaje,
             })
 
         finally:
@@ -279,12 +316,22 @@ def descargar_expediente_sync():
 @login_required
 def estado_descarga(job_id):
     """
-    Long-polling endpoint: el frontend hace UN request que espera hasta que
-    el job complete (máx ~4 min 40s, ver nota de timeout más abajo).
+    Long-polling endpoint: cada request espera hasta ~25s a que el job
+    complete; si no llegó a completar, devuelve el estado actual y el
+    frontend vuelve a pedir de inmediato (ver longPolling() en descargar.js).
+    Para un job de varios minutos esto es una cadena de varios requests
+    cortos, no uno solo sostenido.
+
+    Por qué 25s y no más: el proxy de Render corta cualquier request de
+    más de ~60s (fue la causa original del Error 502 en expedientes
+    extensos, ver .planning/STATE.md). 25s deja margen de sobra bajo ese
+    límite aunque haya latencia de red o el servidor tarde un poco en
+    responder. El timeout de gunicorn (330s, ver Dockerfile) no es la
+    referencia acá: el proxy corta mucho antes de llegar a eso.
 
     El servidor retiene la request hasta que:
     - El job complete (devuelve el estado final)
-    - Pase el timeout (devuelve estado actual, el frontend vuelve a pedir)
+    - Pase el timeout de 25s (devuelve estado actual, el frontend vuelve a pedir)
     - El job sea inválido/expirado (devuelve 404)
 
     Respuestas posibles:
@@ -307,7 +354,7 @@ def estado_descarga(job_id):
     if job['estado'] != 'procesando':
         return jsonify(job), 200
 
-    # Job sigue procesando: esperar con long-polling (máx 5 minutos)
+    # Job sigue procesando: esperar con long-polling corto (máx ~25s)
     # Crear o reutilizar el evento para este job
     event = _job_events.get(job_id)
     if not event:
@@ -315,11 +362,13 @@ def estado_descarga(job_id):
         _job_events[job_id] = event
 
     # Esperar a que el job complete (el thread lo despierta con .set()).
-    # IMPORTANTE: este timeout debe quedar por debajo del --timeout de gunicorn
-    # (330s, ver Dockerfile) para que el long-poll responda por sí mismo antes
-    # de que gunicorn considere al worker colgado y lo mate.
+    # IMPORTANTE: este timeout debe quedar por debajo del límite real del
+    # proxy de Render (~60s) para que ESTE request responda por sí mismo
+    # antes de que el proxy lo corte. El frontend vuelve a pedir de
+    # inmediato si el job sigue en curso, así que un job largo se resuelve
+    # con varios requests cortos en vez de uno sostenido cerca del límite.
     logger.info(f"[LONG-POLL] Request esperando el job {job_id[:8]}")
-    event.wait(timeout=280)
+    event.wait(timeout=25)
     logger.info(f"[LONG-POLL] Request despertado o timeout para {job_id[:8]}")
 
     # Devolver el estado actual (puede ser completo o sigue procesando si hubo timeout)

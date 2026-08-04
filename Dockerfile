@@ -64,14 +64,17 @@ EXPOSE 5000
 # ── Comando de inicio ──
 # 1 worker (RAM limitada), pero con pool de threads (gthread) en vez de sync puro:
 # el pipeline de descarga corre en un hilo de background y el endpoint de
-# long-polling (/descargas/estado) bloquea su request hasta 300s esperando ese
-# hilo. Con el worker "sync" por defecto eso deja al ÚNICO worker sin poder
-# aceptar NINGUNA otra conexión (ni siquiera un healthcheck) durante esos 5
-# minutos. "gthread" permite que el mismo worker atienda varios requests en
-# paralelo (uno por hilo) mientras uno queda bloqueado en el long-poll.
-# Timeout (330s) > timeout del long-poll (300s en rutas/descargas.py) a propósito:
-# si ambos son iguales, gunicorn puede matar al worker ("WORKER TIMEOUT") justo
-# cuando el long-poll está a punto de responder por sí mismo con timeout normal.
+# long-polling (/descargas/estado) bloquea cada request hasta ~25s esperando ese
+# hilo (ver rutas/descargas.py: se acorta a propósito para quedar por debajo del
+# límite real del proxy de Render, ~60s, así un job de varios minutos se resuelve
+# en varios requests cortos en vez de uno sostenido). Con el worker "sync" por
+# defecto, incluso esos ~25s dejarían al ÚNICO worker sin poder aceptar NINGUNA
+# otra conexión (ni siquiera un healthcheck) mientras dura cada long-poll.
+# "gthread" permite que el mismo worker atienda varios requests en paralelo
+# (uno por hilo) mientras uno queda bloqueado en el long-poll.
+# Timeout 330s: techo de seguridad para cualquier request individual (ya no está
+# calibrado contra el long-poll, que ahora es corto) — suficientemente holgado
+# para no matar al worker en medio de trabajo legítimo lento.
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
      "--workers", "1", \
