@@ -608,16 +608,24 @@ class DescargadorArchivos:
                     ventana_original = driver.current_window_handle
                     ventana_nueva_abierta = False
                     try:
-                        # Forzar descarga a disco (en vez de abrir el visor de PDF)
-                        # en la carpeta temporal de este movimiento.
+                        # Forzar descarga a disco (en vez de abrir el visor de PDF).
+                        # IMPORTANTE: usar Browser.setDownloadBehavior (a nivel de
+                        # navegador completo), NO Page.setDownloadBehavior. Este último
+                        # queda atado a la sesión CDP de la pestaña ACTUAL (la original,
+                        # todavía no existe la pestaña nueva en este punto) y la pestaña
+                        # que se crea después con Target.createTarget no lo hereda. Sin
+                        # comportamiento de descarga configurado, Chrome headless intenta
+                        # mostrar un diálogo "Guardar como" que nunca aparece (no hay UI)
+                        # y la descarga se queda esperando en silencio hasta agotar los
+                        # 3 reintentos completos (~4 min) sin bajar nada.
                         try:
-                            driver.execute_cdp_cmd('Page.setDownloadBehavior', {
+                            driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
                                 'behavior': 'allow',
                                 'downloadPath': str(carpeta_dl_temp),
                             })
                         except Exception:
-                            # Chrome más nuevo movió el comando a Browser.*
-                            driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
+                            # Fallback para versiones viejas de Chrome sin Browser.*
+                            driver.execute_cdp_cmd('Page.setDownloadBehavior', {
                                 'behavior': 'allow',
                                 'downloadPath': str(carpeta_dl_temp),
                             })
@@ -652,6 +660,7 @@ class DescargadorArchivos:
                                 driver.switch_to.window(ventana_original)
                                 return False
 
+                            print(f"         [TIMEOUT] Sin archivo tras {self.timeout}s (intento {intento + 1}/{max_intentos}), URL pestaña: {url_pestana[:60]}")
                             driver.close()
                             driver.switch_to.window(ventana_original)
                             ventana_nueva_abierta = False
