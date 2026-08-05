@@ -661,15 +661,34 @@ class DescargadorArchivos:
                                 return False
 
                             print(f"         [TIMEOUT] Sin archivo tras {self.timeout}s (intento {intento + 1}/{max_intentos}), URL pestaña: {url_pestana[:60]}")
-                            # DIAGNÓSTICO: loguear qué cargó realmente la pestaña, para saber
-                            # si la URL es un link de descarga directa que no disparó nada, o
-                            # si es una ruta de la SPA que necesita interacción (click) real.
+                            # DIAGNÓSTICO: la pestaña cargó una vista de la SPA (título =
+                            # carátula del expediente), no un archivo. Buscar dónde está el
+                            # link/visor real del archivo dentro de esa vista: iframe/embed
+                            # (visor de PDF embebido), o los <a href> reales de la página.
                             try:
                                 print(f"         [DEBUG] Título pestaña: {driver.title[:80]!r}")
                                 fuente = driver.page_source or ""
-                                print(f"         [DEBUG] page_source ({len(fuente)} chars), primeros 500: {fuente[:500]!r}")
+                                print(f"         [DEBUG] page_source: {len(fuente)} chars")
+
+                                soup = BeautifulSoup(fuente, "html.parser")
+
+                                for tag_name in ("iframe", "embed", "object"):
+                                    for el in soup.find_all(tag_name):
+                                        src = el.get("src") or el.get("data") or ""
+                                        print(f"         [DEBUG] <{tag_name}> src/data: {src[:150]!r}")
+
+                                enlaces = soup.find_all("a", href=True)
+                                print(f"         [DEBUG] {len(enlaces)} <a href> en la página")
+                                for a in enlaces[:15]:
+                                    href = a.get("href", "")
+                                    texto = a.get_text(strip=True)[:40]
+                                    print(f"         [DEBUG]   href={href[:100]!r} texto={texto!r}")
+
+                                botones = soup.find_all(["button"])
+                                textos_botones = [b.get_text(strip=True)[:30] for b in botones if b.get_text(strip=True)]
+                                print(f"         [DEBUG] {len(textos_botones)} <button> con texto: {textos_botones[:15]}")
                             except Exception as e:
-                                print(f"         [DEBUG] No se pudo leer page_source: {str(e)[:60]}")
+                                print(f"         [DEBUG] No se pudo analizar page_source: {str(e)[:60]}")
                             driver.close()
                             driver.switch_to.window(ventana_original)
                             ventana_nueva_abierta = False
