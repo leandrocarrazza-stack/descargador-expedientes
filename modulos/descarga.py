@@ -661,6 +661,15 @@ class DescargadorArchivos:
                                 return False
 
                             print(f"         [TIMEOUT] Sin archivo tras {self.timeout}s (intento {intento + 1}/{max_intentos}), URL pestaña: {url_pestana[:60]}")
+                            # DIAGNÓSTICO: loguear qué cargó realmente la pestaña, para saber
+                            # si la URL es un link de descarga directa que no disparó nada, o
+                            # si es una ruta de la SPA que necesita interacción (click) real.
+                            try:
+                                print(f"         [DEBUG] Título pestaña: {driver.title[:80]!r}")
+                                fuente = driver.page_source or ""
+                                print(f"         [DEBUG] page_source ({len(fuente)} chars), primeros 500: {fuente[:500]!r}")
+                            except Exception as e:
+                                print(f"         [DEBUG] No se pudo leer page_source: {str(e)[:60]}")
                             driver.close()
                             driver.switch_to.window(ventana_original)
                             ventana_nueva_abierta = False
@@ -742,6 +751,13 @@ class DescargadorArchivos:
         # páginas inútilmente (agotando el timeout del worker y la RAM) en vez
         # de abortar apenas detecta que la sesión no sirve.
         MAX_FALLOS_AUTH_CONSECUTIVOS = 3
+        fallos_consecutivos_totales = 0
+        # Freno adicional para fallos que NO son de sesión expirada (ej: la URL
+        # extraída no dispara ninguna descarga real). Sin esto, un expediente de
+        # cientos de páginas recorrería TODAS agotando 3 reintentos x 60s en cada
+        # una (horas), bloqueando el único slot de descarga del servidor para
+        # todos los usuarios, en vez de abortar apenas queda claro que nada baja.
+        MAX_FALLOS_CONSECUTIVOS_TOTALES = 5
 
         try:
             driver = self.cliente.driver
@@ -791,6 +807,7 @@ class DescargadorArchivos:
                     self._ultimo_fallo_fue_auth = False
                     if self._descargar_archivo_selenium(url, ruta_archivo):
                         fallos_auth_consecutivos = 0
+                        fallos_consecutivos_totales = 0
                         # Detectar tipo real por magic bytes
                         tipo = "pdf"
                         try:
@@ -815,6 +832,7 @@ class DescargadorArchivos:
                         })
                     else:
                         print(f"      [WARN] No se pudo descargar mov {mov_idx_global}")
+                        fallos_consecutivos_totales += 1
 
                         if self._ultimo_fallo_fue_auth:
                             fallos_auth_consecutivos += 1
@@ -825,6 +843,13 @@ class DescargadorArchivos:
                                 )
                         else:
                             fallos_auth_consecutivos = 0
+
+                        if fallos_consecutivos_totales >= MAX_FALLOS_CONSECUTIVOS_TOTALES:
+                            raise Exception(
+                                f"DESCARGA_FALLIDA_CONSECUTIVA: {fallos_consecutivos_totales} descargas "
+                                f"consecutivas fallidas sin ser por sesión expirada (mov {mov_idx_global}), "
+                                f"abortando en vez de recorrer el resto del expediente en vano"
+                            )
 
                 # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
