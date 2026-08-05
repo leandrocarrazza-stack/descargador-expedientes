@@ -89,7 +89,15 @@ def _crear_driver_headless():
     options.add_argument('--no-first-run')                # Saltar wizard de primera vez
     options.add_argument('--mute-audio')                  # Sin audio (innecesario en headless)
     options.add_argument('--disable-gpu')                  # Sin GPU (irrelevante en servidor, ahorra RAM)
-    options.add_argument('--js-flags=--max-old-space-size=256')  # Limitar heap de JS a 256 MB
+    options.add_argument('--js-flags=--max-old-space-size=192')  # Limitar heap de JS (256 dejaba poco margen de 512 MB totales)
+    # Mesa Virtual delega el login en Keycloak (otro origen: ol-sso.jusentrerios.gov.ar)
+    # y carga recursos de terceros (ver origin-trial de google.com en su HTML). Con
+    # Site Isolation (activado por defecto en Chrome moderno) cada origen distinto
+    # corre en su PROPIO proceso renderer, multiplicando el overhead de memoria.
+    # Se desactiva para consolidar todo en un solo proceso: en un servidor de 512 MB
+    # total, esto importa más que el aislamiento de seguridad entre orígenes.
+    options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+    options.add_argument('--renderer-process-limit=1')
 
     # Sin webdriver_manager: Selenium Manager elige el driver correcto automáticamente
     ultimo_error = None
