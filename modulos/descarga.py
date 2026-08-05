@@ -11,7 +11,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
-import shutil
 import time
 from urllib.parse import urljoin
 from typing import List, Optional
@@ -473,9 +472,20 @@ class DescargadorArchivos:
         except Exception as e:
             print(f"      [ERROR] Error reciclando navegador: {str(e)[:80]}")
 
-    def _esperar_archivo_descargado(self, carpeta, timeout=60):
+    # El ícono de descarga de Material-UI (data-testid="GetAppIcon") es el
+    # botón de descarga real de cada fila. Su <a href="#"> NO es una URL real:
+    # la descarga la dispara el JS de la SPA al clickear (fetch + blob), así
+    # que no hay ninguna URL a la que navegar o hacerle un requests.get().
+    # El OTRO <a> de la fila (la celda "Descripción") sí es un link real, pero
+    # lleva a la vista de detalle de la SPA, no a un archivo — de ahí que
+    # extraer "el segundo <a> de la fila" por posición (estrategia vieja)
+    # terminara agarrando el link equivocado.
+    SELECTOR_BOTON_DESCARGA = "//table//*[@data-testid='GetAppIcon']/ancestor::a[1]"
+
+    def _esperar_archivo_nuevo(self, carpeta, archivos_antes, timeout=60):
         """
-        Espera a que aparezca un archivo completo (no parcial) en `carpeta`.
+        Espera a que aparezca un archivo NUEVO (no estaba en `archivos_antes`)
+        y completo (no parcial) en `carpeta`.
 
         Chrome escribe descargas en curso como "*.crdownload" y las renombra
         al nombre final recién cuando terminan. Además, revisa que el tamaño
@@ -483,14 +493,16 @@ class DescargadorArchivos:
         que todavía se está escribiendo.
 
         Retorna:
-            Path del archivo descargado, o None si no llegó nada a tiempo.
+            Path del archivo nuevo, o None si no llegó nada a tiempo.
         """
         limite = time.time() + timeout
         while time.time() < limite:
             try:
                 candidatos = [
                     f for f in carpeta.iterdir()
-                    if f.is_file() and not f.name.endswith((".crdownload", ".tmp"))
+                    if f.is_file()
+                    and f.name not in archivos_antes
+                    and not f.name.endswith((".crdownload", ".tmp"))
                 ]
             except FileNotFoundError:
                 candidatos = []
@@ -511,7 +523,7 @@ class DescargadorArchivos:
 
         return None
 
-    def _validar_archivo_descargado(self, ruta_destino, url, intento, max_intentos):
+    def _validar_archivo_descargado(self, ruta_destino):
         """
         Valida que el archivo descargado sea un PDF/RTF utilizable.
 
@@ -529,8 +541,9 @@ class DescargadorArchivos:
         if magic_bytes.startswith(b"{\\rtf"):
             return True
 
-        # Verificar que sea un PDF válido (si es PDF)
-        if "pdf" in str(url).lower() or ruta_destino.name.endswith(".pdf"):
+        # Verificar que sea un PDF válido (todo se nombra .pdf de entrada,
+        # ver descargar_todo_por_paginas)
+        if ruta_destino.name.endswith(".pdf"):
             try:
                 from PyPDF2 import PdfReader
 
@@ -545,32 +558,33 @@ class DescargadorArchivos:
 
         return True
 
-    def _descargar_archivo_selenium(self, url, ruta_destino):
+    def _contar_botones_descarga(self, driver):
+        """Cuenta los botones de descarga (ícono GetAppIcon) en la página actual."""
+        try:
+            return len(driver.find_elements(By.XPATH, self.SELECTOR_BOTON_DESCARGA))
+        except Exception:
+            return 0
+
+    def _descargar_archivo_selenium(self, indice_boton, ruta_destino):
         """
-        Descarga un archivo abriéndolo en una pestaña nueva del MISMO navegador
-        Selenium ya autenticado, en vez de reconstruir la sesión con `requests`.
+        Descarga un archivo haciendo click real en su botón de descarga
+        (ícono Material-UI "GetAppIcon"), en la MISMA pestaña donde está la
+        tabla de movimientos — no navega a ninguna URL ni abre pestañas.
 
-        Por qué: copiar las cookies (incluso con CDP, cross-domain) a un
-        `requests.Session()` seguía devolviendo la página de login ("sesión
-        expirada") aun con el driver de Selenium correctamente autenticado
-        y navegando con normalidad en la pestaña principal. Eso indica que el
-        problema no era falta de cookies sino que el gateway/WAF de Mesa
-        Virtual distingue el tráfico real del navegador (TLS/headers) del de
-        un cliente HTTP aparte. Al descargar DESDE el propio navegador se usa
-        exactamente el mismo contexto (cookies + fingerprint) que al navegar,
-        sin necesidad de replicarlo.
+        Por qué: el botón de descarga no es un link real (ver
+        SELECTOR_BOTON_DESCARGA): dispara la descarga por JavaScript. No hay
+        ninguna URL que replicar con `requests` ni a la que navegar; hay que
+        clickear el elemento de verdad y dejar que el JS de la página maneje
+        la descarga, con Browser.setDownloadBehavior configurado de antemano
+        para que Chrome la guarde a disco en vez de intentar mostrar un
+        diálogo "Guardar como" (imposible en headless).
 
-        MEJORAS:
-        - Usa Page.setDownloadBehavior (CDP) para forzar la descarga a disco
-          en vez de abrir el visor de PDF interno
-        - Descarga en una pestaña nueva para no perder el estado (paginación)
-          de la tabla de movimientos en la pestaña principal
-        - Verifica completitud de la descarga y validez del PDF
-        - Reintentos automáticos para descargas incompletas
-        - Detecta driver muerto y recicla automáticamente
+        El botón se re-localiza por índice en cada intento (no se guarda el
+        WebElement de una vez): si React re-renderiza la tabla entre un
+        intento y otro, una referencia vieja quedaría "stale".
 
         Args:
-            url: URL del archivo
+            indice_boton: posición (0-based) del botón de descarga en la página actual
             ruta_destino: Path donde guardar el archivo
 
         Retorna:
@@ -585,7 +599,6 @@ class DescargadorArchivos:
                     self._reciclar_navegador()
                     driver = self.cliente.driver
 
-                # Intentar verificar que el driver responde (si no, está muerto)
                 try:
                     _ = driver.current_url
                 except:
@@ -598,119 +611,79 @@ class DescargadorArchivos:
                 self._reciclar_navegador()
                 driver = self.cliente.driver
 
-            ruta_destino.parent.mkdir(parents=True, exist_ok=True)
-            carpeta_dl_temp = ruta_destino.parent / f".dl_{ruta_destino.stem}"
-            carpeta_dl_temp.mkdir(parents=True, exist_ok=True)
+            carpeta_descargas = ruta_destino.parent
+            carpeta_descargas.mkdir(parents=True, exist_ok=True)
+
+            try:
+                driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
+                    'behavior': 'allow',
+                    'downloadPath': str(carpeta_descargas),
+                })
+            except Exception:
+                # Fallback para versiones viejas de Chrome sin Browser.*
+                driver.execute_cdp_cmd('Page.setDownloadBehavior', {
+                    'behavior': 'allow',
+                    'downloadPath': str(carpeta_descargas),
+                })
 
             max_intentos = 3
-            try:
-                for intento in range(max_intentos):
-                    ventana_original = driver.current_window_handle
-                    ventana_nueva_abierta = False
-                    try:
-                        # Forzar descarga a disco (en vez de abrir el visor de PDF).
-                        # IMPORTANTE: usar Browser.setDownloadBehavior (a nivel de
-                        # navegador completo), NO Page.setDownloadBehavior. Este último
-                        # queda atado a la sesión CDP de la pestaña ACTUAL (la original,
-                        # todavía no existe la pestaña nueva en este punto) y la pestaña
-                        # que se crea después con Target.createTarget no lo hereda. Sin
-                        # comportamiento de descarga configurado, Chrome headless intenta
-                        # mostrar un diálogo "Guardar como" que nunca aparece (no hay UI)
-                        # y la descarga se queda esperando en silencio hasta agotar los
-                        # 3 reintentos completos (~4 min) sin bajar nada.
-                        try:
-                            driver.execute_cdp_cmd('Browser.setDownloadBehavior', {
-                                'behavior': 'allow',
-                                'downloadPath': str(carpeta_dl_temp),
-                            })
-                        except Exception:
-                            # Fallback para versiones viejas de Chrome sin Browser.*
-                            driver.execute_cdp_cmd('Page.setDownloadBehavior', {
-                                'behavior': 'allow',
-                                'downloadPath': str(carpeta_dl_temp),
-                            })
+            for intento in range(max_intentos):
+                try:
+                    archivos_antes = {
+                        f.name for f in carpeta_descargas.iterdir() if f.is_file()
+                    }
 
-                        handles_antes = set(driver.window_handles)
-                        # Se abre la pestaña vía CDP (Target.createTarget) en vez de
-                        # window.open() por JS: este último puede ser silenciosamente
-                        # bloqueado por el popup blocker de Chrome al no originarse en
-                        # un gesto real del usuario.
-                        driver.execute_cdp_cmd('Target.createTarget', {'url': url})
-                        WebDriverWait(driver, 10).until(
-                            lambda d: len(set(d.window_handles) - handles_antes) > 0
-                        )
-                        ventana_nueva = list(set(driver.window_handles) - handles_antes)[0]
-                        driver.switch_to.window(ventana_nueva)
-                        ventana_nueva_abierta = True
-
-                        archivo = self._esperar_archivo_descargado(carpeta_dl_temp, timeout=self.timeout)
-
-                        if not archivo:
-                            # No llegó ningún archivo: puede ser que la sesión
-                            # expiró y la pestaña nueva quedó en el login.
-                            url_pestana = ""
-                            try:
-                                url_pestana = driver.current_url
-                            except Exception:
-                                pass
-                            if "ol-sso" in url_pestana or "/login" in url_pestana:
-                                print(f"         [AUTH] Pestaña redirigida a login (sesión expirada), abortando")
-                                self._ultimo_fallo_fue_auth = True
-                                driver.close()
-                                driver.switch_to.window(ventana_original)
-                                return False
-
-                            print(f"         [TIMEOUT] Sin archivo tras {self.timeout}s (intento {intento + 1}/{max_intentos}), URL pestaña: {url_pestana[:60]}")
-                            # DIAGNÓSTICO: loguear qué cargó realmente la pestaña, para saber
-                            # si la URL es un link de descarga directa que no disparó nada, o
-                            # si es una ruta de la SPA que necesita interacción (click) real.
-                            try:
-                                print(f"         [DEBUG] Título pestaña: {driver.title[:80]!r}")
-                                fuente = driver.page_source or ""
-                                print(f"         [DEBUG] page_source ({len(fuente)} chars), primeros 500: {fuente[:500]!r}")
-                            except Exception as e:
-                                print(f"         [DEBUG] No se pudo leer page_source: {str(e)[:60]}")
-                            driver.close()
-                            driver.switch_to.window(ventana_original)
-                            ventana_nueva_abierta = False
-                            if intento < max_intentos - 1:
-                                time.sleep(2)
-                                continue
-                            return False
-
-                        driver.close()
-                        driver.switch_to.window(ventana_original)
-                        ventana_nueva_abierta = False
-
-                        archivo.replace(ruta_destino)
-
-                        if self._validar_archivo_descargado(ruta_destino, url, intento, max_intentos):
-                            return True
-
-                        if intento < max_intentos - 1:
-                            time.sleep(1)
-                            continue
-                        return False
-
-                    except Exception as e:
-                        print(f"         [DOWNLOAD-ERROR] Intento {intento + 1}/{max_intentos}: {str(e)[:80]}")
-                        if ventana_nueva_abierta:
-                            try:
-                                driver.close()
-                            except Exception:
-                                pass
-                        try:
-                            driver.switch_to.window(ventana_original)
-                        except Exception:
-                            pass
+                    botones = driver.find_elements(By.XPATH, self.SELECTOR_BOTON_DESCARGA)
+                    if indice_boton >= len(botones):
+                        print(f"         [ERROR] Botón #{indice_boton} ya no está en la página (hay {len(botones)})")
                         if intento < max_intentos - 1:
                             time.sleep(2)
                             continue
                         return False
 
-                return False
-            finally:
-                shutil.rmtree(carpeta_dl_temp, ignore_errors=True)
+                    boton = botones[indice_boton]
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", boton)
+                    driver.execute_script("arguments[0].click();", boton)
+
+                    archivo = self._esperar_archivo_nuevo(carpeta_descargas, archivos_antes, timeout=self.timeout)
+
+                    if not archivo:
+                        # No llegó ningún archivo nuevo: puede ser que la sesión
+                        # expiró y el click disparó una redirección a login.
+                        url_actual = ""
+                        try:
+                            url_actual = driver.current_url
+                        except Exception:
+                            pass
+                        if "ol-sso" in url_actual or "/login" in url_actual:
+                            print(f"         [AUTH] Redirigido a login tras el click (sesión expirada), abortando")
+                            self._ultimo_fallo_fue_auth = True
+                            return False
+
+                        print(f"         [TIMEOUT] Sin archivo nuevo tras {self.timeout}s (intento {intento + 1}/{max_intentos})")
+                        if intento < max_intentos - 1:
+                            time.sleep(2)
+                            continue
+                        return False
+
+                    archivo.replace(ruta_destino)
+
+                    if self._validar_archivo_descargado(ruta_destino):
+                        return True
+
+                    if intento < max_intentos - 1:
+                        time.sleep(1)
+                        continue
+                    return False
+
+                except Exception as e:
+                    print(f"         [DOWNLOAD-ERROR] Intento {intento + 1}/{max_intentos}: {str(e)[:80]}")
+                    if intento < max_intentos - 1:
+                        time.sleep(2)
+                        continue
+                    return False
+
+            return False
 
         except Exception as e:
             print(f"         [DOWNLOAD-FATAL] Error fatal descargando: {str(e)[:80]}")
@@ -721,11 +694,12 @@ class DescargadorArchivos:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
 
-        CRITICO (aprendido del skill manual):
-        Los JWT tokens en los hrefs expiran cuando navegas a otra pagina.
-        Si primero recolectas todos los hrefs y despues descargas,
-        los tokens de pagina 1 ya vencieron cuando llegaste a pagina 2 -> HTTP 403.
-        Solucion: descargar TODOS los archivos de la pagina actual ANTES de navegar.
+        CRITICO: los botones de descarga se ubican por índice dentro de la
+        tabla React actual (ver SELECTOR_BOTON_DESCARGA). Si primero se
+        recolectaran los de TODAS las páginas y se descargara después, los
+        WebElements de páginas ya abandonadas quedarían "stale" en cuanto
+        React re-renderice la tabla al paginar. Solución: descargar TODOS
+        los archivos de la página actual ANTES de navegar a la siguiente.
 
         Orden cronologico:
         Mesa Virtual muestra mas nuevo primero (pagina 1 = mas reciente).
@@ -737,10 +711,10 @@ class DescargadorArchivos:
             max_movimientos: Limite de seguridad para no crashear con expedientes enormes
 
         Retorna:
-            List[dict]: Lista de {path, tipo, movimiento, url} de archivos descargados
+            List[dict]: Lista de {path, tipo, movimiento} de archivos descargados
         """
         print(f"\n[DESCARGA POR PAGINAS] Expediente: {numero}")
-        print(f"  [INFO] Estrategia: descargar cada pagina antes de navegar (evita expiracion JWT)")
+        print(f"  [INFO] Estrategia: descargar cada pagina antes de navegar (evita WebElements obsoletos)")
 
         archivos_descargados = []
         pagina_actual = 1
@@ -774,38 +748,36 @@ class DescargadorArchivos:
                 # Puede haber diferentes estructuras según Material-UI/React rendering
                 self._esperar_tabla_cargada(driver)
 
-                print(f"  [PAG {pagina_actual}] Extrayendo enlaces...")
+                print(f"  [PAG {pagina_actual}] Buscando botones de descarga...")
                 time.sleep(1)
 
-                # 1. Extraer hrefs de la pagina ACTUAL (tokens validos ahora)
-                hrefs = self._extraer_hrefs_pagina_actual(driver)
-                print(f"  [PAG {pagina_actual}] {len(hrefs)} enlace(s) de descarga encontrado(s)")
+                # 1. Contar botones de descarga de la pagina ACTUAL. No se
+                # guardan los WebElements: se re-localizan por índice al
+                # momento de cada click (ver _descargar_archivo_selenium),
+                # porque React puede re-renderizar la tabla entre descargas
+                # y una referencia vieja quedaría "stale".
+                cantidad_botones = self._contar_botones_descarga(driver)
+                print(f"  [PAG {pagina_actual}] {cantidad_botones} boton(es) de descarga encontrado(s)")
 
-                if not hrefs:
+                if cantidad_botones == 0:
                     print(f"  [PAG {pagina_actual}] Sin archivos, terminando")
                     break
 
                 # 2. Descargar TODOS los archivos de esta pagina ANTES de navegar
-                for href in hrefs:
+                for indice_boton in range(cantidad_botones):
                     if mov_idx_global >= max_movimientos:
                         print(f"  [LIMIT] Limite de {max_movimientos} movimientos alcanzado")
                         break
 
                     mov_idx_global += 1
 
-                    # Construir URL absoluta si es relativa
-                    if href.startswith("http"):
-                        url = href
-                    else:
-                        url = f"https://mesavirtual.jusentrerios.gov.ar{href}"
-
                     nombre_archivo = f"{mov_idx_global:04d}_pag{pagina_actual:02d}.pdf"
                     ruta_archivo = self.carpeta_temp / nombre_archivo
 
-                    print(f"    > [{mov_idx_global}] {url[:70]}...")
+                    print(f"    > [{mov_idx_global}] boton de descarga #{indice_boton}")
 
                     self._ultimo_fallo_fue_auth = False
-                    if self._descargar_archivo_selenium(url, ruta_archivo):
+                    if self._descargar_archivo_selenium(indice_boton, ruta_archivo):
                         fallos_auth_consecutivos = 0
                         fallos_consecutivos_totales = 0
                         # Detectar tipo real por magic bytes
@@ -828,7 +800,6 @@ class DescargadorArchivos:
                             "path": ruta_archivo,
                             "tipo": tipo,
                             "movimiento": mov_idx_global,
-                            "url": url,
                         })
                     else:
                         print(f"      [WARN] No se pudo descargar mov {mov_idx_global}")
@@ -923,173 +894,6 @@ class DescargadorArchivos:
 
         print(f"    [WARN] No se detectó tabla, continuando de todas formas...")
         return False
-
-    def _extraer_hrefs_pagina_actual(self, driver) -> List[str]:
-        """
-        Extrae los hrefs de descarga de la pagina actualmente visible en el navegador.
-
-        Estrategias (en orden de preferencia):
-        1. Segundo <a> en cada fila (estructura tradicional)
-        2. Todos los <a> dentro de una tabla
-        3. Enlaces con href que contienen "descargar" o "download"
-        4. Búsqueda genérica de cualquier <a> en la tabla
-        """
-        try:
-            hrefs = []
-
-            # ESTRATEGIA 1: Segundo <a> de cada fila (estructura tradicional)
-            # //table//tbody//tr//a[2] o sin tbody
-            selectores_estrategia1 = [
-                "//table//tbody//tr//a[2]",
-                "//table//tr//a[2]",
-                "//table//tr[1]//a[position()>1]",
-            ]
-
-            for xpath in selectores_estrategia1:
-                try:
-                    elementos = driver.find_elements(By.XPATH, xpath)
-                    for elem in elementos:
-                        href = elem.get_attribute("href") or ""
-                        if href and href not in hrefs:
-                            hrefs.append(href)
-                    if hrefs:
-                        print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 1 ({xpath})")
-                        return hrefs
-                except:
-                    continue
-
-            # ESTRATEGIA 2: Todos los <a> dentro de tabla que NO sean el primero de cada fila
-            # (porque el primero suele ser preview)
-            try:
-                filas = driver.find_elements(By.XPATH, "//table//tr")
-                print(f"  [DEBUG] Encontradas {len(filas)} filas en tabla")
-
-                for fila_idx, fila in enumerate(filas, 1):
-                    enlaces = fila.find_elements(By.TAG_NAME, "a")
-                    print(f"    [FILA {fila_idx}] {len(enlaces)} enlace(s)")
-
-                    # Si hay múltiples enlaces, usar todos excepto el primero
-                    # Si hay solo uno, usarlo (podría ser descarga directa)
-                    for enlace_idx, enlace in enumerate(enlaces, 1):
-                        # Saltar primer enlace si hay múltiples (suele ser preview)
-                        if len(enlaces) > 1 and enlace_idx == 1:
-                            continue
-
-                        href = enlace.get_attribute("href") or ""
-                        if href and href not in hrefs:
-                            hrefs.append(href)
-
-                if hrefs:
-                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 2 (todos en tabla)")
-                    return hrefs
-            except Exception as e:
-                print(f"  [WARN] Estrategia 2 falló: {str(e)[:50]}")
-
-            # ESTRATEGIA 3: Buscar enlaces con palabras clave en href o aria-label
-            try:
-                palabras_clave = ["descargar", "download", "pdf", "rtf", "doc", "archivo"]
-                enlaces = driver.find_elements(By.XPATH, "//table//a")
-                print(f"  [DEBUG] Encontrados {len(enlaces)} total enlaces en tabla")
-
-                for enlace in enlaces:
-                    href = enlace.get_attribute("href") or ""
-                    aria = (enlace.get_attribute("aria-label") or "").lower()
-                    texto = (enlace.text or "").lower()
-
-                    # Verificar si contiene palabra clave
-                    es_descarga = any(
-                        palabra in href.lower() or
-                        palabra in aria or
-                        palabra in texto
-                        for palabra in palabras_clave
-                    )
-
-                    if href and es_descarga and href not in hrefs:
-                        hrefs.append(href)
-
-                if hrefs:
-                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 3 (palabras clave)")
-                    return hrefs
-            except Exception as e:
-                print(f"  [WARN] Estrategia 3 falló: {str(e)[:50]}")
-
-            # ESTRATEGIA 4: Última opción - cualquier <a> con href dentro de tabla
-            try:
-                elementos = driver.find_elements(By.XPATH, "//table//a[@href]")
-                print(f"  [DEBUG] Encontrados {len(elementos)} enlaces con href en tabla")
-
-                for elem in elementos:
-                    href = elem.get_attribute("href") or ""
-                    if href and href not in hrefs:
-                        hrefs.append(href)
-
-                if hrefs:
-                    print(f"  [OK] Encontrados {len(hrefs)} enlace(s) con estrategia 4 (todos con href)")
-                    return hrefs
-            except Exception as e:
-                print(f"  [WARN] Estrategia 4 falló: {str(e)[:50]}")
-
-            # Si llegamos aquí, no encontró nada
-            print(f"  [WARN] No se encontraron enlaces con ninguna estrategia")
-            self._debug_estructura_tabla(driver)
-            return []
-
-        except Exception as e:
-            print(f"  [WARN] Error extrayendo hrefs de pagina actual: {str(e)[:60]}")
-            return []
-
-    def _debug_estructura_tabla(self, driver):
-        """
-        Captura información sobre la estructura de la tabla para debugging.
-        Se ejecuta cuando no se encuentran enlaces.
-        """
-        try:
-            html = driver.page_source
-            soup = BeautifulSoup(html, "html.parser")
-
-            # Buscar todas las tablas
-            tablas = soup.find_all("table")
-            print(f"\n  [DEBUG TABLA] Total de <table>: {len(tablas)}")
-
-            for tabla_idx, tabla in enumerate(tablas, 1):
-                print(f"\n    Tabla {tabla_idx}:")
-                filas = tabla.find_all("tr")
-                print(f"      Total filas: {len(filas)}")
-
-                # Mostrar estructura de primeras 3 filas
-                for fila_idx, fila in enumerate(filas[:3], 1):
-                    celdas = fila.find_all(["td", "th"])
-                    enlaces = fila.find_all("a")
-                    print(f"        Fila {fila_idx}: {len(celdas)} celdas, {len(enlaces)} enlaces")
-
-                    # Mostrar contenido del primer enlace si existe
-                    if enlaces:
-                        for enlace_idx, enlace in enumerate(enlaces[:2], 1):
-                            href = enlace.get_attribute("href") if hasattr(enlace, "get_attribute") else enlace.get("href", "")
-                            texto = enlace.get_text(strip=True)[:40]
-                            print(f"          Enlace {enlace_idx}: href='{href[:50]}...' texto='{texto}'")
-
-            # Buscar divs con role="table" (Material-UI puede usar esto)
-            divs_tabla = soup.find_all("div", attrs={"role": "table"})
-            if divs_tabla:
-                print(f"\n    Encontrados {len(divs_tabla)} div[role='table']")
-                for div_idx, div in enumerate(divs_tabla[:1], 1):
-                    filas = div.find_all("div", attrs={"role": "row"})
-                    print(f"      Div tabla {div_idx}: {len(filas)} filas")
-
-            # Buscar cualquier enlace en la página
-            todos_enlaces = soup.find_all("a", href=True)
-            print(f"\n    Total <a> con href en página: {len(todos_enlaces)}")
-            if todos_enlaces:
-                print(f"      Primeros 3 enlaces:")
-                for enlace in todos_enlaces[:3]:
-                    href = enlace.get("href", "")
-                    texto = enlace.get_text(strip=True)[:40]
-                    print(f"        - href='{href[:50]}...' texto='{texto}'")
-
-        except Exception as e:
-            print(f"  [WARN] Error en debug: {str(e)[:50]}")
-
 
 def crear_descargador(
     cliente_selenium, api_graphql_url=None, api_archivos_url=None, carpeta_temp=None
