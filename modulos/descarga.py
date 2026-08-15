@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
+import re
 import time
 from urllib.parse import urljoin
 from typing import List, Optional
@@ -19,6 +20,7 @@ from modulos.logger import crear_logger
 from modulos.excepciones import ErrorDescarga
 from modulos.modelos import Archivo, Movimiento
 from modulos.conversion import memoria_disponible_mb
+from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 
 logger = crear_logger(__name__)
 
@@ -171,6 +173,177 @@ class DescargadorArchivos:
             logger.error(f"Error obteniendo movimientos: {e}", exc_info=True)
             raise ErrorDescarga(f"Error obteniendo movimientos: {e}") from e
 
+    # Patrones del indicador de paginación. El tercero es deliberadamente
+    # genérico y por eso peligroso: también matchea carátulas ("21 de 2024").
+    # Se conserva tal cual estaba porque _navegar_siguiente_pagina depende de
+    # él para saber cuándo frenar, pero NO se usa solo para estimar totales
+    # (ver _leer_rango_filas, que exige la forma de rango con guión).
+    _PATRONES_PAGINA = (
+        r"[Pp]á?gina\s+(\d+)\s+de\s+(\d+)",  # Página 1 de 14
+        r"page\s+(\d+)\s+of\s+(\d+)",        # page 1 of 14
+        r"(\d+)\s+de\s+(\d+)",               # 1 de 14 (solo números)
+    )
+
+    # Etiqueta de Material-UI TablePagination: "1–10 de 213".
+    # El guión puede venir como -, – (en dash) o — (em dash) según la versión.
+    _SELECTORES_TOTAL_FILAS = (
+        "p.MuiTablePagination-displayedRows",
+        "p.MuiTablePagination-caption",                  # MUI v4
+        "[class*='MuiTablePagination-displayedRows']",
+        "[class*='MuiTablePagination-caption']",
+        "[class*='TablePagination'] p",
+    )
+    # Los tres números aceptan separador de miles ("1.001–1.010 de 2.130").
+    _RE_RANGO_TOTAL = re.compile(
+        r"([\d.,]+)\s*[-–—]\s*([\d.,]+)\s+(?:de|of)\s+(m[áa]s\s+de\s+|more\s+than\s+)?([\d.,]+)",
+        re.IGNORECASE,
+    )
+    # Cota de cordura: un expediente no tiene 2024 páginas de movimientos, pero
+    # un año sí parece un total válido si el regex pesca la carátula.
+    _MAX_FILAS_RAZONABLE = 20000
+
+    def _detectar_paginacion(self, driver):
+        """
+        Lee el indicador "Página X de Y" del page_source.
+
+        Retorna:
+            (pagina_actual, total_paginas) o None si no se encontró.
+        """
+        try:
+            html = driver.page_source
+            for patron in self._PATRONES_PAGINA:
+                matches = re.findall(patron, html, re.IGNORECASE)
+                if matches:
+                    # Último match: el indicador de paginación suele estar al
+                    # final del documento, después del contenido de la tabla.
+                    return int(matches[-1][0]), int(matches[-1][1])
+        except Exception:
+            pass
+        return None
+
+    def _leer_rango_filas(self, driver):
+        """
+        Lee la etiqueta de paginación de Material-UI ("1–10 de 213") para saber
+        cuántas FILAS tiene el expediente en total.
+
+        Se busca por selector del DOM y no con un regex sobre todo el HTML: la
+        etiqueta tiene una clase propia, y limitar la búsqueda a ese elemento
+        evita pescar cualquier "N de M" suelto del contenido (una carátula tipo
+        "21 de 2024" daría un total absurdo).
+
+        Retorna:
+            (desde, hasta, total_filas) o None si no se pudo leer.
+        """
+        textos = []
+        for selector in self._SELECTORES_TOTAL_FILAS:
+            try:
+                textos += [
+                    e.text for e in driver.find_elements(By.CSS_SELECTOR, selector) if e.text
+                ]
+            except Exception:
+                continue
+
+        if not textos:
+            # Último recurso: el HTML completo. El regex exige la forma de rango
+            # con guión, que es mucho más específica que un "N de M" pelado.
+            try:
+                textos = [driver.page_source]
+            except Exception:
+                return None
+
+        for texto in textos:
+            match = self._RE_RANGO_TOTAL.search(texto)
+            if not match:
+                continue
+
+            if match.group(3):
+                # "1–10 de más de 10": MUI con count=-1 (total desconocido).
+                # Es una cota inferior, no un total: no sirve como denominador.
+                continue
+
+            try:
+                desde = int(re.sub(r"[.,]", "", match.group(1)))
+                hasta = int(re.sub(r"[.,]", "", match.group(2)))
+                total = int(re.sub(r"[.,]", "", match.group(4)))
+            except ValueError:
+                continue
+
+            if 0 < desde <= hasta <= total <= self._MAX_FILAS_RAZONABLE:
+                return desde, hasta, total
+
+        return None
+
+    def _detectar_total_movimientos(self, driver, botones_pagina, pagina_actual, ya_intentados):
+        """
+        Estima cuántos ARCHIVOS se van a descargar en total, para poder mostrarle
+        al usuario "archivo N de TOTAL" mientras espera.
+
+        Ojo con la diferencia: el total que publica Mesa Virtual es de FILAS, no
+        de archivos — una fila sin ícono de descarga no aporta ningún archivo.
+        Por eso el total de filas se corrige por la proporción de botones/filas
+        realmente observada, y por eso 'exacto' es False salvo cuando el
+        expediente entra en una sola página (ahí los botones SON el total).
+
+        Se llama en cada página, no sólo en la primera: así la estimación se
+        autocorrige a medida que llegan datos reales.
+
+        Args:
+            driver: Selenium WebDriver
+            botones_pagina: botones de descarga contados en la página actual
+            pagina_actual: número de página que se está por descargar (1-based)
+            ya_intentados: archivos ya recorridos en páginas anteriores
+
+        Retorna:
+            (total, exacto, total_paginas). total puede ser None si no se pudo estimar.
+        """
+        try:
+            total_paginas = None
+            paginacion = self._detectar_paginacion(driver)
+            if paginacion:
+                total_paginas = paginacion[1]
+
+            vistos = ya_intentados + botones_pagina
+            rango = self._leer_rango_filas(driver)
+
+            # CASO A: hay etiqueta de MUI -> tenemos total de filas y tamaño real de página
+            if rango:
+                desde, hasta, total_filas = rango
+                filas_en_pagina = max(hasta - desde + 1, 1)
+
+                if total_filas <= filas_en_pagina:
+                    # Todo el expediente entra en esta página: los botones que
+                    # contamos SON todos los archivos que hay.
+                    return botones_pagina, True, (total_paginas or 1)
+
+                filas_vistas = min(hasta, total_filas)
+                ratio = min(vistos / filas_vistas, 1.0) if filas_vistas else 1.0
+                estimado = max(int(round(total_filas * ratio)), vistos)
+                return estimado, False, total_paginas
+
+            # CASO B: sin etiqueta, pero sí "Página X de Y"
+            if total_paginas and total_paginas > 1 and botones_pagina:
+                if pagina_actual <= 1:
+                    estimado = botones_pagina * total_paginas
+                else:
+                    promedio_por_pagina = vistos / pagina_actual
+                    estimado = max(int(round(promedio_por_pagina * total_paginas)), vistos)
+
+                # El patrón genérico "N de M" que alimenta total_paginas también
+                # matchea una carátula ("Expediente 21 de 2024") y devolvería un
+                # total delirante. Si el número no tiene sentido, mejor no
+                # mostrar denominador que mostrar uno inventado.
+                if estimado <= self._MAX_FILAS_RAZONABLE:
+                    return estimado, False, total_paginas
+
+            # CASO C: ni etiqueta ni paginación -> asumir página única
+            return (vistos or None), False, (total_paginas or 1)
+
+        except Exception:
+            # El total es cosmético: si no se puede estimar, el contador muestra
+            # sólo el número corrido y la descarga sigue exactamente igual.
+            logger.debug("No se pudo estimar el total de movimientos", exc_info=True)
+            return None, False, None
+
     def _navegar_siguiente_pagina(self, driver):
         """
         Intenta navegar a la siguiente página usando diferentes estrategias.
@@ -192,38 +365,15 @@ class DescargadorArchivos:
 
             # ESTRATEGIA PRIMARIA: Detectar indicador de página (ej: "Página 1 de 14")
             # Esto es más confiable que buscar botones
-            try:
-                # Buscar texto que indique "Página X de Y" (más específico)
-                import re
+            paginacion = self._detectar_paginacion(driver)
+            if paginacion:
+                pagina_actual, total_paginas = paginacion
+                print(f"      [INFO]  Página {pagina_actual} de {total_paginas}")
 
-                # Buscar en toda la página
-                html = driver.page_source
-
-                # Patrones comunes: "Página 1 de 14", "1 de 14", "page 1 of 14", etc
-                patrones = [
-                    r"[Pp]á?gina\s+(\d+)\s+de\s+(\d+)",  # Página 1 de 14
-                    r"page\s+(\d+)\s+of\s+(\d+)",  # page 1 of 14
-                    r"(\d+)\s+de\s+(\d+)",  # 1 de 14 (solo números)
-                ]
-
-                for patron in patrones:
-                    matches = re.findall(patron, html, re.IGNORECASE)
-                    if matches:
-                        # Tomar el último match (más probable que sea el indicador de paginación)
-                        pagina_actual = int(matches[-1][0])
-                        total_paginas = int(matches[-1][1])
-
-                        print(f"      [INFO]  Página {pagina_actual} de {total_paginas}")
-
-                        if pagina_actual >= total_paginas:
-                            print(f"      [OK] Última página alcanzada (página {pagina_actual}/{total_paginas})")
-                            return False
-                        else:
-                            # Hay más páginas, continuar buscando botón siguiente
-                            break
-            except Exception as e:
-                # No encontró indicador, continuar con otras estrategias
-                pass
+                if pagina_actual >= total_paginas:
+                    print(f"      [OK] Última página alcanzada (página {pagina_actual}/{total_paginas})")
+                    return False
+                # Hay más páginas: seguir con la búsqueda del botón "Siguiente"
 
             # ESTRATEGIA 2: Buscar botón "Siguiente" habilitado
             selectores_siguiente = [
@@ -724,7 +874,7 @@ class DescargadorArchivos:
         if antes is not None and despues is not None:
             print(f"      [MEMORIA] Purgado Chrome: {antes} MB -> {despues} MB disponibles")
 
-    def descargar_todo_por_paginas(self, numero: str) -> List[dict]:
+    def descargar_todo_por_paginas(self, numero: str, on_progreso=None) -> List[dict]:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
 
@@ -750,6 +900,9 @@ class DescargadorArchivos:
 
         Args:
             numero: Numero del expediente (solo para logs)
+            on_progreso: callable opcional que recibe un dict con el avance
+                (fase, actual, total, ...) para mostrarlo en el frontend.
+                Ver el emisor local `emitir()` más abajo.
 
         Retorna:
             List[dict]: Lista de {path, tipo, movimiento} de archivos descargados
@@ -778,6 +931,40 @@ class DescargadorArchivos:
         # va acumulando memoria a lo largo de la sesión hasta agotar los 512 MB
         # cerca del final, aun con todo funcionando bien.
         PURGAR_MEMORIA_CADA_N_PAGINAS = 5
+
+        # ── Progreso hacia el frontend ────────────────────────────────────
+        # Todos los valores son primitivos JSON: este dict termina serializado
+        # tal cual por /descargas/progreso (nada de Path ni datetime acá).
+        estado_prog = {
+            'fase': 'descarga',
+            'actual': 0,            # archivo en curso (1-based)
+            'total': None,          # None = todavía no se sabe
+            'total_exacto': False,  # False = estimación, puede corregirse
+            'descargados': 0,
+            'fallidos': 0,
+            'pagina': 1,
+            'total_paginas': None,
+        }
+
+        def emitir(**cambios):
+            """
+            Publica el avance. Se pasa una COPIA: quien lee del otro thread
+            nunca ve un dict a medio escribir. Y traga cualquier excepción del
+            callback — el progreso es cosmético y jamás debe tumbar una
+            descarga que el usuario ya pagó con un crédito.
+
+            El estado se actualiza SIEMPRE, aunque no haya callback: hay
+            emisiones que se calculan a partir del valor anterior (fallidos,
+            total), y si el dict quedara sin actualizar en el modo sin callback
+            esos acumuladores se irían desincronizando.
+            """
+            estado_prog.update(cambios)
+            if on_progreso is None:
+                return
+            try:
+                on_progreso(dict(estado_prog))
+            except Exception:
+                logger.debug("Callback de progreso falló (ignorado)", exc_info=True)
 
         try:
             driver = self.cliente.driver
@@ -817,6 +1004,19 @@ class DescargadorArchivos:
                     print(f"  [PAG {pagina_actual}] Sin archivos, terminando")
                     break
 
+                # Estimar el total ahora que ya sabemos cuántos botones trae esta
+                # página. Se recalcula en cada página para que la estimación se
+                # corrija sola a medida que llegan datos reales.
+                total_est, exacto, total_pag = self._detectar_total_movimientos(
+                    driver, cantidad_botones, pagina_actual, mov_idx_global
+                )
+                emitir(
+                    pagina=pagina_actual,
+                    total_paginas=total_pag,
+                    total=max(total_est or 0, mov_idx_global) or None,
+                    total_exacto=exacto,
+                )
+
                 # 2. Descargar TODOS los archivos de esta pagina ANTES de navegar
                 for indice_boton in range(cantidad_botones):
                     mov_idx_global += 1
@@ -825,6 +1025,16 @@ class DescargadorArchivos:
                     ruta_archivo = self.carpeta_temp / nombre_archivo
 
                     print(f"    > [{mov_idx_global}] boton de descarga #{indice_boton}")
+
+                    # Se publica ANTES del intento, no después: un archivo puede
+                    # tardar hasta 180s (3 reintentos x 60s de timeout), y así el
+                    # usuario ve avanzar el número en vez de quedarse mirando el
+                    # anterior congelado justo cuando más lento va todo.
+                    if mov_idx_global % PROGRESO_CADA_N_ARCHIVOS == 0:
+                        emitir(
+                            actual=mov_idx_global,
+                            total=max(estado_prog['total'] or 0, mov_idx_global) or None,
+                        )
 
                     self._ultimo_fallo_fue_auth = False
                     if self._descargar_archivo_selenium(indice_boton, ruta_archivo):
@@ -851,9 +1061,12 @@ class DescargadorArchivos:
                             "tipo": tipo,
                             "movimiento": mov_idx_global,
                         })
+                        if len(archivos_descargados) % PROGRESO_CADA_N_ARCHIVOS == 0:
+                            emitir(descargados=len(archivos_descargados))
                     else:
                         print(f"      [WARN] No se pudo descargar mov {mov_idx_global}")
                         fallos_consecutivos_totales += 1
+                        emitir(fallidos=estado_prog['fallidos'] + 1)
 
                         if self._ultimo_fallo_fue_auth:
                             fallos_auth_consecutivos += 1
@@ -872,6 +1085,15 @@ class DescargadorArchivos:
                                 f"abortando en vez de recorrer el resto del expediente en vano"
                             )
 
+                # Fin de página: publicar siempre, aunque no se hayan completado
+                # los N archivos de la cadencia, para que el contador no quede
+                # quieto más de una página entera.
+                emitir(
+                    actual=mov_idx_global,
+                    descargados=len(archivos_descargados),
+                    total=max(estado_prog['total'] or 0, mov_idx_global) or None,
+                )
+
                 # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
                 hay_siguiente = self._navegar_siguiente_pagina(driver)
                 if not hay_siguiente:
@@ -887,6 +1109,17 @@ class DescargadorArchivos:
                 # devolver tipo_error='auth_failed' ("Reconectá tu cuenta") en vez
                 # de un genérico "no se pudieron descargar archivos".
                 raise
+
+        # Reconciliación final: ya no hay estimación que valga, sabemos el número
+        # exacto. Sin esto el contador podría cerrar en "208 de 213" si la
+        # estimación estaba corrida. Corre también cuando el except de arriba
+        # tragó el error (descarga parcial), pero no cuando relanza.
+        emitir(
+            actual=len(archivos_descargados),
+            descargados=len(archivos_descargados),
+            total=len(archivos_descargados) or None,
+            total_exacto=True,
+        )
 
         print(f"\n[OK] Total archivos descargados: {len(archivos_descargados)} ({pagina_actual} pagina(s))")
         return archivos_descargados

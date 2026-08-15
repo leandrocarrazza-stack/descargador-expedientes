@@ -22,6 +22,7 @@ from modulos.login import ClienteSelenium, crear_cliente_sesion
 from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
+from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb
 from modulos.unificacion import UnificadorPDF
 from modulos.compresion import comprimir_pdf
@@ -73,18 +74,38 @@ class PipelineDescargador:
         self.conversor: Optional[ConversorRTF] = None
         self.unificador: Optional[UnificadorPDF] = None
         self.carpeta_temp: Optional[Path] = None
+        self._on_progreso = None
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None) -> ResultadoPipeline:
+    def _emitir(self, **datos):
+        """
+        Publica el avance del pipeline hacia el frontend.
+
+        Traga cualquier excepción del callback a propósito: el progreso es
+        cosmético y no puede hacer fracasar una descarga que ya consumió un
+        crédito del usuario.
+        """
+        if not self._on_progreso:
+            return
+        try:
+            self._on_progreso(datos)
+        except Exception:
+            logger.debug("Callback de progreso falló (ignorado)", exc_info=True)
+
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
         Args:
             numero_expediente: Número a descargar (ej: "21/24")
             limpiar_temp: Limpiar carpeta temporal al finalizar
+            on_progreso: callable opcional que recibe dicts con el avance real
+                (fase, actual, total...) para que el frontend muestre
+                "archivo N de TOTAL" en vez de una barra inventada.
 
         Returns:
             ResultadoPipeline con resultado o error
         """
+        self._on_progreso = on_progreso
         try:
             logger.info(f"[PIPELINE] Iniciando descarga: {numero_expediente}")
 
@@ -97,6 +118,7 @@ class PipelineDescargador:
 
             # PASO 1: AUTENTICACIÓN
             logger.info("[PASO 1/5] Autenticación en Mesa Virtual")
+            self._emitir(fase='auth', actual=0, total=None, total_exacto=False)
 
             if cookies_mv:
                 # Usar las cookies del usuario (Login Relay) — camino normal en producción
@@ -123,6 +145,7 @@ class PipelineDescargador:
 
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
+            self._emitir(fase='busqueda', actual=0, total=None, total_exacto=False)
             self.buscador = BuscadorExpedientes(self.cliente)
             resultado_busqueda = self.buscador.buscar(numero_expediente, indice_expediente=indice_expediente)
 
@@ -167,7 +190,9 @@ class PipelineDescargador:
             # Descargar por paginas: en cada pagina descargamos todos los archivos
             # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
             # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
-            archivos_descargados = self.descargador.descargar_todo_por_paginas(numero_expediente)
+            archivos_descargados = self.descargador.descargar_todo_por_paginas(
+                numero_expediente, on_progreso=self._on_progreso
+            )
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
             _log_memoria("descarga (Chrome todavía abierto)")
 
@@ -198,14 +223,19 @@ class PipelineDescargador:
 
             # Convertir archivos descargados manteniendo metadata
             # descargar_todo_por_paginas() retorna {path, tipo, movimiento, url}
+            total_a_convertir = len(archivos_descargados)
+            self._emitir(fase='conversion', actual=0, total=total_a_convertir, total_exacto=True)
+
             archivos_convertidos = []
-            for arch in archivos_descargados:
+            for i, arch in enumerate(archivos_descargados, 1):
                 ruta_original = arch['path']
                 pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
                 if pdf_convertido:
                     # Actualizar ruta con conversión realizada, mantener metadata
                     arch['path'] = pdf_convertido
                     archivos_convertidos.append(arch)
+                if i % PROGRESO_CADA_N_ARCHIVOS == 0:
+                    self._emitir(fase='conversion', actual=i, total=total_a_convertir, total_exacto=True)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
@@ -225,10 +255,13 @@ class PipelineDescargador:
 
             # PASO 5: UNIFICACIÓN
             logger.info("[PASO 5/5] Unificación de PDFs")
+            self._emitir(fase='unificacion', actual=0, total=len(archivos_convertidos), total_exacto=True)
             self.unificador = UnificadorPDF(config.OUTPUT_DIR)
 
             # Pasar archivos con metadata al unificador
-            pdf_final = self.unificador.unificar(numero_expediente, archivos_convertidos)
+            pdf_final = self.unificador.unificar(
+                numero_expediente, archivos_convertidos, on_progreso=self._on_progreso
+            )
 
             if not pdf_final or not pdf_final.exists():
                 logger.error(f"PDF final no generado o inexistente: {pdf_final}")

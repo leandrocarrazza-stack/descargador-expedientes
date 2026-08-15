@@ -253,6 +253,7 @@
                              style="width: 0%"
                              aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
+                    <small id="contador-archivos" class="text-muted-foja mono d-block mt-2" style="display: none;"></small>
                     <small id="mensaje-extendido" class="text-muted-foja d-block mt-2" style="display: none !important;"></small>
                 </div>
             </div>
@@ -324,12 +325,36 @@
         ]},
     ];
 
+    // Mapeo de las fases que informa el backend a la etapa visual y a su tramo
+    // de la barra. Los techos son los mismos de ETAPAS (10/30/70/92), así el
+    // ritmo visual no cambia: sólo se parte el tramo 70-92 entre convertir y
+    // unificar, que antes iban juntos a ciegas.
+    const FASES = {
+        auth:        { etapa: 0, desde: 0,  hasta: 10, verbo: 'Autenticando' },
+        busqueda:    { etapa: 1, desde: 10, hasta: 30, verbo: 'Buscando' },
+        descarga:    { etapa: 2, desde: 30, hasta: 70, verbo: 'Descargando' },
+        conversion:  { etapa: 3, desde: 70, hasta: 86, verbo: 'Convirtiendo' },
+        unificacion: { etapa: 3, desde: 86, hasta: 92, verbo: 'Unificando' },
+    };
+
+    // Debe coincidir con PROGRESO_CADA_N_ARCHIVOS de modulos/progreso.py: es
+    // cada cuántos archivos publica el servidor, y con eso la barra sabe qué
+    // tan lejos está el próximo dato para no pasarse de largo suavizando.
+    const PROGRESO_CADA_N_ARCHIVOS = 10;
+
     let timers = [];
     let tickInterval = null;
     let numeroActual = '';
     let tiempoInicioAnimacion = 0;
     let etapaActualIdx = 0;
     let porcentajeActual = 0;
+
+    // Progreso real informado por el servidor
+    let progresoInterval = null;
+    let ultimoProgreso = null;
+    let faseActual = null;
+    let modoReal = false;   // true en cuanto llega el primer dato real
+    let etiquetaActual = 'Iniciando...';
 
     // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
     function mostrarSolo(idPanel) {
@@ -344,6 +369,10 @@
         porcentajeActual = 0;
         etapaActualIdx = 0;
         tiempoInicioAnimacion = Date.now();
+        // Resetear acá (y no sólo en reiniciar()) es lo que deja limpio el
+        // camino "varios expedientes encontrados" -> elegir uno: esa segunda
+        // descarga es un job nuevo y no debe arrastrar los números del anterior.
+        resetearProgresoReal();
         setBarra(0, 'Iniciando...');
 
         // Iniciar tick continuo
@@ -351,9 +380,18 @@
     }
 
     function tickAnimacion() {
+        // Apenas hay datos reales del servidor, el reloj deja de inventar
+        // el porcentaje y sólo suaviza el movimiento entre dato y dato.
+        if (modoReal) { tickSuavizado(); return; }
+
         const tiempoTranscurrido = (Date.now() - tiempoInicioAnimacion) / 1000;
-        let nuevoIdx = 0;
-        let pctEnEtapa = 0;
+        // Arrancar en la ÚLTIMA etapa: si el tiempo transcurrido supera todo el
+        // cronograma, el bucle de abajo no matchea ninguna rama y estos valores
+        // quedan como están. Inicializarlos en 0 (como estaba antes) hacía que
+        // la barra se desplomara de 92% a 10% pasados los 118s y se quedara ahí
+        // hasta el final, que es de dónde salía el "parece que se trabó".
+        let nuevoIdx = ETAPAS.length - 1;
+        let pctEnEtapa = 0.98;
 
         // Determinar etapa actual y progreso dentro de ella
         let tiempoAcumulado = 0;
@@ -369,26 +407,13 @@
             tiempoAcumulado += etapa.segundos;
         }
 
-        // Si pasamos la última etapa, quedarse en techo
-        if (nuevoIdx >= ETAPAS.length) {
-            nuevoIdx = ETAPAS.length - 1;
-            pctEnEtapa = 1;
-        }
-
-        // Cambiar etapa si es necesario
-        if (nuevoIdx !== etapaActualIdx) {
-            for (let i = 0; i < nuevoIdx; i++) {
-                marcarEtapaCompleta(i);
-            }
-            activarEtapa(nuevoIdx);
-            etapaActualIdx = nuevoIdx;
-        }
+        sincronizarEtapas(nuevoIdx);
 
         // Rotar textos dentro de la etapa
         const etapa = ETAPAS[nuevoIdx];
         const tiempoEnEtapa = tiempoTranscurrido - (ETAPAS.slice(0, nuevoIdx).reduce((s, e) => s + e.segundos, 0));
         const idxTexto = Math.floor((tiempoEnEtapa / (etapa.segundos / etapa.textos.length)) % etapa.textos.length);
-        const texto = etapa.textos[idxTexto];
+        const texto = etapa.textos[Math.min(idxTexto, etapa.textos.length - 1)];
 
         // Calcular porcentaje
         const pctDesde = nuevoIdx === 0 ? 0 : ETAPAS[nuevoIdx - 1].techo;
@@ -402,7 +427,114 @@
             porcentajeActual = nuevoPct;
         }
 
+        etiquetaActual = texto;
         setBarra(Math.round(porcentajeActual), texto);
+    }
+
+    // ─── PROGRESO REAL DEL SERVIDOR ───────────────────────────────────────
+    // Porcentaje que le corresponde a un avance dentro de su fase.
+    function pctDeFase(f, p) {
+        if (!p.total || p.total <= 0) return f.desde;
+        const hechos = Math.min(p.actual || 0, p.total);
+        return f.desde + (f.hasta - f.desde) * (hechos / p.total);
+    }
+
+    // Entre dato y dato del servidor pueden pasar varios segundos: el contador
+    // se publica cada 10 archivos, y cada archivo puede tardar lo suyo. La
+    // barra sigue avanzando hacia donde estaría el próximo lote, sin llegar
+    // nunca: así nunca parece congelada, pero tampoco adelanta progreso que
+    // todavía no ocurrió.
+    //
+    // El avance es asintótico (rápido al principio, cada vez más lento) y no
+    // lineal: no sabemos cuánto va a tardar el lote siguiente, y una velocidad
+    // fija o se queda corta en expedientes lentos o toca el techo enseguida en
+    // los rápidos.
+    function tickSuavizado() {
+        const f = FASES[faseActual];
+        if (!f) return;
+
+        let techo = f.hasta;
+        if (ultimoProgreso && ultimoProgreso.total > 0) {
+            const unLote = (f.hasta - f.desde) * PROGRESO_CADA_N_ARCHIVOS / ultimoProgreso.total;
+            techo = Math.min(f.hasta, pctDeFase(f, ultimoProgreso) + unLote * 0.9);
+        }
+
+        if (porcentajeActual < techo) {
+            porcentajeActual = Math.min(porcentajeActual + (techo - porcentajeActual) * 0.05, techo);
+        }
+        setBarra(Math.round(porcentajeActual), etiquetaActual);
+    }
+
+    function aplicarProgresoReal(p) {
+        const f = FASES[p.fase];
+        if (!f) return;   // fase 'iniciando' o desconocida: seguir con el reloj
+
+        modoReal = true;
+        faseActual = p.fase;
+        ultimoProgreso = p;
+
+        sincronizarEtapas(f.etapa);
+
+        // La etiqueta de la barra describe la ETAPA; los números van en la línea
+        // del contador, abajo. Poner las dos cosas en los dos lugares repetía
+        // la misma información al pedo.
+        const hayNumeros = p.total > 0 && p.actual > 0;
+        etiquetaActual = ETAPAS[f.etapa].textos[0];
+
+        // La barra nunca retrocede, aunque el total se corrija hacia arriba.
+        porcentajeActual = Math.max(porcentajeActual, pctDeFase(f, p));
+        setBarra(Math.round(porcentajeActual), etiquetaActual);
+        setContador(p, f, hayNumeros);
+    }
+
+    function sincronizarEtapas(idx) {
+        if (idx === etapaActualIdx) return;
+        for (let i = 0; i < idx; i++) marcarEtapaCompleta(i);
+        activarEtapa(idx);
+        etapaActualIdx = idx;
+    }
+
+    function setContador(p, f, hayNumeros) {
+        const el = document.getElementById('contador-archivos');
+        if (!el) return;
+        if (!hayNumeros) { el.style.display = 'none'; return; }
+
+        const n = Math.min(p.actual, p.total);
+        el.textContent = (p.fase === 'descarga')
+            ? `${n} de ${p.total} archivos descargados`
+            : `${f.verbo} ${n} de ${p.total}`;
+        el.style.display = 'block';
+    }
+
+    function iniciarPollProgreso(jobId) {
+        detenerPollProgreso();
+        progresoInterval = setInterval(async () => {
+            try {
+                const r = await fetch(`/descargas/progreso/${jobId}`);
+                if (!r.ok) return;   // job expirado o ajeno: manda el long-poll
+                const d = await r.json();
+                if (d && d.progreso && d.progreso.fase) aplicarProgresoReal(d.progreso);
+            } catch (e) {
+                // Red intermitente: ignorar. Nunca desarmar la UI por un fallo
+                // del polleo de progreso — quien decide el resultado es /estado.
+            }
+        }, 2000);
+    }
+
+    function detenerPollProgreso() {
+        if (progresoInterval) {
+            clearInterval(progresoInterval);
+            progresoInterval = null;
+        }
+    }
+
+    function resetearProgresoReal() {
+        modoReal = false;
+        ultimoProgreso = null;
+        faseActual = null;
+        etiquetaActual = 'Iniciando...';
+        const cont = document.getElementById('contador-archivos');
+        if (cont) { cont.textContent = ''; cont.style.display = 'none'; }
     }
 
     function activarEtapa(idx) {
@@ -434,6 +566,9 @@
             clearInterval(tickInterval);
             tickInterval = null;
         }
+        // Una sola línea cubre las cinco salidas (éxito, error, sesión vencida,
+        // múltiples opciones y reiniciar): todas pasan por acá.
+        detenerPollProgreso();
     }
 
     function animarExito() {
@@ -508,7 +643,12 @@
                 return;
             }
 
-            // 2. Long-polling: esperar a que el job termine (el servidor retiene el request)
+            // 2. Arrancar el polleo del contador ANTES del long-poll: el await
+            // de abajo bloquea hasta 25s, así que si esto fuera después el
+            // contador no aparecería nunca.
+            iniciarPollProgreso(data.job_id);
+
+            // 3. Long-polling: esperar a que el job termine (el servidor retiene el request)
             await longPolling(data.job_id);
 
         } catch (err) {
@@ -520,9 +660,11 @@
         }
     }
 
-    // Long-polling: un único request que espera en el servidor hasta que el job complete
-    // (el servidor lo despierta apenas termina el pipeline, máx 5 minutos)
-    async function longPolling(jobId) {
+    // Long-polling: cadena de requests cortos (~25s c/u en el servidor) hasta que el job
+    // complete. startTime se preserva entre llamadas recursivas para saber cuánto tiempo
+    // real pasó y recién entonces mostrar el aviso de "muchos movimientos".
+    async function longPolling(jobId, startTime) {
+        if (!startTime) startTime = Date.now();
         try {
             console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
 
@@ -570,10 +712,14 @@
                 return;
 
             } else if (data.estado === 'procesando') {
-                // Timeout del server (5 minutos): el job sigue en progreso
-                mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
+                // Timeout corto del server (~25s): el job sigue en progreso, se vuelve a pedir.
+                // El aviso recién sale pasado 1:30 real de espera acumulada, no en cada vuelta
+                // de este polling corto (antes aparecía siempre a los 25s y asustaba de más).
+                if (Date.now() - startTime > 90000) {
+                    mostrarMensajeExtendido('Este expediente tiene muchos movimientos. Estamos terminando — no cierres la pestaña.');
+                }
                 console.log('[LONG-POLL] Timeout del servidor, reintentando...');
-                await longPolling(jobId);
+                await longPolling(jobId, startTime);
                 return;
             }
 
@@ -628,6 +774,9 @@
         barra.setAttribute('aria-valuenow', 0);
         const msgExtendido = document.getElementById('mensaje-extendido');
         if (msgExtendido) msgExtendido.style.cssText = 'display: none !important;';
+        porcentajeActual = 0;
+        etapaActualIdx = 0;
+        resetearProgresoReal();
         ETAPAS.forEach(e => {
             const badge = document.getElementById(`badge-${e.idx}`);
             badge.className = 'etapa-badge';

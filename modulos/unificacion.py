@@ -20,6 +20,7 @@ import gc  # Garbage collector para liberar memoria entre lotes
 from .conversion import crear_conversor
 from .logger import crear_logger
 from .excepciones import ErrorUnificacion
+from .progreso import PROGRESO_CADA_N_ARCHIVOS
 
 logger = crear_logger(__name__)
 
@@ -43,13 +44,16 @@ class UnificadorPDF:
         self.carpeta_salida = Path(carpeta_salida) if carpeta_salida else self.carpeta_temp
         self.carpeta_salida.mkdir(parents=True, exist_ok=True)
 
-    def unificar(self, numero_expediente: str, archivos_descargados: List[dict]) -> Optional[Path]:
+    def unificar(self, numero_expediente: str, archivos_descargados: List[dict], on_progreso=None) -> Optional[Path]:
         """
         Unifica múltiples PDFs en un solo archivo.
 
         Args:
             numero_expediente: Número del expediente (para el nombre del archivo)
             archivos_descargados: Lista de dicts con {path, tipo, movimiento}
+            on_progreso: callable opcional que recibe dicts con el avance, para
+                que el usuario vea "Unificando N de TOTAL" en vez de una barra
+                quieta durante la etapa más lenta después de la descarga.
 
         Retorna:
             Path: Ruta del archivo PDF unificado, o None si falla
@@ -62,6 +66,22 @@ class UnificadorPDF:
             return None
 
         print(f"\n Unificando {len(archivos_descargados)} archivo(s) en PDF único...\n")
+
+        total_archivos = len(archivos_descargados)
+
+        def emitir(actual):
+            """Publica el avance; nunca puede hacer fallar la unificación."""
+            if on_progreso is None:
+                return
+            try:
+                on_progreso({
+                    'fase': 'unificacion',
+                    'actual': min(actual, total_archivos),
+                    'total': total_archivos,
+                    'total_exacto': True,
+                })
+            except Exception:
+                logger.debug("Callback de progreso falló (ignorado)", exc_info=True)
 
         try:
             # Ordenar archivos por movimiento (índice) en orden NORMAL (ascendente)
@@ -138,6 +158,10 @@ class UnificadorPDF:
                     print(f"[NO] ({str(e)[:30]})")
                     continue
 
+                finally:
+                    if i % PROGRESO_CADA_N_ARCHIVOS == 0:
+                        emitir(i)
+
             # Si no hay PDFs válidos, intentar modo alternativo (copiar único archivo)
             if not rutas_validas:
                 print("\n[WARN] Modo alternativo: PDFs dañados, copiando como está...")
@@ -181,6 +205,7 @@ class UnificadorPDF:
                         print("[OK]")
                     else:
                         print(f"[OK] ({len(incluidos)}/{len(lote)}, se omitieron {len(lote) - len(incluidos)})")
+                    emitir(idx_lote + len(lote))
                     gc.collect()  # Forzar liberación de memoria entre lotes
 
                 # Merge final de los archivos intermedios
