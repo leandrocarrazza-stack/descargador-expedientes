@@ -22,12 +22,34 @@ from modulos.login import ClienteSelenium, crear_cliente_sesion
 from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
-from modulos.conversion import ConversorRTF
+from modulos.conversion import ConversorRTF, matar_procesos_soffice
 from modulos.unificacion import UnificadorPDF
 from modulos.compresion import comprimir_pdf
 import config
 
 logger = logging.getLogger(__name__)
+
+
+def _log_memoria(etapa: str):
+    """
+    Loguea la memoria disponible del sistema (no sólo la de este proceso
+    Python) en puntos clave del pipeline.
+
+    Por qué: en un servidor de 512 MB totales, lo que importa es cuánto
+    queda libre para que Chrome/LibreOffice puedan arrancar, no cuánto usa
+    el proceso Flask en sí. Lee /proc/meminfo directamente (sin psutil, no
+    está instalado) para tener datos reales de dónde se va la memoria en
+    vez de seguir infiriéndolo de los síntomas.
+    """
+    try:
+        with open('/proc/meminfo') as f:
+            for linea in f:
+                if linea.startswith('MemAvailable:'):
+                    mb = int(linea.split()[1]) // 1024
+                    logger.info(f"[MEMORIA] Disponible tras {etapa}: {mb} MB")
+                    return
+    except Exception as e:
+        logger.debug(f"[MEMORIA] No se pudo leer /proc/meminfo: {str(e)[:60]}")
 
 
 @dataclass
@@ -68,6 +90,13 @@ class PipelineDescargador:
         try:
             logger.info(f"[PIPELINE] Iniciando descarga: {numero_expediente}")
 
+            # Limpieza preventiva: si un pipeline anterior crasheó a mitad de la
+            # conversión (excepción no manejada, OOM-kill del proceso), puede haber
+            # dejado un soffice.bin residente consumiendo memoria desde entonces.
+            # Se libera ANTES de arrancar Chrome, que es lo que más RAM necesita.
+            matar_procesos_soffice()
+            _log_memoria("inicio")
+
             # PASO 1: AUTENTICACIÓN
             logger.info("[PASO 1/5] Autenticación en Mesa Virtual")
 
@@ -91,6 +120,8 @@ class PipelineDescargador:
                         error="No se pudo crear sesión. Intenta nuevamente.",
                         tipo_error="auth_failed"
                     )
+
+            _log_memoria("autenticación (Chrome recién arrancado)")
 
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
@@ -123,6 +154,8 @@ class PipelineDescargador:
             expediente = resultado_busqueda  # dict
             logger.info(f"[OK] Expediente encontrado: {expediente.get('numero', numero_expediente)}")
 
+            _log_memoria("búsqueda")
+
             # PASO 3: DESCARGA DE ARCHIVOS
             logger.info("[PASO 3/5] Descarga de archivos")
 
@@ -138,6 +171,7 @@ class PipelineDescargador:
             # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
             archivos_descargados = self.descargador.descargar_todo_por_paginas(numero_expediente)
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
+            _log_memoria("descarga (Chrome todavía abierto)")
 
             if not archivos_descargados:
                 return ResultadoPipeline(
@@ -158,6 +192,8 @@ class PipelineDescargador:
                 except Exception as e:
                     logger.warning(f"[WARN] Error al cerrar navegador: {e}")
 
+            _log_memoria("cierre de Chrome")
+
             # PASO 4: CONVERSIÓN RTF>PDF
             logger.info("[PASO 4/5] Conversión RTF>PDF")
             self.conversor = ConversorRTF()
@@ -174,6 +210,12 @@ class PipelineDescargador:
                     archivos_convertidos.append(arch)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
+
+            # Liberar la memoria del proceso soffice.bin residente (si hubo al
+            # menos un RTF) ANTES de que PyPDF2 tenga que cargar y combinar todos
+            # los PDFs — ambos compiten por la misma RAM del proceso Python.
+            matar_procesos_soffice()
+            _log_memoria("conversión RTF>PDF (soffice liberado)")
 
             if not archivos_convertidos:
                 return ResultadoPipeline(
@@ -200,6 +242,7 @@ class PipelineDescargador:
                 )
 
             logger.info(f"[OK] PDF final generado: {pdf_final}")
+            _log_memoria("unificación")
 
             # PASO 6 (OPCIONAL): COMPRESIÓN
             # Solo comprime si COMPRIMIR_PDF=true en .env (desactivado por defecto)
