@@ -164,18 +164,23 @@ class UnificadorPDF:
             if len(rutas_validas) <= LOTE_UNIFICACION:
                 # Pocos archivos → merge directo (sin intermedios)
                 print(f"\n    Unificando {len(rutas_validas)} PDFs directamente...")
-                self._merge_lista(rutas_validas, ruta_salida)
+                total_incluidos = len(self._merge_lista(rutas_validas, ruta_salida))
             else:
                 # Muchos archivos → merge por lotes
                 print(f"\n    Unificando {len(rutas_validas)} PDFs en lotes de {LOTE_UNIFICACION}...")
                 archivos_lote = []
+                total_incluidos = 0
                 for idx_lote in range(0, len(rutas_validas), LOTE_UNIFICACION):
                     lote = rutas_validas[idx_lote:idx_lote + LOTE_UNIFICACION]
                     ruta_lote = self.carpeta_temp / f"_lote_{idx_lote // LOTE_UNIFICACION}.pdf"
                     print(f"      Lote {idx_lote // LOTE_UNIFICACION + 1}: {len(lote)} archivos...", end=" ", flush=True)
-                    self._merge_lista(lote, ruta_lote)
+                    incluidos = self._merge_lista(lote, ruta_lote)
+                    total_incluidos += len(incluidos)
                     archivos_lote.append(ruta_lote)
-                    print("[OK]")
+                    if len(incluidos) == len(lote):
+                        print("[OK]")
+                    else:
+                        print(f"[OK] ({len(incluidos)}/{len(lote)}, se omitieron {len(lote) - len(incluidos)})")
                     gc.collect()  # Forzar liberación de memoria entre lotes
 
                 # Merge final de los archivos intermedios
@@ -199,7 +204,10 @@ class UnificadorPDF:
             tamaño_mb = tamaño / (1024 * 1024)
 
             print(f"    PDF unificado creado exitosamente")
-            print(f"      Archivos unidos: {len(rutas_validas)}/{len(archivos_descargados)}")
+            print(f"      Archivos unidos: {total_incluidos}/{len(archivos_descargados)}")
+            if total_incluidos < len(rutas_validas):
+                print(f"      [WARN] {len(rutas_validas) - total_incluidos} archivo(s) válidos en apariencia "
+                      f"pero no se pudieron unir (detalle arriba)")
             print(f"      Tamaño: {tamaño_mb:.2f} MB")
             print(f"      Ubicación: {ruta_salida}\n")
 
@@ -211,23 +219,42 @@ class UnificadorPDF:
             print(f"\n[NO] Error unificando PDFs: {e}")
             return None
 
-    def _merge_lista(self, rutas: List[Path], salida: Path) -> None:
+    def _merge_lista(self, rutas: List[Path], salida: Path) -> List[Path]:
         """
         Une una lista de PDFs en un solo archivo.
         Método auxiliar usado tanto para lotes como para merge directo.
 
+        Si un PDF individual falla al añadirse, se lo omite y se sigue con
+        el resto en vez de perder el lote entero. Por qué: la validación
+        previa (PdfReader + contar páginas) es más laxa que lo que hace
+        PdfMerger.append() acá — append() copia los objetos completos
+        (fuentes, streams) y puede toparse recién ahí con una corrupción
+        real que PdfReader no detectó (ya pasó en producción: 200 archivos
+        descargados y validados bien, uno solo con "EOF marker not found"
+        tiró abajo la unificación completa y se perdió todo el trabajo).
+
         Args:
-            rutas: Lista de Path a PDFs válidos
+            rutas: Lista de Path a PDFs (ya pasaron la validación previa)
             salida: Ruta del archivo de salida
+
+        Retorna:
+            List[Path]: subconjunto de `rutas` que efectivamente se unió
         """
         merger = PdfMerger()
+        incluidos = []
         try:
             for ruta in rutas:
-                merger.append(str(ruta))
+                try:
+                    merger.append(str(ruta))
+                    incluidos.append(ruta)
+                except Exception as e:
+                    print(f"\n      [WARN] {ruta.name} no se pudo unir ({str(e)[:50]}), se omite")
+                    logger.warning(f"PDF omitido en unificación: {ruta.name}: {e}")
             with open(salida, "wb") as f:
                 merger.write(f)
         finally:
             merger.close()
+        return incluidos
 
     def _copiar_unico(self, ruta_archivo: Path, numero_expediente: str) -> Optional[Path]:
         """

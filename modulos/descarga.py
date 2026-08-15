@@ -724,7 +724,7 @@ class DescargadorArchivos:
         if antes is not None and despues is not None:
             print(f"      [MEMORIA] Purgado Chrome: {antes} MB -> {despues} MB disponibles")
 
-    def descargar_todo_por_paginas(self, numero: str, max_movimientos: int = 200) -> List[dict]:
+    def descargar_todo_por_paginas(self, numero: str) -> List[dict]:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
 
@@ -740,9 +740,16 @@ class DescargadorArchivos:
         Asignamos mov_idx secuencial: 1, 2, 3... donde 1 = mas reciente.
         El unificador usa reverse=True, poniendo el mas antiguo primero en el PDF.
 
+        Sin límite de movimientos: recorre páginas hasta que Mesa Virtual
+        no tenga más (o una página no traiga botones), pase lo que pase con
+        el tamaño del expediente. El límite de 200 que existía antes cortaba
+        expedientes reales a mitad de camino (213 movimientos, sólo bajaba
+        200) — la protección contra quedarse sin memoria en expedientes
+        gigantes ahora pasa por el purgado periódico y los flags de Chrome,
+        no por truncar la descarga.
+
         Args:
             numero: Numero del expediente (solo para logs)
-            max_movimientos: Limite de seguridad para no crashear con expedientes enormes
 
         Retorna:
             List[dict]: Lista de {path, tipo, movimiento} de archivos descargados
@@ -775,7 +782,7 @@ class DescargadorArchivos:
         try:
             driver = self.cliente.driver
 
-            while mov_idx_global < max_movimientos:
+            while True:
                 print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
 
                 # Detectar si la sesión de Keycloak expiró (driver redirigido a login)
@@ -812,10 +819,6 @@ class DescargadorArchivos:
 
                 # 2. Descargar TODOS los archivos de esta pagina ANTES de navegar
                 for indice_boton in range(cantidad_botones):
-                    if mov_idx_global >= max_movimientos:
-                        print(f"  [LIMIT] Limite de {max_movimientos} movimientos alcanzado")
-                        break
-
                     mov_idx_global += 1
 
                     nombre_archivo = f"{mov_idx_global:04d}_pag{pagina_actual:02d}.pdf"
