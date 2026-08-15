@@ -20,6 +20,51 @@ from modulos.excepciones import ErrorConversion
 logger = crear_logger(__name__)
 
 
+def memoria_disponible_mb():
+    """
+    Memoria disponible para ESTE contenedor, en MB. None si no se pudo leer.
+
+    Dentro de Docker (como en Render), /proc/meminfo reporta la RAM del
+    HOST completo, no el límite real del contenedor: el kernel no
+    restringe ese archivo por namespace. Por eso los logs de [MEMORIA]
+    mostraban valores como "13570 MB disponibles" en un plan de 512 MB —
+    ese número nunca reflejó cuánta memoria le quedaba realmente al
+    proceso antes de un OOM-kill. El límite que el kernel sí hace cumplir
+    está en el cgroup del contenedor, así que se lee de ahí (v2 primero,
+    v1 como fallback) y sólo se usa /proc/meminfo si no hay cgroup
+    (ej. corriendo fuera de Docker).
+    """
+    try:
+        with open('/sys/fs/cgroup/memory.max') as f:
+            limite_raw = f.read().strip()
+        if limite_raw != 'max':
+            with open('/sys/fs/cgroup/memory.current') as f:
+                uso = int(f.read().strip())
+            return (int(limite_raw) - uso) // (1024 * 1024)
+    except Exception:
+        pass
+
+    try:
+        with open('/sys/fs/cgroup/memory/memory.limit_in_bytes') as f:
+            limite = int(f.read().strip())
+        if limite < (1 << 62):  # sin límite real, cgroup v1 reporta un número gigante
+            with open('/sys/fs/cgroup/memory/memory.usage_in_bytes') as f:
+                uso = int(f.read().strip())
+            return (limite - uso) // (1024 * 1024)
+    except Exception:
+        pass
+
+    try:
+        with open('/proc/meminfo') as f:
+            for linea in f:
+                if linea.startswith('MemAvailable:'):
+                    return int(linea.split()[1]) // 1024
+    except Exception:
+        pass
+
+    return None
+
+
 def matar_procesos_soffice():
     """
     Mata cualquier proceso "soffice"/"soffice.bin" residual del sistema.
