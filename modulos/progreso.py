@@ -24,4 +24,4 @@ El flujo completo del progreso es:
 #
 # Ojo: además de esta cadencia, siempre se publica al cambiar de página y al
 # terminar cada etapa, así el contador nunca queda quieto una página entera.
-PROGRESO_CADA_N_ARCHIVOS = 10
+PROGRESO_CADA_N_ARCHIVOS = 1
