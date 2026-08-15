@@ -18,6 +18,7 @@ from typing import List, Optional
 from modulos.logger import crear_logger
 from modulos.excepciones import ErrorDescarga
 from modulos.modelos import Archivo, Movimiento
+from modulos.conversion import memoria_disponible_mb
 
 logger = crear_logger(__name__)
 
@@ -689,17 +690,6 @@ class DescargadorArchivos:
             print(f"         [DOWNLOAD-FATAL] Error fatal descargando: {str(e)[:80]}")
             return False
 
-    def _memoria_disponible_mb(self):
-        """Lee MemAvailable de /proc/meminfo. None si no se puede leer (ej. no-Linux)."""
-        try:
-            with open('/proc/meminfo') as f:
-                for linea in f:
-                    if linea.startswith('MemAvailable:'):
-                        return int(linea.split()[1]) // 1024
-        except Exception:
-            pass
-        return None
-
     def _purgar_memoria_chrome(self, driver):
         """
         Le pide a Chrome que libere memoria acumulada, sin cerrar la pestaña
@@ -713,8 +703,16 @@ class DescargadorArchivos:
         completo (que obligaría a recordar la página exacta donde se estaba
         y volver a navegar hasta ahí): no toca el flujo de navegación en
         absoluto, sólo le pide a Chrome que limpie lo que ya no usa.
+
+        Sólo llama a HeapProfiler.collectGarbage (GC estándar, equivalente a
+        lo que hace el botón "Collect garbage" de Chrome DevTools). Se
+        probó también Memory.forciblyPurgeJavaScriptMemory, pero esa llamada
+        simula una intervención de OOM y en la práctica tiró abajo el
+        execution context del frame activo (la SPA quedó rota, con
+        "no such execution context" en el siguiente comando de Selenium) —
+        demasiado agresiva para una página React en uso.
         """
-        antes = self._memoria_disponible_mb()
+        antes = memoria_disponible_mb()
 
         try:
             driver.execute_cdp_cmd('HeapProfiler.enable', {})
@@ -722,12 +720,7 @@ class DescargadorArchivos:
         except Exception as e:
             print(f"      [MEMORIA] HeapProfiler.collectGarbage falló: {str(e)[:60]}")
 
-        try:
-            driver.execute_cdp_cmd('Memory.forciblyPurgeJavaScriptMemory', {})
-        except Exception as e:
-            print(f"      [MEMORIA] Memory.forciblyPurgeJavaScriptMemory falló: {str(e)[:60]}")
-
-        despues = self._memoria_disponible_mb()
+        despues = memoria_disponible_mb()
         if antes is not None and despues is not None:
             print(f"      [MEMORIA] Purgado Chrome: {antes} MB -> {despues} MB disponibles")
 
@@ -793,6 +786,14 @@ class DescargadorArchivos:
                 # IMPORTANTE: Esperar a que cargue la tabla completamente
                 # Puede haber diferentes estructuras según Material-UI/React rendering
                 self._esperar_tabla_cargada(driver)
+
+                # Purgar memoria ACA (tabla ya confirmada, contexto JS estable),
+                # no apenas se navega: hacerlo a mitad de la transición de página
+                # (React todavía re-renderizando/haciendo fetch de la tabla nueva)
+                # rompió el execution context del frame en producción (ver
+                # _purgar_memoria_chrome).
+                if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
+                    self._purgar_memoria_chrome(driver)
 
                 print(f"  [PAG {pagina_actual}] Buscando botones de descarga...")
                 time.sleep(1)
@@ -874,9 +875,6 @@ class DescargadorArchivos:
                     print(f"\n  [PAG {pagina_actual}] Ultima pagina, terminando")
                     break
                 pagina_actual += 1
-
-                if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
-                    self._purgar_memoria_chrome(driver)
 
         except Exception as e:
             print(f"[ERROR] descargar_todo_por_paginas: {str(e)[:100]}")

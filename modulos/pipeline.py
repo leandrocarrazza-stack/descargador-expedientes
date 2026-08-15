@@ -22,7 +22,7 @@ from modulos.login import ClienteSelenium, crear_cliente_sesion
 from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
-from modulos.conversion import ConversorRTF, matar_procesos_soffice
+from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb
 from modulos.unificacion import UnificadorPDF
 from modulos.compresion import comprimir_pdf
 import config
@@ -32,24 +32,22 @@ logger = logging.getLogger(__name__)
 
 def _log_memoria(etapa: str):
     """
-    Loguea la memoria disponible del sistema (no sólo la de este proceso
-    Python) en puntos clave del pipeline.
+    Loguea la memoria disponible del CONTENEDOR (no del host) en puntos
+    clave del pipeline.
 
     Por qué: en un servidor de 512 MB totales, lo que importa es cuánto
     queda libre para que Chrome/LibreOffice puedan arrancar, no cuánto usa
-    el proceso Flask en sí. Lee /proc/meminfo directamente (sin psutil, no
-    está instalado) para tener datos reales de dónde se va la memoria en
-    vez de seguir infiriéndolo de los síntomas.
+    el proceso Flask en sí — ni cuánta RAM tiene libre el host físico que
+    corre Docker (eso es lo que /proc/meminfo reportaba antes, mostrando
+    valores de varios GB que no tenían nada que ver con el límite real de
+    este contenedor). Ver memoria_disponible_mb() para el detalle de cómo
+    se lee el límite real vía cgroup.
     """
-    try:
-        with open('/proc/meminfo') as f:
-            for linea in f:
-                if linea.startswith('MemAvailable:'):
-                    mb = int(linea.split()[1]) // 1024
-                    logger.info(f"[MEMORIA] Disponible tras {etapa}: {mb} MB")
-                    return
-    except Exception as e:
-        logger.debug(f"[MEMORIA] No se pudo leer /proc/meminfo: {str(e)[:60]}")
+    mb = memoria_disponible_mb()
+    if mb is not None:
+        logger.info(f"[MEMORIA] Disponible tras {etapa}: {mb} MB")
+    else:
+        logger.debug("[MEMORIA] No se pudo leer memoria disponible")
 
 
 @dataclass
