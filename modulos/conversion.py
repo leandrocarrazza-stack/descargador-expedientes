@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 import subprocess
 import os
+import signal
 import time
 import shutil
 
@@ -17,6 +18,54 @@ from modulos.logger import crear_logger
 from modulos.excepciones import ErrorConversion
 
 logger = crear_logger(__name__)
+
+
+def matar_procesos_soffice():
+    """
+    Mata cualquier proceso "soffice"/"soffice.bin" residual del sistema.
+
+    LibreOffice, al usarse en modo `--headless --convert-to`, suele dejar un
+    proceso soffice.bin corriendo en segundo plano como optimización para
+    acelerar conversiones futuras (evita reiniciar todo el entorno de LO en
+    cada invocación). En un servidor con 512 MB totales compartidos con
+    Chrome, ese proceso residente (100-300 MB, según versión) compite por
+    memoria incluso mucho después de haber terminado de convertir algo —
+    nada en el código lo cerraba explícitamente hasta ahora.
+
+    No usa psutil ni pkill (ninguno de los dos está instalado en la imagen):
+    lee /proc directamente, que es información estándar de cualquier Linux.
+    """
+    eliminados = 0
+    try:
+        for entrada in os.listdir('/proc'):
+            if not entrada.isdigit():
+                continue
+            pid = int(entrada)
+            try:
+                with open(f'/proc/{pid}/cmdline', 'rb') as f:
+                    argv = f.read().decode('utf-8', errors='ignore').split('\x00')
+            except (FileNotFoundError, ProcessLookupError, PermissionError):
+                continue
+
+            # Comparar el EJECUTABLE exacto (primer argumento, sin path), no una
+            # búsqueda de substring en cualquier parte del cmdline: un substring
+            # laxo puede matchear por accidente cualquier proceso que mencione la
+            # palabra "soffice" en un argumento (ej. una ruta), y aquí el objetivo
+            # es sólo el proceso real de LibreOffice.
+            ejecutable = os.path.basename(argv[0]) if argv and argv[0] else ''
+            if ejecutable not in ('soffice', 'soffice.bin'):
+                continue
+
+            try:
+                os.kill(pid, signal.SIGKILL)
+                eliminados += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+
+        if eliminados:
+            logger.info(f"[MEMORIA] {eliminados} proceso(s) soffice residual(es) eliminado(s)")
+    except Exception as e:
+        logger.warning(f"[MEMORIA] Error limpiando procesos soffice: {str(e)[:60]}")
 
 
 class ConversorRTF:
