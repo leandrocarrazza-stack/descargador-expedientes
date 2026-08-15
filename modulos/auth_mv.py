@@ -81,6 +81,7 @@ def _crear_driver_headless():
     options.add_argument('--disable-blink-features=AutomationControlled')  # Evita detección como bot
 
     # ── Ahorro de memoria (Render starter plan: 512 MB) ────────────────────────
+    # El plan no va a subir de tamaño: hay que exprimir cada MB posible.
     options.add_argument('--disable-extensions')           # No cargar extensiones (~30 MB ahorrados)
     options.add_argument('--disable-plugins')              # No cargar plugins del sistema
     options.add_argument('--disable-background-networking') # Desactivar sync y updates en background
@@ -89,15 +90,37 @@ def _crear_driver_headless():
     options.add_argument('--no-first-run')                # Saltar wizard de primera vez
     options.add_argument('--mute-audio')                  # Sin audio (innecesario en headless)
     options.add_argument('--disable-gpu')                  # Sin GPU (irrelevante en servidor, ahorra RAM)
-    options.add_argument('--js-flags=--max-old-space-size=192')  # Limitar heap de JS (256 dejaba poco margen de 512 MB totales)
-    # Mesa Virtual delega el login en Keycloak (otro origen: ol-sso.jusentrerios.gov.ar)
-    # y carga recursos de terceros (ver origin-trial de google.com en su HTML). Con
-    # Site Isolation (activado por defecto en Chrome moderno) cada origen distinto
-    # corre en su PROPIO proceso renderer, multiplicando el overhead de memoria.
-    # Se desactiva para consolidar todo en un solo proceso: en un servidor de 512 MB
-    # total, esto importa más que el aislamiento de seguridad entre orígenes.
-    options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+    # 192 MB seguía dejando poco margen para el resto (overhead nativo de Chrome +
+    # Python/gunicorn) en un límite total de 512 MB. Bajar más arriesga que la SPA
+    # (Material-UI, pesada) se quede sin heap para renderizar — si eso llega a pasar,
+    # subir este número antes que ningún otro ajuste de esta función.
+    options.add_argument('--js-flags=--max-old-space-size=160')
+    # Todas las features a desactivar van en UNA sola flag: Chrome no fusiona
+    # --disable-features repetidos, sólo el último add_argument gana.
+    # - IsolateOrigins,site-per-process: Mesa Virtual delega el login en Keycloak
+    #   (otro origen: ol-sso.jusentrerios.gov.ar) y carga recursos de terceros (ver
+    #   origin-trial de google.com en su HTML). Con Site Isolation (activado por
+    #   defecto en Chrome moderno) cada origen distinto corre en su PROPIO proceso
+    #   renderer, multiplicando el overhead de memoria.
+    # - BackForwardCache: Chrome guarda páginas completas en RAM para volver atrás
+    #   instantáneo. No lo necesitamos (el flujo sólo avanza).
+    # - Translate,AutofillServerCommunication,OptimizationHints: subsistemas que no
+    #   usamos, cada uno con su propio overhead de memoria/red en background.
+    options.add_argument(
+        '--disable-features=IsolateOrigins,site-per-process,BackForwardCache,'
+        'Translate,AutofillServerCommunication,OptimizationHints'
+    )
     options.add_argument('--renderer-process-limit=1')
+    # No cargar imágenes: el DOM no cambia (los íconos de Mesa Virtual son SVG
+    # inline, no <img>), así que no afecta ningún selector — sólo evita que Chrome
+    # descargue/decodifique/cachee assets que nunca miramos.
+    options.add_argument('--blink-settings=imagesEnabled=false')
+    options.add_argument('--disk-cache-size=1')            # Sin caché de disco
+    options.add_argument('--media-cache-size=1')           # Sin caché de media
+    options.add_argument('--disable-component-update')     # No busca actualizaciones de componentes
+    options.add_argument('--disable-domain-reliability')   # Sin telemetría interna de Chrome
+    options.add_argument('--disable-hang-monitor')         # Sin monitor de "página no responde"
+    options.add_argument('--disable-client-side-phishing-detection')  # Sin Safe Browsing local
 
     # Sin webdriver_manager: Selenium Manager elige el driver correcto automáticamente
     ultimo_error = None
