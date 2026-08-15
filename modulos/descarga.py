@@ -689,6 +689,47 @@ class DescargadorArchivos:
             print(f"         [DOWNLOAD-FATAL] Error fatal descargando: {str(e)[:80]}")
             return False
 
+    def _memoria_disponible_mb(self):
+        """Lee MemAvailable de /proc/meminfo. None si no se puede leer (ej. no-Linux)."""
+        try:
+            with open('/proc/meminfo') as f:
+                for linea in f:
+                    if linea.startswith('MemAvailable:'):
+                        return int(linea.split()[1]) // 1024
+        except Exception:
+            pass
+        return None
+
+    def _purgar_memoria_chrome(self, driver):
+        """
+        Le pide a Chrome que libere memoria acumulada, sin cerrar la pestaña
+        ni perder sesión/posición en la tabla de movimientos.
+
+        Por qué: en expedientes muy largos (200+ páginas), Chrome va
+        acumulando memoria a lo largo de la sesión (cachés, estado de cada
+        página de la tabla ya visitada) hasta agotar los 512 MB del servidor
+        cerca del final, aun con la sesión y la descarga funcionando bien.
+        Esto es más simple y de menor riesgo que reciclar el navegador
+        completo (que obligaría a recordar la página exacta donde se estaba
+        y volver a navegar hasta ahí): no toca el flujo de navegación en
+        absoluto, sólo le pide a Chrome que limpie lo que ya no usa.
+        """
+        antes = self._memoria_disponible_mb()
+
+        try:
+            driver.execute_cdp_cmd('HeapProfiler.enable', {})
+            driver.execute_cdp_cmd('HeapProfiler.collectGarbage', {})
+        except Exception as e:
+            print(f"      [MEMORIA] HeapProfiler.collectGarbage falló: {str(e)[:60]}")
+
+        try:
+            driver.execute_cdp_cmd('Memory.forciblyPurgeJavaScriptMemory', {})
+        except Exception as e:
+            print(f"      [MEMORIA] Memory.forciblyPurgeJavaScriptMemory falló: {str(e)[:60]}")
+
+        despues = self._memoria_disponible_mb()
+        if antes is not None and despues is not None:
+            print(f"      [MEMORIA] Purgado Chrome: {antes} MB -> {despues} MB disponibles")
 
     def descargar_todo_por_paginas(self, numero: str, max_movimientos: int = 200) -> List[dict]:
         """
@@ -732,6 +773,11 @@ class DescargadorArchivos:
         # una (horas), bloqueando el único slot de descarga del servidor para
         # todos los usuarios, en vez de abortar apenas queda claro que nada baja.
         MAX_FALLOS_CONSECUTIVOS_TOTALES = 5
+        # Cada cuántas páginas pedirle a Chrome que libere memoria acumulada
+        # (ver _purgar_memoria_chrome). En expedientes de 200+ páginas, Chrome
+        # va acumulando memoria a lo largo de la sesión hasta agotar los 512 MB
+        # cerca del final, aun con todo funcionando bien.
+        PURGAR_MEMORIA_CADA_N_PAGINAS = 5
 
         try:
             driver = self.cliente.driver
@@ -828,6 +874,9 @@ class DescargadorArchivos:
                     print(f"\n  [PAG {pagina_actual}] Ultima pagina, terminando")
                     break
                 pagina_actual += 1
+
+                if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
+                    self._purgar_memoria_chrome(driver)
 
         except Exception as e:
             print(f"[ERROR] descargar_todo_por_paginas: {str(e)[:100]}")
