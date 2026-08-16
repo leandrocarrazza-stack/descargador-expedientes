@@ -217,10 +217,31 @@ class ConversorRTF:
                 pass
 
         if es_pdf:
-            # Ya es PDF, simplemente copiarlo
+            # Ya es PDF. Si nadie pasó un ruta_pdf explícito (el caso normal:
+            # pipeline.py llama convertir_rtf_a_pdf(ruta) a secas), ruta_pdf
+            # se calculó arriba como ruta_rtf.with_suffix('.pdf') — que para
+            # un archivo que YA termina en .pdf es el mismo path. No hay nada
+            # que copiar ni mover: el archivo ya está donde tiene que estar.
+            #
+            # Sin este chequeo, shutil.copy(x, x) fallaba con SameFileError
+            # en el 100% de estos casos (confirmado en logs de producción:
+            # nunca apareció el mensaje "(ya es PDF)" sin "movido" atrás), y
+            # el código sólo "andaba" de rebote gracias al except de abajo,
+            # que termina haciendo un rename(x, x) — un no-op que no aportaba
+            # nada salvo una excepción de más por archivo.
+            if ruta_pdf == ruta_rtf:
+                print(f"      [OK] {ruta_rtf.name} (ya es PDF)")
+                return ruta_rtf
+
+            # No hay que esperar a que "se libere" antes de copiar a un
+            # destino distinto: para cuando esto corre (PASO 4 del pipeline),
+            # el archivo ya pasó por _esperar_archivo_nuevo() en descarga.py,
+            # que sólo lo devuelve cuando su tamaño se mantuvo estable entre
+            # dos lecturas — y Chrome ya está cerrado (pipeline.py lo cierra
+            # antes de PASO 4). No queda ningún escritor concurrente al que
+            # esperar.
             try:
                 ruta_pdf.parent.mkdir(parents=True, exist_ok=True)
-                time.sleep(0.5)  # Esperar a que el archivo se libere
                 shutil.copy(ruta_rtf, ruta_pdf)
                 print(f"      [OK] {ruta_rtf.name} (ya es PDF)")
                 return ruta_pdf
