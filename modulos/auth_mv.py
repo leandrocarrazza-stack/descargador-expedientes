@@ -30,6 +30,7 @@ from datetime import datetime
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.remote_connection import RemoteConnection
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -40,6 +41,19 @@ logger = logging.getLogger(__name__)
 URL_MESA_VIRTUAL = "https://mesavirtual.jusentrerios.gov.ar/"
 TIMEOUT_LOGIN = 30        # segundos para que cargue cada página
 TIMEOUT_SESION_RELAY = 180  # segundos que guardamos el driver en memoria (3 min)
+# Selenium NO pone timeout de socket por defecto en el comando HTTP que manda a
+# chromedriver (RemoteConnection._timeout queda sin setear = bloquea para
+# siempre). Si el renderer de Chrome se cuelga (memoria, proceso zombie, etc.)
+# CUALQUIER llamada (execute_script, get, click...) puede quedarse esperando
+# una respuesta que nunca llega. Eso mantiene vivo el thread de _run_pipeline
+# sin pasar nunca por su finally, así que el semáforo de concurrencia
+# (MAX_DESCARGAS_SIMULTANEAS=1) queda tomado para siempre y bloquea a TODOS
+# los usuarios con 409 hasta que se reinicie el servicio. Poniendo un techo acá
+# cualquier comando colgado revienta con una excepción normal en vez de
+# trabarse: el pipeline la captura como cualquier otro error, el job termina
+# en 'error' y el permiso se libera solo.
+TIMEOUT_COMANDO_SELENIUM = 90  # segundos
+RemoteConnection.set_timeout(TIMEOUT_COMANDO_SELENIUM)
 # Render starter (512 MB) ocasionalmente no tiene RAM libre en el instante exacto
 # en que Chrome intenta arrancar (otro hilo descargando/convirtiendo PDFs), lo que
 # produce "session not created: chrome not reachable". Es transitorio: reintentar
