@@ -142,6 +142,21 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
         try:
             log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
 
+            def _publicar_progreso(datos: dict):
+                """
+                Publica el avance real del pipeline para que el frontend muestre
+                "archivo N de TOTAL".
+
+                Corre SOLO en este thread. Reasigna un dict nuevo y completo a la
+                clave 'progreso' (que ya existe desde que se creó el job) en vez
+                de mutar el publicado: reasignar una clave existente no cambia el
+                tamaño del dict, así que un request que esté serializando el job
+                en paralelo nunca ve un estado a medias ni revienta con
+                "dictionary changed size during iteration".
+                """
+                datos['actualizado'] = time.time()
+                _actualizar_job(job_id, {'progreso': datos})
+
             pipeline = PipelineDescargador()
             log.info(f"[JOB {job_id[:8]}] Pipeline creado, llamando a ejecutar()...")
 
@@ -149,7 +164,8 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 numero_expediente=numero_expediente,
                 limpiar_temp=config.LIMPIAR_TEMP,
                 indice_expediente=indice_expediente,
-                cookies_mv=cookies_mv
+                cookies_mv=cookies_mv,
+                on_progreso=_publicar_progreso
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -357,6 +373,13 @@ def descargar_expediente_sync():
             'estado': 'procesando',
             'user_id': current_user.id,
             'timestamp': time.time(),
+            # Se pre-siembra la clave (no es cosmético): estado_descarga() hace
+            # jsonify(job), que ITERA este dict. Si el thread del pipeline
+            # insertara 'progreso' por primera vez justo durante esa iteración,
+            # CPython tiraría "dictionary changed size during iteration" -> 500
+            # en HTML -> el "Unexpected token '<'" del frontend. Creándola acá,
+            # el conjunto de claves nunca cambia: sólo se reasigna su valor.
+            'progreso': {'fase': 'iniciando', 'actual': 0, 'total': None, 'total_exacto': False},
         }
 
         app = current_app._get_current_object()
@@ -388,9 +411,12 @@ def estado_descarga(job_id):
     """
     Long-polling endpoint: cada request espera hasta ~25s a que el job
     complete; si no llegó a completar, devuelve el estado actual y el
-    frontend vuelve a pedir de inmediato (ver longPolling() en descargar.js).
-    Para un job de varios minutos esto es una cadena de varios requests
-    cortos, no uno solo sostenido.
+    frontend vuelve a pedir de inmediato (ver longPolling() en el script de
+    templates/descargar_expediente.html). Para un job de varios minutos esto es
+    una cadena de varios requests cortos, no uno solo sostenido.
+
+    El avance archivo-por-archivo NO viaja por acá: va por /descargas/progreso,
+    que responde en el acto (ver progreso_descarga()).
 
     Por qué 25s y no más: el proxy de Render corta cualquier request de
     más de ~60s (fue la causa original del Error 502 en expedientes
@@ -450,6 +476,46 @@ def estado_descarga(job_id):
     if not job_actual:
         return jsonify({'estado': 'no_encontrado'}), 404
     return jsonify(job_actual), 200
+
+
+@descargas_bp.route('/progreso/<job_id>', methods=['GET'])
+@login_required
+def progreso_descarga(job_id):
+    """
+    Progreso REAL de la descarga: cuántos archivos tiene el expediente y cuántos
+    van bajados hasta ahora.
+
+    A diferencia de /estado, este endpoint NO hace long-polling: responde en el
+    acto con lo último que publicó el thread del pipeline. Es una lectura de un
+    dict en memoria, así que el frontend lo puede consultar cada 2 segundos sin
+    costo mientras el long-poll de /estado sigue esperando el resultado final.
+
+    Por qué un endpoint aparte y no despertar el long-poll: /estado espera sobre
+    un único threading.Event por job que se hace set() exactamente una vez, al
+    terminar el pipeline. Reusarlo para progreso obligaría a set()/clear() por
+    archivo, y un request que caiga en esa ventana podría perderse el aviso
+    FINAL y quedarse 25s colgado después de que el job ya terminó. El progreso
+    es lossy por diseño (sólo importa el último valor); el fin del job tiene que
+    entregarse exactamente una vez. No van por el mismo canal.
+
+    Respuestas:
+      { estado, progreso: {fase, actual, total, total_exacto, ...} }  → 200
+      { estado: 'no_encontrado' }                                    → 404
+    """
+    job = _jobs.get(job_id)
+
+    # Se colapsan "no existe" y "no es tuyo" en la misma respuesta para que no
+    # se puedan enumerar job_ids ajenos.
+    if not job or job.get('user_id') != current_user.id:
+        return jsonify({'estado': 'no_encontrado'}), 404
+
+    # Se arma un dict chico en vez de jsonify(job): no filtra user_id ni
+    # timestamp, y sobre todo NO itera el job vivo mientras el thread del
+    # pipeline lo está actualizando.
+    return jsonify({
+        'estado': job.get('estado', 'procesando'),
+        'progreso': job.get('progreso') or {},
+    }), 200
 
 
 @descargas_bp.route('/expediente/<int:expediente_id>/descargar', methods=['GET'])
