@@ -56,6 +56,32 @@ def _descargador():
     return DescargadorArchivos(cliente_selenium=None, carpeta_temp=tempfile.mkdtemp())
 
 
+class DriverContador:
+    """
+    Driver que cuenta cada round-trip que le costaría a Chrome de verdad
+    (find_elements por selector, lecturas de page_source), para poder probar
+    que _leer_rango_filas corta apenas encuentra un match utilizable y que
+    _detectar_total_movimientos/_navegar_siguiente_pagina no repiten la
+    lectura de paginación dentro de la misma página.
+    """
+
+    def __init__(self, textos_por_selector=None, page_source=""):
+        self._textos_por_selector = textos_por_selector or {}
+        self._page_source_valor = page_source
+        self.llamadas_find_elements = []
+        self.lecturas_page_source = 0
+
+    def find_elements(self, by, selector):
+        self.llamadas_find_elements.append(selector)
+        texto = self._textos_por_selector.get(selector)
+        return [_Elemento(texto)] if texto else []
+
+    @property
+    def page_source(self):
+        self.lecturas_page_source += 1
+        return self._page_source_valor
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. Lectura de la etiqueta de paginación de Material-UI
 # ═══════════════════════════════════════════════════════════════════════════
@@ -88,6 +114,72 @@ def test_leer_rango_filas():
           d._leer_rango_filas(DriverFalso("1–10 de 999999")) is None)
     check("rango incoherente (hasta > total) se descarta",
           d._leer_rango_filas(DriverFalso("1–99 de 10")) is None)
+
+
+def test_lecturas_minimas_por_pagina():
+    """
+    Regresión de rendimiento: cada find_elements/page_source es un viaje de
+    ida y vuelta a Chrome. En un expediente descargado en producción (23035,
+    116 archivos en 12 páginas) esto corría el doble de lo necesario por
+    página. Estos tests fijan el comportamiento correcto para que no vuelva
+    a desviarse.
+    """
+    print("\n[1b] Se leen el mínimo de veces por página (no se repite el viaje a Chrome)")
+    d = _descargador()
+
+    # _leer_rango_filas debe cortar apenas el PRIMER selector da un match
+    # utilizable: no tiene que consultar los otros 3 ni caer al page_source.
+    driver = DriverContador(textos_por_selector={
+        d._SELECTORES_TOTAL_FILAS[0]: "1–10 de 213",
+    })
+    resultado = d._leer_rango_filas(driver)
+    check("con match en el primer selector, no se consultan los demás",
+          len(driver.llamadas_find_elements) == 1,
+          f"consultó {len(driver.llamadas_find_elements)} selector(es): {driver.llamadas_find_elements}")
+    check("...y no cae al page_source de respaldo",
+          driver.lecturas_page_source == 0)
+    check("...y el resultado es el correcto", resultado == (1, 10, 213))
+
+    # Si ningún selector matchea, tiene que probarlos TODOS antes de caer al
+    # page_source (no debe abandonar antes de tiempo).
+    driver2 = DriverContador(page_source="1–10 de 213")
+    resultado2 = d._leer_rango_filas(driver2)
+    check("sin match en ningún selector, prueba los 4 antes de usar page_source",
+          len(driver2.llamadas_find_elements) == len(d._SELECTORES_TOTAL_FILAS))
+    check("...y encuentra el total en el page_source de respaldo",
+          resultado2 == (1, 10, 213))
+
+    # El caso que de verdad estaba duplicado: antes del fix, tanto
+    # _detectar_total_movimientos como _navegar_siguiente_pagina llamaban a
+    # _detectar_paginacion por su cuenta, cada una con su propia lectura de
+    # driver.page_source, DOS VECES por página. _leer_rango_filas es un dato
+    # aparte (el rango de filas de MUI) y sigue leyendo lo suyo — lo que se
+    # comparte acá es sólo el "Página X de Y".
+    #
+    # _navegar_siguiente_pagina() empieza con un time.sleep(1) real; se lo
+    # neutraliza para no frenar la corrida de tests por esto.
+    import modulos.descarga as _descarga_mod
+    sleep_original = _descarga_mod.time.sleep
+    _descarga_mod.time.sleep = lambda *a, **k: None
+    try:
+        # Con la paginación ya calculada e indicando "última página", no
+        # tiene que releer driver.page_source ni una vez: usa la caché y
+        # devuelve False de inmediato.
+        driver3 = DriverContador(page_source="Página 22 de 22")
+        resultado3 = d._navegar_siguiente_pagina(driver3, paginacion_cacheada=(22, 22))
+        check("con paginación cacheada, _navegar_siguiente_pagina no relee page_source",
+              resultado3 is False and driver3.lecturas_page_source == 0,
+              f"resultado={resultado3} lecturas={driver3.lecturas_page_source}")
+
+        # Sin caché (comportamiento por defecto de quien la llame suelta,
+        # como el otro call site en obtener_movimientos), sigue calculándola
+        # ella misma y llega a la misma conclusión.
+        driver4 = DriverContador(page_source="Página 22 de 22")
+        resultado4 = d._navegar_siguiente_pagina(driver4)
+        check("sin paginación cacheada, la calcula igual y llega al mismo resultado",
+              resultado4 is False and driver4.lecturas_page_source >= 1)
+    finally:
+        _descarga_mod.time.sleep = sleep_original
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -343,6 +435,7 @@ if __name__ == '__main__':
     print("=" * 70)
 
     test_leer_rango_filas()
+    test_lecturas_minimas_por_pagina()
     test_detectar_total()
     test_callback_roto_no_rompe()
     test_firmas_compatibles()

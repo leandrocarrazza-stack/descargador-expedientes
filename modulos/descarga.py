@@ -202,6 +202,12 @@ class DescargadorArchivos:
     # un año sí parece un total válido si el regex pesca la carátula.
     _MAX_FILAS_RAZONABLE = 20000
 
+    # Sentinel para distinguir "no se pasó paginacion_cacheada" (calcularla)
+    # de "se pasó, y es None" (ya se buscó en esta página y no había). Sin
+    # esto, _navegar_siguiente_pagina y _detectar_total_movimientos no podrían
+    # compartir una sola lectura de driver.page_source por página.
+    _SIN_CACHE = object()
+
     def _detectar_paginacion(self, driver):
         """
         Lee el indicador "Página X de Y" del page_source.
@@ -221,6 +227,36 @@ class DescargadorArchivos:
             pass
         return None
 
+    def _parsear_rango_total(self, texto):
+        """
+        Busca el patrón "1–10 de 213" dentro de un texto ya obtenido, sin
+        tocar el driver. Separado de _leer_rango_filas para poder cortar la
+        búsqueda apenas hay un match, en vez de siempre revisar el resto.
+
+        Retorna:
+            (desde, hasta, total_filas) o None si el texto no matchea o el
+            match no es un total utilizable.
+        """
+        match = self._RE_RANGO_TOTAL.search(texto)
+        if not match:
+            return None
+
+        if match.group(3):
+            # "1–10 de más de 10": MUI con count=-1 (total desconocido).
+            # Es una cota inferior, no un total: no sirve como denominador.
+            return None
+
+        try:
+            desde = int(re.sub(r"[.,]", "", match.group(1)))
+            hasta = int(re.sub(r"[.,]", "", match.group(2)))
+            total = int(re.sub(r"[.,]", "", match.group(4)))
+        except ValueError:
+            return None
+
+        if 0 < desde <= hasta <= total <= self._MAX_FILAS_RAZONABLE:
+            return desde, hasta, total
+        return None
+
     def _leer_rango_filas(self, driver):
         """
         Lee la etiqueta de paginación de Material-UI ("1–10 de 213") para saber
@@ -231,49 +267,35 @@ class DescargadorArchivos:
         evita pescar cualquier "N de M" suelto del contenido (una carátula tipo
         "21 de 2024" daría un total absurdo).
 
+        Corta apenas encuentra un match utilizable: cada selector es un
+        round-trip a Chrome, y probarlos todos aunque el primero ya haya
+        contestado es puro tiempo tirado — esto corre una vez por página,
+        no una vez por archivo, pero en un expediente de varias páginas suma.
+
         Retorna:
             (desde, hasta, total_filas) o None si no se pudo leer.
         """
-        textos = []
         for selector in self._SELECTORES_TOTAL_FILAS:
             try:
-                textos += [
-                    e.text for e in driver.find_elements(By.CSS_SELECTOR, selector) if e.text
-                ]
+                elementos = driver.find_elements(By.CSS_SELECTOR, selector)
             except Exception:
                 continue
+            for elemento in elementos:
+                if not elemento.text:
+                    continue
+                resultado = self._parsear_rango_total(elemento.text)
+                if resultado:
+                    return resultado
 
-        if not textos:
-            # Último recurso: el HTML completo. El regex exige la forma de rango
-            # con guión, que es mucho más específica que un "N de M" pelado.
-            try:
-                textos = [driver.page_source]
-            except Exception:
-                return None
+        # Último recurso: el HTML completo. El regex exige la forma de rango
+        # con guión, que es mucho más específica que un "N de M" pelado.
+        try:
+            return self._parsear_rango_total(driver.page_source)
+        except Exception:
+            return None
 
-        for texto in textos:
-            match = self._RE_RANGO_TOTAL.search(texto)
-            if not match:
-                continue
-
-            if match.group(3):
-                # "1–10 de más de 10": MUI con count=-1 (total desconocido).
-                # Es una cota inferior, no un total: no sirve como denominador.
-                continue
-
-            try:
-                desde = int(re.sub(r"[.,]", "", match.group(1)))
-                hasta = int(re.sub(r"[.,]", "", match.group(2)))
-                total = int(re.sub(r"[.,]", "", match.group(4)))
-            except ValueError:
-                continue
-
-            if 0 < desde <= hasta <= total <= self._MAX_FILAS_RAZONABLE:
-                return desde, hasta, total
-
-        return None
-
-    def _detectar_total_movimientos(self, driver, botones_pagina, pagina_actual, ya_intentados):
+    def _detectar_total_movimientos(self, driver, botones_pagina, pagina_actual, ya_intentados,
+                                     paginacion_cacheada=_SIN_CACHE):
         """
         Estima cuántos ARCHIVOS se van a descargar en total, para poder mostrarle
         al usuario "archivo N de TOTAL" mientras espera.
@@ -292,13 +314,19 @@ class DescargadorArchivos:
             botones_pagina: botones de descarga contados en la página actual
             pagina_actual: número de página que se está por descargar (1-based)
             ya_intentados: archivos ya recorridos en páginas anteriores
+            paginacion_cacheada: resultado ya calculado de _detectar_paginacion
+                para esta misma página (evita releer driver.page_source si
+                quien llama ya lo hizo). Si se omite, se calcula acá.
 
         Retorna:
             (total, exacto, total_paginas). total puede ser None si no se pudo estimar.
         """
         try:
             total_paginas = None
-            paginacion = self._detectar_paginacion(driver)
+            paginacion = (
+                paginacion_cacheada if paginacion_cacheada is not self._SIN_CACHE
+                else self._detectar_paginacion(driver)
+            )
             if paginacion:
                 total_paginas = paginacion[1]
 
@@ -344,7 +372,7 @@ class DescargadorArchivos:
             logger.debug("No se pudo estimar el total de movimientos", exc_info=True)
             return None, False, None
 
-    def _navegar_siguiente_pagina(self, driver):
+    def _navegar_siguiente_pagina(self, driver, paginacion_cacheada=_SIN_CACHE):
         """
         Intenta navegar a la siguiente página usando diferentes estrategias.
 
@@ -355,6 +383,10 @@ class DescargadorArchivos:
 
         Args:
             driver: Instancia de Selenium WebDriver
+            paginacion_cacheada: resultado ya calculado de _detectar_paginacion
+                para esta misma página, para no releer driver.page_source si
+                quien llama ya lo hizo (ver descargar_todo_por_paginas). Si se
+                omite, se calcula acá.
 
         Retorna:
             bool: True si se navegó a siguiente página, False si no hay más páginas
@@ -365,7 +397,10 @@ class DescargadorArchivos:
 
             # ESTRATEGIA PRIMARIA: Detectar indicador de página (ej: "Página 1 de 14")
             # Esto es más confiable que buscar botones
-            paginacion = self._detectar_paginacion(driver)
+            paginacion = (
+                paginacion_cacheada if paginacion_cacheada is not self._SIN_CACHE
+                else self._detectar_paginacion(driver)
+            )
             if paginacion:
                 pagina_actual, total_paginas = paginacion
                 print(f"      [INFO]  Página {pagina_actual} de {total_paginas}")
@@ -1004,11 +1039,19 @@ class DescargadorArchivos:
                     print(f"  [PAG {pagina_actual}] Sin archivos, terminando")
                     break
 
+                # Se lee la paginación UNA sola vez por página (no cambia por
+                # descargar archivos, sólo al navegar) y se comparte con
+                # _navegar_siguiente_pagina más abajo: cada lectura es un
+                # viaje de ida y vuelta a Chrome, y hacerla dos veces por
+                # página en expedientes de muchas páginas se nota.
+                paginacion_pagina = self._detectar_paginacion(driver)
+
                 # Estimar el total ahora que ya sabemos cuántos botones trae esta
                 # página. Se recalcula en cada página para que la estimación se
                 # corrija sola a medida que llegan datos reales.
                 total_est, exacto, total_pag = self._detectar_total_movimientos(
-                    driver, cantidad_botones, pagina_actual, mov_idx_global
+                    driver, cantidad_botones, pagina_actual, mov_idx_global,
+                    paginacion_cacheada=paginacion_pagina,
                 )
                 emitir(
                     pagina=pagina_actual,
@@ -1095,7 +1138,9 @@ class DescargadorArchivos:
                 )
 
                 # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
-                hay_siguiente = self._navegar_siguiente_pagina(driver)
+                hay_siguiente = self._navegar_siguiente_pagina(
+                    driver, paginacion_cacheada=paginacion_pagina
+                )
                 if not hay_siguiente:
                     print(f"\n  [PAG {pagina_actual}] Ultima pagina, terminando")
                     break
