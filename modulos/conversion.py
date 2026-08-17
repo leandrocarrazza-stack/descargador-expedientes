@@ -7,7 +7,8 @@ Utiliza LibreOffice como herramienta principal de conversión.
 """
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
+import functools
 import subprocess
 import os
 import signal
@@ -18,6 +19,13 @@ from modulos.logger import crear_logger
 from modulos.excepciones import ErrorConversion
 
 logger = crear_logger(__name__)
+
+# Cantidad de RTF por invocación de soffice en convertir_lote(). Más alto =
+# menos arranques en frío de LibreOffice (~1.5-3s + 1s de sleep cada uno,
+# ver convertir_rtf_a_pdf), pero un timeout del lote entero se paga con
+# TODOS esos archivos si soffice se cuelga. 8 es un balance razonable para
+# servidores con RAM limitada.
+LOTE_CONVERSION = int(os.environ.get('LOTE_CONVERSION', '8'))
 
 
 def memoria_disponible_mb():
@@ -113,69 +121,108 @@ def matar_procesos_soffice():
         logger.warning(f"[MEMORIA] Error limpiando procesos soffice: {str(e)[:60]}")
 
 
+def parece_pdf(ruta: Path) -> bool:
+    """
+    True si el archivo ya es un PDF, por extensión o por magic bytes.
+
+    Función compartida (antes vivía inline y duplicada) entre
+    ConversorRTF.convertir_rtf_a_pdf() -el camino barato para archivos que
+    ya son PDF, sin pasar por soffice- y pipeline.py, que la usa para
+    partir los archivos descargados entre "ya PDF" (van uno por uno, es
+    prácticamente gratis) y "RTF real" (van agrupados a convertir_lote()).
+    """
+    ruta = Path(ruta)
+    if ruta.suffix.lower() == '.pdf':
+        return True
+    try:
+        with open(ruta, 'rb') as f:
+            return f.read(4).startswith(b'%PDF')
+    except Exception:
+        return False
+
+
+@functools.lru_cache(maxsize=1)
+def detectar_libreoffice() -> Optional[str]:
+    """
+    Detecta la ruta de LibreOffice en el sistema. Cacheado con lru_cache:
+    antes cada ConversorRTF() nuevo repetía este shell-out (`which soffice`
+    + `soffice --version`) desde cero, y se construyen 2 conversores por
+    job (uno en pipeline.py, otro en unificacion.py) — un chequeo que da
+    el mismo resultado durante toda la vida del proceso, no hace falta
+    repetirlo.
+
+    Estrategias de búsqueda:
+    1. Rutas estándar de Windows
+    2. PATH del sistema
+    3. Comandos 'where' o 'which'
+
+    Retorna:
+        Optional[str]: Ruta de LibreOffice, o None si no se encuentra
+    """
+    # Rutas posibles en Windows (ordenadas por probabilidad)
+    posibles_rutas = [
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        r"C:\Program Files\LibreOffice\program\soffice",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice",
+    ]
+
+    # Buscar en rutas estándar
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            logger.debug(f"LibreOffice encontrado en ruta estándar: {ruta}")
+            return ruta
+
+    # Intentar usar comando 'where' (Windows) o 'which' (Linux/Mac)
+    try:
+        comando = "where" if os.name == "nt" else "which"
+        result = subprocess.run([comando, "soffice"], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            ruta = result.stdout.strip()
+            logger.debug(f"LibreOffice encontrado via comando '{comando}': {ruta}")
+            return ruta
+    except Exception as e:
+        logger.debug(f"Error al ejecutar comando '{comando}': {str(e)[:50]}")
+
+    # Intentar con 'soffice' directamente si está en PATH
+    try:
+        result = subprocess.run(
+            ["soffice", "--version"], capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            logger.debug("LibreOffice encontrado en PATH del sistema")
+            return "soffice"
+    except Exception as e:
+        logger.debug(f"Error verificando LibreOffice en PATH: {str(e)[:50]}")
+
+    logger.debug("LibreOffice no encontrado en ninguna ubicación")
+    return None
+
+
 class ConversorRTF:
     """Conversor de archivos RTF a PDF con soporte para LibreOffice."""
 
-    def __init__(self) -> None:
-        """Inicializa el conversor y detecta LibreOffice."""
-        self.libreoffice_path = self._detectar_libreoffice()
+    def __init__(self, perfil_dir: Optional[Path] = None) -> None:
+        """
+        Inicializa el conversor y detecta LibreOffice.
+
+        Args:
+            perfil_dir: si se pasa, cada invocación de soffice usa este
+                directorio como su propio perfil de usuario
+                (-env:UserInstallation) en vez del perfil default
+                compartido de LibreOffice. No hace falta con el permiso de
+                conversión exclusivo (cap 1, ver modulos/concurrencia.py)
+                que ya impide que dos soffice corran a la vez — es
+                cinturón y tiradores por si ese cap alguna vez sube.
+        """
+        self.libreoffice_path = detectar_libreoffice()
         self.disponible = self.libreoffice_path is not None
+        self.perfil_dir = Path(perfil_dir) if perfil_dir else None
 
         if self.disponible:
             logger.info(f"LibreOffice detectado en: {self.libreoffice_path}")
         else:
             logger.warning("LibreOffice no detectado en el sistema")
-
-    def _detectar_libreoffice(self) -> Optional[str]:
-        """
-        Detecta la ruta de LibreOffice en el sistema.
-
-        Estrategias de búsqueda:
-        1. Rutas estándar de Windows
-        2. PATH del sistema
-        3. Comandos 'where' o 'which'
-
-        Retorna:
-            Optional[str]: Ruta de LibreOffice, o None si no se encuentra
-        """
-        # Rutas posibles en Windows (ordenadas por probabilidad)
-        posibles_rutas = [
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            r"C:\Program Files\LibreOffice\program\soffice",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice",
-        ]
-
-        # Buscar en rutas estándar
-        for ruta in posibles_rutas:
-            if os.path.exists(ruta):
-                logger.debug(f"LibreOffice encontrado en ruta estándar: {ruta}")
-                return ruta
-
-        # Intentar usar comando 'where' (Windows) o 'which' (Linux/Mac)
-        try:
-            comando = "where" if os.name == "nt" else "which"
-            result = subprocess.run([comando, "soffice"], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                ruta = result.stdout.strip()
-                logger.debug(f"LibreOffice encontrado via comando '{comando}': {ruta}")
-                return ruta
-        except Exception as e:
-            logger.debug(f"Error al ejecutar comando '{comando}': {str(e)[:50]}")
-
-        # Intentar con 'soffice' directamente si está en PATH
-        try:
-            result = subprocess.run(
-                ["soffice", "--version"], capture_output=True, text=True, timeout=5
-            )
-            if result.returncode == 0:
-                logger.debug("LibreOffice encontrado en PATH del sistema")
-                return "soffice"
-        except Exception as e:
-            logger.debug(f"Error verificando LibreOffice en PATH: {str(e)[:50]}")
-
-        logger.debug("LibreOffice no encontrado en ninguna ubicación")
-        return None
 
     def convertir_rtf_a_pdf(
         self, ruta_rtf: Path, ruta_pdf: Optional[Path] = None
@@ -206,17 +253,7 @@ class ConversorRTF:
         else:
             ruta_pdf = Path(ruta_pdf)
 
-        # Detectar si ya es PDF
-        es_pdf = ruta_rtf.suffix.lower() == '.pdf'
-        if not es_pdf:
-            try:
-                with open(ruta_rtf, 'rb') as f:
-                    magic = f.read(4)
-                es_pdf = magic.startswith(b'%PDF')
-            except:
-                pass
-
-        if es_pdf:
+        if parece_pdf(ruta_rtf):
             # Ya es PDF. Si nadie pasó un ruta_pdf explícito (el caso normal:
             # pipeline.py llama convertir_rtf_a_pdf(ruta) a secas), ruta_pdf
             # se calculó arriba como ruta_rtf.with_suffix('.pdf') — que para
@@ -257,26 +294,11 @@ class ConversorRTF:
                     return None
 
         # Validar que es RTF: primero por extensión, luego por magic bytes
-        es_rtf_por_extension = ruta_rtf.suffix.lower() == ".rtf"
-        es_rtf_por_contenido = False
-
-        if not es_rtf_por_extension:
-            try:
-                with open(ruta_rtf, "rb") as f:
-                    magic = f.read(6)
-                es_rtf_por_contenido = magic.startswith(b"{\\rtf")
-                if es_rtf_por_contenido:
-                    # Renombrar el archivo a .rtf para que LibreOffice lo reconozca
-                    ruta_renombrada = ruta_rtf.with_suffix(".rtf")
-                    ruta_rtf.rename(ruta_renombrada)
-                    ruta_rtf = ruta_renombrada
-                    print(f"      [INFO]  Renombrado a .rtf por contenido RTF detectado")
-            except Exception:
-                pass
-
-        if not es_rtf_por_extension and not es_rtf_por_contenido:
+        ruta_normalizada = self._normalizar_rtf(ruta_rtf)
+        if ruta_normalizada is None:
             print(f"      [WARN]  No es archivo RTF: {ruta_rtf.name}")
             return None
+        ruta_rtf = ruta_normalizada
 
         # Verificar si LibreOffice está disponible
         if not self.disponible:
@@ -298,6 +320,149 @@ class ConversorRTF:
         except Exception as e:
             print(f"      [NO] Error: {str(e)[:40]}")
             return None
+
+    def _normalizar_rtf(self, ruta_rtf: Path) -> Optional[Path]:
+        """
+        Confirma que el archivo es un RTF real (por extensión o, si Mesa
+        Virtual lo entregó sin extensión, por magic bytes) y le agrega
+        ".rtf" si hacía falta. Devuelve la ruta ya normalizada, o None si
+        no es RTF.
+
+        Factorizado de convertir_rtf_a_pdf() para poder correr ANTES de
+        agrupar varios archivos en una sola invocación de soffice
+        (convertir_lote): soffice necesita la extensión correcta en CADA
+        archivo del lote desde el principio, no se puede corregir a mitad
+        de una conversión conjunta.
+        """
+        if ruta_rtf.suffix.lower() == ".rtf":
+            return ruta_rtf
+
+        try:
+            with open(ruta_rtf, "rb") as f:
+                magic = f.read(6)
+            if magic.startswith(b"{\\rtf"):
+                ruta_renombrada = ruta_rtf.with_suffix(".rtf")
+                ruta_rtf.rename(ruta_renombrada)
+                print(f"      [INFO]  Renombrado a .rtf por contenido RTF detectado")
+                return ruta_renombrada
+        except Exception:
+            pass
+
+        return None
+
+    def _armar_comando_soffice(self, outdir: Path, *entradas: Path) -> List[str]:
+        """Arma el comando de soffice compartido entre conversión individual y por lote."""
+        comando = [self.libreoffice_path, "--headless"]
+        if self.perfil_dir:
+            self.perfil_dir.mkdir(parents=True, exist_ok=True)
+            # Perfil de usuario propio: evita que dos invocaciones de soffice
+            # se pisen el lock del perfil default si algún día corren en
+            # paralelo (hoy no pasa: el permiso de conversión es exclusivo).
+            comando.append(f"-env:UserInstallation=file://{self.perfil_dir}")
+        comando += ["--convert-to", "pdf", "--outdir", str(outdir)]
+        comando += [str(e) for e in entradas]
+        return comando
+
+    def convertir_lote(self, rutas_rtf: List[Path], outdir: Path) -> Dict[Path, Optional[Path]]:
+        """
+        Convierte varios RTF a PDF con UNA sola invocación de soffice, en
+        vez de un subprocess.run + sleep(1) por archivo (~1.5-3s de
+        arranque en frío cada uno). En un expediente con muchos RTF esto
+        ahorra minutos: el costo fijo de arrancar LibreOffice se paga una
+        vez por lote, no una vez por archivo.
+
+        Los archivos que ya son PDF NO deben venir acá — filtralos antes
+        con parece_pdf()/convertir_rtf_a_pdf(): ese camino es prácticamente
+        gratis y no necesita soffice. Este método sólo tiene sentido para
+        RTF reales (ver el particionado en modulos/pipeline.py PASO 4).
+
+        Si algún archivo del lote no aparece en la salida esperada (un RTF
+        corrupto puede hacer que soffice se salte ESE archivo sin abortar
+        el resto, o el batch entero puede fallar/expirar), se reintenta
+        ESE archivo individualmente por el camino de siempre
+        (convertir_rtf_a_pdf) — nunca se pierde un archivo por culpa de
+        otro del mismo lote.
+
+        Args:
+            rutas_rtf: RTFs a convertir (se normalizan igual acá, así que
+                no hace falta haber pasado por _normalizar_rtf antes)
+            outdir: carpeta de salida para todos los PDFs del lote
+
+        Retorna:
+            dict {ruta_original: ruta_pdf_o_None}, una entrada por cada
+            archivo de `rutas_rtf` (la clave es el path ORIGINAL, aunque
+            _normalizar_rtf le haya cambiado la extensión por dentro).
+        """
+        resultado: Dict[Path, Optional[Path]] = {}
+        if not rutas_rtf:
+            return resultado
+
+        if not self.disponible:
+            print(f"      [WARN]  LibreOffice no está instalado")
+            for ruta in rutas_rtf:
+                resultado[Path(ruta)] = None
+            return resultado
+
+        outdir = Path(outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        # Normalizar ANTES del batch: soffice necesita la extensión
+        # correcta en cada archivo de entrada desde el arranque.
+        normalizados: Dict[Path, Path] = {}  # original -> normalizado
+        for original in rutas_rtf:
+            original = Path(original)
+            normalizado = self._normalizar_rtf(original)
+            if normalizado is None:
+                print(f"      [WARN]  No es archivo RTF: {original.name}")
+                resultado[original] = None
+                continue
+            normalizados[original] = normalizado
+
+        if not normalizados:
+            return resultado
+
+        comando = self._armar_comando_soffice(outdir, *normalizados.values())
+        timeout = min(60 + 20 * len(normalizados), 300)
+
+        logger.debug(f"Ejecutando comando LibreOffice (lote de {len(normalizados)}): {' '.join(comando)}")
+        try:
+            subprocess.run(comando, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # subprocess.run ya mata al proceso hijo al vencer el timeout.
+            # Lo que haya alcanzado a escribirse se valida igual abajo; lo
+            # que falte se reintenta uno por uno más adelante.
+            logger.warning(f"Timeout en conversión por lote (>{timeout}s, {len(normalizados)} archivos)")
+        except Exception as e:
+            logger.warning(f"Error ejecutando soffice en lote: {str(e)[:60]}")
+
+        time.sleep(1)  # mismo margen que el camino individual: última escritura a disco
+
+        faltantes: List[Path] = []
+        for original, normalizado in normalizados.items():
+            ruta_pdf_esperada = outdir / normalizado.with_suffix('.pdf').name
+            valido = False
+            if ruta_pdf_esperada.exists() and ruta_pdf_esperada.stat().st_size >= 500:
+                try:
+                    with open(ruta_pdf_esperada, 'rb') as f:
+                        valido = f.read(4) == b'%PDF'
+                except Exception:
+                    valido = False
+
+            if valido:
+                resultado[original] = ruta_pdf_esperada
+                print(f"      [OK] {normalizado.name} > {ruta_pdf_esperada.name}")
+            else:
+                faltantes.append(original)
+
+        if faltantes:
+            print(f"      [INFO]  {len(faltantes)}/{len(normalizados)} archivo(s) del lote no "
+                  f"salieron bien, reintentando uno por uno...")
+            for original in faltantes:
+                normalizado = normalizados[original]
+                destino = outdir / normalizado.with_suffix('.pdf').name
+                resultado[original] = self.convertir_rtf_a_pdf(normalizado, destino)
+
+        return resultado
 
     def _convertir_con_libreoffice(self, ruta_rtf: Path, ruta_pdf: Path) -> bool:
         """
@@ -326,15 +491,7 @@ class ConversorRTF:
             logger.debug(f"Directorio de salida creado/verificado: {ruta_pdf.parent}")
 
             # Comando de LibreOffice
-            comando = [
-                self.libreoffice_path,
-                "--headless",  # Sin interfaz gráfica
-                "--convert-to",
-                "pdf",  # Convertir a PDF
-                "--outdir",
-                str(ruta_pdf.parent),  # Carpeta de salida
-                str(ruta_rtf),  # Archivo de entrada
-            ]
+            comando = self._armar_comando_soffice(ruta_pdf.parent, ruta_rtf)
 
             logger.debug(f"Ejecutando comando LibreOffice: {' '.join(comando)}")
 

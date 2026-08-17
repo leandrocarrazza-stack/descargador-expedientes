@@ -15,10 +15,13 @@ completo tarde varios minutos.
 
 Modelo: Cada descarga cuesta 1 crédito prepagado.
 
-CONCURRENCIA: sólo corre una descarga a la vez en toda la instancia
-(_semaforo_descarga) — dos Chrome + LibreOffice al mismo tiempo pueden
-agotar los 512 MB de RAM del plan Starter y tumbar la app entera. Una
-segunda solicitud mientras hay una en curso recibe 409 de inmediato.
+CONCURRENCIA: las descargas se atienden en una cola FIFO (modulos/concurrencia.py)
+en vez de rechazar con 409 a la segunda solicitud. Dos Chrome + LibreOffice al
+mismo tiempo pueden agotar los 512 MB de RAM del plan Starter y tumbar la app
+entera, así que la cola sigue limitando cuántos navegadores/conversiones
+corren de verdad en simultáneo — pero ahora nadie es rechazado de entrada:
+espera su turno y ve su posición ("Hay 2 descargas adelante"). Recién si la
+cola misma se llena (MAX_COLA_DESCARGAS) se devuelve 409.
 
 LIMPIEZA: El PDF final se borra del servidor después de que el usuario
 lo descarga. Además, al iniciar la app se borran PDFs con más de
@@ -41,6 +44,7 @@ from modulos.database import db
 from modulos.models import ExpedienteDescargado, SesionUsuarioMV
 from modulos.auth_mv import obtener_cookies_usuario
 from modulos.extensions import csrf
+from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout
 import config
 
 # ── Jobs en memoria ───────────────────────────────────────────────────────────
@@ -57,16 +61,11 @@ JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo que vive en memoria un job 
 # revienta con KeyError -> 500 HTML -> "Unexpected token '<'" en el frontend.
 JOB_TTL_PROCESANDO_SEGUNDOS = 3600  # 1 hora
 
-# Límite de descargas simultáneas. Cada descarga abre su propio Chrome +
-# LibreOffice; el plan Starter de Render tiene 512 MB de RAM en total, así
-# que dos pipelines corriendo a la vez (dos usuarios, o el mismo usuario dos
-# veces) son un candidato real a agotar la memoria y tumbar toda la instancia
-# — no solo la descarga que se queda sin RAM, sino la app entera para todos
-# los usuarios. _run_pipeline() libera el permiso en su finally, así que
-# queda tomado durante todo el pipeline (Chrome + conversión + unificación),
-# no solo mientras arranca.
-MAX_DESCARGAS_SIMULTANEAS = 1
-_semaforo_descarga = threading.Semaphore(MAX_DESCARGAS_SIMULTANEAS)
+# La cola FIFO y los permisos de navegador/conversión viven en
+# modulos/concurrencia.py (singleton `gestor`, compartido por ser gunicorn
+# de 1 solo worker — ver Dockerfile). Acá sólo se usa: encolar() en el POST,
+# esperar_turno() dentro del thread del pipeline, y abandonar() si el
+# thread nunca llega a arrancar.
 
 
 def _limpiar_jobs_viejos():
@@ -130,18 +129,21 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
         db.session.rollback()
 
 
-def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv):
+def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
     fuera del hilo principal.
+
+    `entrada` es la EntradaCola devuelta por gestor.encolar() en el POST: este
+    thread espera su turno acá adentro (no bloquea el request que lo lanzó,
+    que ya respondió 202 con el job_id).
     """
     log = logging.getLogger(__name__)
+    control = None
 
     with app.app_context():
         try:
-            log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
-
             def _publicar_progreso(datos: dict):
                 """
                 Publica el avance real del pipeline para que el frontend muestre
@@ -157,6 +159,28 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 datos['actualizado'] = time.time()
                 _actualizar_job(job_id, {'progreso': datos})
 
+            log.info(f"[JOB {job_id[:8]}] En cola para expediente {numero_expediente}")
+            try:
+                control = gestor.esperar_turno(
+                    entrada,
+                    on_posicion=lambda puesto: _publicar_progreso({
+                        'fase': 'en_cola', 'puesto': puesto,
+                        'actual': 0, 'total': None, 'total_exacto': False,
+                    }),
+                )
+            except ErrorColaTimeout:
+                log.warning(f"[JOB {job_id[:8]}] Timeout esperando turno en la cola")
+                mensaje = 'El servidor estuvo saturado demasiado tiempo. Probá de nuevo en unos minutos.'
+                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
+                _actualizar_job(job_id, {
+                    'estado': 'error',
+                    'tipo_error': 'timeout_cola',
+                    'mensaje': mensaje,
+                })
+                return
+
+            log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
+
             pipeline = PipelineDescargador()
             log.info(f"[JOB {job_id[:8]}] Pipeline creado, llamando a ejecutar()...")
 
@@ -165,7 +189,8 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 limpiar_temp=config.LIMPIAR_TEMP,
                 indice_expediente=indice_expediente,
                 cookies_mv=cookies_mv,
-                on_progreso=_publicar_progreso
+                on_progreso=_publicar_progreso,
+                control=control,
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -242,9 +267,13 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             })
 
         finally:
-            # Liberar el permiso de concurrencia SIEMPRE, sea cual sea el resultado,
-            # para que la próxima descarga en espera pueda arrancar.
-            _semaforo_descarga.release()
+            # Liberar los permisos de concurrencia SIEMPRE, sea cual sea el
+            # resultado, para que la próxima descarga en cola pueda avanzar.
+            # `control` puede ser None si el timeout de cola saltó antes de
+            # ser admitido (gestor.esperar_turno ya sacó la entrada de la
+            # cola por su cuenta en ese caso, ver su propio finally).
+            if control is not None:
+                control.liberar_todo()
 
             # Despertar cualquier request de long-polling que esté esperando este job
             if job_id in _job_events:
@@ -356,19 +385,22 @@ def descargar_expediente_sync():
                 'login_url': '/auth/mv-login?next=/descargas/expediente'
             }), 401
 
-        # Límite de concurrencia: si ya hay una descarga corriendo, rechazar
-        # rápido en vez de arrancar un segundo Chrome que puede tumbar la
-        # instancia entera (ver comentario junto a _semaforo_descarga).
-        if not _semaforo_descarga.acquire(blocking=False):
-            logger.warning(f"Descarga rechazada por concurrencia: user {current_user.id}, expediente {numero_expediente}")
+        # Encolar: ya no se rechaza de entrada como antes (_semaforo_descarga
+        # non-blocking + 409 inmediato). Ahora se hace lugar en la cola FIFO y
+        # el job espera su turno DENTRO del thread — recién si la cola misma
+        # está llena (MAX_COLA_DESCARGAS) corresponde un 409.
+        job_id = str(uuid.uuid4())
+        try:
+            entrada, puesto = gestor.encolar(job_id)
+        except ErrorColaLlena:
+            logger.warning(f"Cola llena: user {current_user.id}, expediente {numero_expediente}")
             return jsonify({
                 'exito': False,
-                'tipo_error': 'descarga_en_curso',
-                'mensaje': 'Ya hay otra descarga en curso en el servidor. Esperá un momento e intentá de nuevo.',
+                'tipo_error': 'cola_llena',
+                'mensaje': 'Hay muchas descargas en este momento. Esperá unos minutos e intentá de nuevo.',
             }), 409
 
         # Registrar job y lanzar thread
-        job_id = str(uuid.uuid4())
         _jobs[job_id] = {
             'estado': 'procesando',
             'user_id': current_user.id,
@@ -379,22 +411,22 @@ def descargar_expediente_sync():
             # CPython tiraría "dictionary changed size during iteration" -> 500
             # en HTML -> el "Unexpected token '<'" del frontend. Creándola acá,
             # el conjunto de claves nunca cambia: sólo se reasigna su valor.
-            'progreso': {'fase': 'iniciando', 'actual': 0, 'total': None, 'total_exacto': False},
+            'progreso': {'fase': 'en_cola', 'puesto': puesto, 'actual': 0, 'total': None, 'total_exacto': False},
         }
 
         app = current_app._get_current_object()
         try:
             t = threading.Thread(
                 target=_run_pipeline,
-                args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv),
+                args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv, entrada),
                 daemon=True
             )
             t.start()
         except Exception:
-            # El thread nunca arrancó, así que _run_pipeline no va a liberar
-            # el permiso en su finally: hay que soltarlo acá para no dejar
-            # la concurrencia bloqueada para siempre.
-            _semaforo_descarga.release()
+            # El thread nunca arrancó, así que _run_pipeline no va a sacarla
+            # de la cola en su finally: hay que hacerlo acá para no dejar a
+            # los que siguen esperando detrás de una entrada fantasma.
+            gestor.abandonar(entrada)
             raise
 
         logger.info(f"[JOB {job_id[:8]}] Lanzado para user {current_user.id}, expediente {numero_expediente}")

@@ -148,6 +148,16 @@ def crear_app(config_obj=None):
     # Evita que el disco del servidor se llene con descargas viejas
     limpiar_pdfs_antiguos()
 
+    # Matar cualquier soffice.bin residual de un proceso anterior (crash,
+    # redeploy a mitad de una conversión). Se hace UNA sola vez acá, al
+    # arrancar: con la cola de concurrencia (modulos/concurrencia.py) puede
+    # haber más de un pipeline corriendo a la vez, así que llamar a esto
+    # dentro de cada descarga mataría la conversión en vuelo de otro job
+    # (ver el uso de matar_procesos_soffice() en modulos/pipeline.py, ahora
+    # gateado por el permiso exclusivo de conversión).
+    from modulos.conversion import matar_procesos_soffice
+    matar_procesos_soffice()
+
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
     # ═════════════════════════════════════════════════════════════════════

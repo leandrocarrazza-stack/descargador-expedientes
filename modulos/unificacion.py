@@ -44,7 +44,8 @@ class UnificadorPDF:
         self.carpeta_salida = Path(carpeta_salida) if carpeta_salida else self.carpeta_temp
         self.carpeta_salida.mkdir(parents=True, exist_ok=True)
 
-    def unificar(self, numero_expediente: str, archivos_descargados: List[dict], on_progreso=None) -> Optional[Path]:
+    def unificar(self, numero_expediente: str, archivos_descargados: List[dict], on_progreso=None,
+                 sufijo_salida: str = '') -> Optional[Path]:
         """
         Unifica múltiples PDFs en un solo archivo.
 
@@ -54,6 +55,11 @@ class UnificadorPDF:
             on_progreso: callable opcional que recibe dicts con el avance, para
                 que el usuario vea "Unificando N de TOTAL" en vez de una barra
                 quieta durante la etapa más lenta después de la descarga.
+            sufijo_salida: token opcional para que el nombre del PDF final sea
+                único por job. Sin esto, dos usuarios descargando el MISMO
+                expediente al mismo tiempo generarían el mismo nombre de
+                archivo y se pisarían entre sí (incluido el borrado diferido
+                del primero que termina).
 
         Retorna:
             Path: Ruta del archivo PDF unificado, o None si falla
@@ -166,7 +172,7 @@ class UnificadorPDF:
             if not rutas_validas:
                 print("\n[WARN] Modo alternativo: PDFs dañados, copiando como está...")
                 if len(archivos_ordenados) == 1:
-                    return self._copiar_unico(archivos_ordenados[0]["path"], numero_expediente)
+                    return self._copiar_unico(archivos_ordenados[0]["path"], numero_expediente, sufijo_salida)
                 print("   [NO] Múltiples archivos dañados, no se pueden unificar")
                 return None
 
@@ -182,7 +188,8 @@ class UnificadorPDF:
             numero_sanitizado = (
                 str(numero_expediente).replace("/", "_").replace("\\", "_").replace(":", "_")
             )
-            nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO.pdf"
+            sufijo = f"_{sufijo_salida}" if sufijo_salida else ""
+            nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO{sufijo}.pdf"
             ruta_salida = self.carpeta_salida / nombre_salida
 
             if len(rutas_validas) <= LOTE_UNIFICACION:
@@ -281,13 +288,14 @@ class UnificadorPDF:
             merger.close()
         return incluidos
 
-    def _copiar_unico(self, ruta_archivo: Path, numero_expediente: str) -> Optional[Path]:
+    def _copiar_unico(self, ruta_archivo: Path, numero_expediente: str, sufijo_salida: str = '') -> Optional[Path]:
         """
         Copia un solo archivo como PDF final (fallback cuando hay un único archivo).
 
         Args:
             ruta_archivo: Ruta del archivo a copiar
             numero_expediente: Número de expediente para el nombre
+            sufijo_salida: mismo token de `unificar()`, para que el nombre sea único por job
 
         Returns:
             Path del PDF copiado, o None si falla
@@ -297,7 +305,8 @@ class UnificadorPDF:
             numero_sanitizado = (
                 str(numero_expediente).replace("/", "_").replace("\\", "_").replace(":", "_")
             )
-            nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO.pdf"
+            sufijo = f"_{sufijo_salida}" if sufijo_salida else ""
+            nombre_salida = f"Expediente_{numero_sanitizado}_UNIFICADO{sufijo}.pdf"
             ruta_salida = self.carpeta_salida / nombre_salida
             shutil.copy2(str(ruta_archivo), str(ruta_salida))
             tamaño_mb = ruta_salida.stat().st_size / (1024 * 1024)
