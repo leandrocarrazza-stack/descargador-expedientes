@@ -18,7 +18,8 @@
       "Bash(git pull:*)",
       "Bash(git commit -m \"Agregar archivos Celery copiados del worktree:*)",
       "Bash(git rebase:*)",
-      "Bash(git commit -m \"Resolver conflictos de merge con origin/main:*)"
+      "Bash(git commit -m \"Resolver conflictos de merge con origin/main:*)",
+      "Bash(git fetch *)"
     ]
   }
 }
