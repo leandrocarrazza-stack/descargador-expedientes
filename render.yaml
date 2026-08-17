@@ -36,6 +36,19 @@ services:
         value: "false"
       - key: MESA_VIRTUAL_SESSION_PATH
         value: "/data/sesion.pkl"
+      # Cola de concurrencia (modulos/concurrencia.py) — ver ese módulo para
+      # el detalle de cada uno. SOLAPE_NAVEGADOR_CONVERSION queda apagado
+      # hasta confirmar con unos días de logs de [MEMORIA] en producción que
+      # hay margen real para solapar un Chrome nuevo con la conversión/
+      # unificación (sin Chrome) del job anterior.
+      - key: MAX_NAVEGADORES
+        value: "1"
+      - key: MAX_COLA_DESCARGAS
+        value: "10"
+      - key: UMBRAL_RAM_NAVEGADOR_MB
+        value: "220"
+      - key: SOLAPE_NAVEGADOR_CONVERSION
+        value: "false"
 
       # Estas se configuran MANUALMENTE en el panel de Render:
       # - DATABASE_URL                     (Render PostgreSQL addon)

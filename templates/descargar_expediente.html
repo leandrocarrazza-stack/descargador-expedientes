@@ -355,6 +355,12 @@
     let faseActual = null;
     let modoReal = false;   // true en cuanto llega el primer dato real
     let etiquetaActual = 'Iniciando...';
+    // true en cuanto se dispara el long-poll de /estado. Con la cola de
+    // concurrencia, un job puede pasar un rato sólo "en_cola" (ver
+    // aplicarProgresoReal): recién arranca el long-poll cuando sale de ahí,
+    // para no retener un hilo de gunicorn de más por cada usuario esperando
+    // turno.
+    let longPollArrancado = false;
 
     // ─── MOSTRAR/OCULTAR PANELES ───────────────────────────────────────────
     function mostrarSolo(idPanel) {
@@ -466,6 +472,28 @@
     }
 
     function aplicarProgresoReal(p) {
+        if (p.fase === 'en_cola') {
+            // Especial: todavía no arrancó nada real (ni Chrome ni búsqueda).
+            // No se sincronizan etapas -no hay que marcar "Autenticando" como
+            // activa mientras se espera turno-: sólo se mueve la barra un
+            // poco para que no se vea congelada, y se muestra la posición.
+            modoReal = true;
+            faseActual = 'en_cola';
+            ultimoProgreso = p;
+            porcentajeActual = Math.max(porcentajeActual, 3);
+            etiquetaActual = 'Esperando turno...';
+            setBarra(Math.round(porcentajeActual), etiquetaActual);
+            const el = document.getElementById('contador-archivos');
+            if (el) {
+                const adelante = Math.max((p.puesto || 1) - 1, 0);
+                el.textContent = adelante > 0
+                    ? `Hay ${adelante} descarga${adelante === 1 ? '' : 's'} adelante`
+                    : 'Sos el próximo — arrancando...';
+                el.style.display = 'block';
+            }
+            return;
+        }
+
         const f = FASES[p.fase];
         if (!f) return;   // fase 'iniciando' o desconocida: seguir con el reloj
 
@@ -511,14 +539,37 @@
         progresoInterval = setInterval(async () => {
             try {
                 const r = await fetch(`/descargas/progreso/${jobId}`);
-                if (!r.ok) return;   // job expirado o ajeno: manda el long-poll
+                if (!r.ok) {
+                    // Job expirado o ajeno (ej. la app se reinició con el job
+                    // todavía en cola): que decida el long-poll, que sabe
+                    // convertir esto en el panel de "la sesión expiró".
+                    arrancarLongPollSiHaceFalta(jobId);
+                    return;
+                }
                 const d = await r.json();
-                if (d && d.progreso && d.progreso.fase) aplicarProgresoReal(d.progreso);
+                const fase = d && d.progreso && d.progreso.fase;
+                if (fase) aplicarProgresoReal(d.progreso);
+
+                // Mientras el job está sólo "en_cola" (o recién sembrado, sin
+                // fase todavía) NO se arranca el long-poll: cada uno retiene
+                // un hilo de gunicorn ~25s, y no tiene sentido gastarlo en
+                // alguien que ni siquiera empezó a procesar. Apenas hay
+                // trabajo real (o el job ya terminó) se dispara una única vez.
+                const trabajoReal = fase && fase !== 'en_cola' && fase !== 'iniciando';
+                if (d.estado !== 'procesando' || trabajoReal) {
+                    arrancarLongPollSiHaceFalta(jobId);
+                }
             } catch (e) {
                 // Red intermitente: ignorar. Nunca desarmar la UI por un fallo
                 // del polleo de progreso — quien decide el resultado es /estado.
             }
         }, 2000);
+    }
+
+    function arrancarLongPollSiHaceFalta(jobId) {
+        if (longPollArrancado) return;
+        longPollArrancado = true;
+        longPolling(jobId);
     }
 
     function detenerPollProgreso() {
@@ -533,6 +584,7 @@
         ultimoProgreso = null;
         faseActual = null;
         etiquetaActual = 'Iniciando...';
+        longPollArrancado = false;
         const cont = document.getElementById('contador-archivos');
         if (cont) { cont.textContent = ''; cont.style.display = 'none'; }
     }
@@ -643,13 +695,13 @@
                 return;
             }
 
-            // 2. Arrancar el polleo del contador ANTES del long-poll: el await
-            // de abajo bloquea hasta 25s, así que si esto fuera después el
-            // contador no aparecería nunca.
+            // 2. Arrancar el polleo del contador. El long-poll de /estado ya
+            // NO se dispara desde acá: mientras el job está "en_cola" no
+            // tiene sentido retener un hilo de gunicorn en un long-poll de
+            // 25s para alguien que ni empezó — arranca solo, una vez, en
+            // cuanto el polleo de progreso detecta que salió de la cola (ver
+            // arrancarLongPollSiHaceFalta dentro de iniciarPollProgreso).
             iniciarPollProgreso(data.job_id);
-
-            // 3. Long-polling: esperar a que el job termine (el servidor retiene el request)
-            await longPolling(data.job_id);
 
         } catch (err) {
             animarError();

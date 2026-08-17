@@ -14,6 +14,7 @@ Retorna: ResultadoPipeline con .exito, .pdf_final, .error
 
 import logging
 import shutil
+import uuid
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -23,9 +24,10 @@ from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
-from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb
+from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb, parece_pdf, LOTE_CONVERSION
 from modulos.unificacion import UnificadorPDF
 from modulos.compresion import comprimir_pdf
+from modulos.concurrencia import ControlJob
 import config
 
 logger = logging.getLogger(__name__)
@@ -91,7 +93,7 @@ class PipelineDescargador:
         except Exception:
             logger.debug("Callback de progreso falló (ignorado)", exc_info=True)
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -101,11 +103,21 @@ class PipelineDescargador:
             on_progreso: callable opcional que recibe dicts con el avance real
                 (fase, actual, total...) para que el frontend muestre
                 "archivo N de TOTAL" en vez de una barra inventada.
+            control: handle de concurrencia (modulos/concurrencia.py) que
+                coordina cuántos Chrome/conversiones pueden correr a la vez.
+                Si se omite (llamadores viejos: CLI, MCP, Celery legacy), se
+                usa un control nulo que no bloquea ni limita nada — igual que
+                el comportamiento de antes de que existiera la cola.
 
         Returns:
             ResultadoPipeline con resultado o error
         """
         self._on_progreso = on_progreso
+        control = control or ControlJob.nulo()
+        # Token único por job: evita que dos descargas del MISMO expediente
+        # (dos usuarios, o el mismo usuario dos veces) compartan carpeta
+        # temporal o nombre de PDF final y se pisen entre sí.
+        self._token = uuid.uuid4().hex[:8]
         try:
             logger.info(f"[PIPELINE] Iniciando descarga: {numero_expediente}")
 
@@ -113,7 +125,11 @@ class PipelineDescargador:
             # conversión (excepción no manejada, OOM-kill del proceso), puede haber
             # dejado un soffice.bin residente consumiendo memoria desde entonces.
             # Se libera ANTES de arrancar Chrome, que es lo que más RAM necesita.
-            matar_procesos_soffice()
+            # Con concurrencia real (control no nulo) esto sólo corre una vez al
+            # arrancar la app (ver servidor.py): hacerlo acá mataría la conversión
+            # en vuelo de otro job que esté corriendo al mismo tiempo.
+            if control.es_nulo:
+                matar_procesos_soffice()
             _log_memoria("inicio")
 
             # PASO 1: AUTENTICACIÓN
@@ -180,8 +196,11 @@ class PipelineDescargador:
             # PASO 3: DESCARGA DE ARCHIVOS
             logger.info("[PASO 3/5] Descarga de archivos")
 
-            # Crear carpeta temporal PRIMERO
-            self.carpeta_temp = Path(config.TEMP_DIR) / f"exp_{numero_expediente.replace('/', '_')}"
+            # Crear carpeta temporal PRIMERO. El token la hace única por job:
+            # sin él, dos descargas del mismo expediente en simultáneo
+            # comparten carpeta y el rmtree del finally de una borra las
+            # descargas de la otra a mitad de camino.
+            self.carpeta_temp = Path(config.TEMP_DIR) / f"exp_{numero_expediente.replace('/', '_')}_{self._token}"
             self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
             # Crear descargador con carpeta temp
@@ -215,34 +234,93 @@ class PipelineDescargador:
                 except Exception as e:
                     logger.warning(f"[WARN] Error al cerrar navegador: {e}")
 
+            # Con SOLAPE_NAVEGADOR_CONVERSION=true, este permiso se libera DE
+            # VERDAD acá: el siguiente job de la cola puede arrancar su Chrome
+            # mientras este pipeline sigue en conversión/unificación (ya sin
+            # Chrome propio abierto). Con el default (false), es un no-op —
+            # el permiso se retiene hasta el final, como el semáforo de antes.
+            control.liberar_navegador()
             _log_memoria("cierre de Chrome")
 
             # PASO 4: CONVERSIÓN RTF>PDF
+            # El permiso de conversión es exclusivo (cap 1, sin importar
+            # cuántos navegadores estén habilitados): cubre PASO 4 + PASO 5,
+            # porque el par de RAM peligroso es exactamente soffice de un job
+            # + el merge de PyPDF2 de otro. Si no se consigue a tiempo, el
+            # servidor está genuinamente saturado — no tiene sentido reintentar
+            # desde acá, se corta con un error claro.
+            if not control.adquirir_conversion(timeout=600):
+                logger.error("[PASO 4/5] No se pudo obtener el permiso de conversión (servidor ocupado)")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="El servidor está muy ocupado en este momento. Probá de nuevo en unos minutos.",
+                    tipo_error="servidor_ocupado",
+                    expediente=expediente
+                )
+
             logger.info("[PASO 4/5] Conversión RTF>PDF")
-            self.conversor = ConversorRTF()
+            # perfil_dir propio: cinturón y tiradores si algún día sube el cap
+            # de conversión (ver modulos/concurrencia.py) — hoy, con el
+            # permiso exclusivo ya tomado arriba, sólo un soffice corre a la
+            # vez de cualquier forma.
+            self.conversor = ConversorRTF(perfil_dir=self.carpeta_temp / 'lo_perfil')
 
             # Convertir archivos descargados manteniendo metadata
             # descargar_todo_por_paginas() retorna {path, tipo, movimiento, url}
             total_a_convertir = len(archivos_descargados)
             self._emitir(fase='conversion', actual=0, total=total_a_convertir, total_exacto=True)
 
+            # Partición: los que ya son PDF (la mayoría en un expediente
+            # típico) son casi gratis — van uno por uno por el camino de
+            # siempre, sin tocar soffice. Los RTF reales van agrupados en
+            # lotes de LOTE_CONVERSION a UNA sola invocación de soffice cada
+            # uno, en vez de pagar ~1.5-3s de arranque en frío + 1s de sleep
+            # POR ARCHIVO (ver convertir_lote() en modulos/conversion.py).
             archivos_convertidos = []
-            for i, arch in enumerate(archivos_descargados, 1):
+            pendientes_rtf = []  # [(arch, ruta_original)]
+            actual = 0
+
+            for arch in archivos_descargados:
                 ruta_original = arch['path']
-                pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
-                if pdf_convertido:
-                    # Actualizar ruta con conversión realizada, mantener metadata
-                    arch['path'] = pdf_convertido
-                    archivos_convertidos.append(arch)
-                if i % PROGRESO_CADA_N_ARCHIVOS == 0:
-                    self._emitir(fase='conversion', actual=i, total=total_a_convertir, total_exacto=True)
+                if parece_pdf(ruta_original):
+                    pdf_convertido = self.conversor.convertir_rtf_a_pdf(ruta_original)
+                    actual += 1
+                    if pdf_convertido:
+                        arch['path'] = pdf_convertido
+                        archivos_convertidos.append(arch)
+                    if actual % PROGRESO_CADA_N_ARCHIVOS == 0:
+                        self._emitir(fase='conversion', actual=actual, total=total_a_convertir, total_exacto=True)
+                else:
+                    pendientes_rtf.append((arch, ruta_original))
+
+            for inicio in range(0, len(pendientes_rtf), LOTE_CONVERSION):
+                grupo = pendientes_rtf[inicio:inicio + LOTE_CONVERSION]
+                resultados_lote = self.conversor.convertir_lote(
+                    [ruta for _, ruta in grupo], self.carpeta_temp
+                )
+                for arch, ruta_original in grupo:
+                    actual += 1
+                    pdf_convertido = resultados_lote.get(Path(ruta_original))
+                    if pdf_convertido:
+                        arch['path'] = pdf_convertido
+                        archivos_convertidos.append(arch)
+                # Se emite siempre al cerrar cada lote (no gateado por
+                # PROGRESO_CADA_N_ARCHIVOS): un lote entero puede ser más
+                # grande que la cadencia normal, y sin esto el contador
+                # podría saltar de golpe LOTE_CONVERSION números de una vez.
+                self._emitir(fase='conversion', actual=actual, total=total_a_convertir, total_exacto=True)
 
             logger.info(f"[OK] Conversión completada: {len(archivos_convertidos)} archivos")
 
             # Liberar la memoria del proceso soffice.bin residente (si hubo al
             # menos un RTF) ANTES de que PyPDF2 tenga que cargar y combinar todos
             # los PDFs — ambos compiten por la misma RAM del proceso Python.
-            matar_procesos_soffice()
+            # Seguro incluso con otros jobs corriendo en simultáneo: sólo se
+            # llega acá con el permiso de conversión tomado (control no nulo
+            # devolvió arriba si no lo consiguió), así que ningún otro job
+            # puede tener su propio soffice en vuelo en este momento.
+            if control.permite_matar_soffice():
+                matar_procesos_soffice()
             _log_memoria("conversión RTF>PDF (soffice liberado)")
 
             if not archivos_convertidos:
@@ -256,11 +334,16 @@ class PipelineDescargador:
             # PASO 5: UNIFICACIÓN
             logger.info("[PASO 5/5] Unificación de PDFs")
             self._emitir(fase='unificacion', actual=0, total=len(archivos_convertidos), total_exacto=True)
-            self.unificador = UnificadorPDF(config.OUTPUT_DIR)
+            # carpeta_temp propia (no config.OUTPUT_DIR): los PDFs intermedios
+            # de lote (_lote_N.pdf) quedan scoped a este job, así dos
+            # unificaciones concurrentes no pisan los archivos intermedios
+            # de la otra.
+            self.unificador = UnificadorPDF(self.carpeta_temp, config.OUTPUT_DIR)
 
             # Pasar archivos con metadata al unificador
             pdf_final = self.unificador.unificar(
-                numero_expediente, archivos_convertidos, on_progreso=self._on_progreso
+                numero_expediente, archivos_convertidos, on_progreso=self._on_progreso,
+                sufijo_salida=self._token
             )
 
             if not pdf_final or not pdf_final.exists():
@@ -315,6 +398,13 @@ class PipelineDescargador:
                     self.cliente.cerrar()
                 except Exception:
                     pass
+
+            # 1b. Backstop: soltar cualquier permiso de concurrencia que haya
+            #     quedado tomado, sea cual sea el camino de salida (éxito,
+            #     error temprano, excepción). Idempotente: si ya se soltó
+            #     arriba (liberar_navegador tras cerrar Chrome), esto no hace
+            #     nada de más.
+            control.liberar_todo()
 
             # 2. Borrar carpeta temporal completa (RTFs, PDFs individuales, lotes)
             #    El PDF final ya está en OUTPUT_DIR, así que temp/ es descartable
