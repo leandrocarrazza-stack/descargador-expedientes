@@ -23,6 +23,8 @@ Importante:
 
 import json
 import logging
+import os
+import signal
 import time
 import uuid
 from datetime import datetime
@@ -40,18 +42,38 @@ logger = logging.getLogger(__name__)
 
 URL_MESA_VIRTUAL = "https://mesavirtual.jusentrerios.gov.ar/"
 TIMEOUT_LOGIN = 30        # segundos para que cargue cada página
-TIMEOUT_SESION_RELAY = 180  # segundos que guardamos el driver en memoria (3 min)
+# Antes 180 (3 min): en producción se vio un usuario escribir un código 2FA
+# incorrecto, corregirlo ~2 minutos después (tiempo normal para notar el
+# typo y volver a mirar la app del autenticador) y encontrarse la sesión ya
+# expirada. El reloj de estos 180s arranca apenas se detecta el campo OTP,
+# así que si el tramo previo (arrancar Chrome, cargar Keycloak) viene lento
+# -bajo presión de memoria, por ejemplo- le come minutos al presupuesto
+# antes de que el usuario llegue siquiera a ver el campo. 300s (5 min) deja
+# margen real para un segundo intento sin que el costo sea alto: sigue
+# siendo un techo, no una espera indefinida.
+TIMEOUT_SESION_RELAY = 300  # segundos que guardamos el driver en memoria (5 min)
 # Selenium NO pone timeout de socket por defecto en el comando HTTP que manda a
 # chromedriver (RemoteConnection._timeout queda sin setear = bloquea para
 # siempre). Si el renderer de Chrome se cuelga (memoria, proceso zombie, etc.)
 # CUALQUIER llamada (execute_script, get, click...) puede quedarse esperando
-# una respuesta que nunca llega. Eso mantiene vivo el thread de _run_pipeline
-# sin pasar nunca por su finally, así que el semáforo de concurrencia
-# (MAX_DESCARGAS_SIMULTANEAS=1) queda tomado para siempre y bloquea a TODOS
-# los usuarios con 409 hasta que se reinicie el servicio. Poniendo un techo acá
-# cualquier comando colgado revienta con una excepción normal en vez de
-# trabarse: el pipeline la captura como cualquier otro error, el job termina
-# en 'error' y el permiso se libera solo.
+# una respuesta que nunca llega. Eso mantiene vivo el thread que la hizo sin
+# pasar nunca por su finally, así que el permiso de concurrencia que esté
+# reteniendo (ver modulos/concurrencia.py) queda tomado para siempre y
+# bloquea a los demás usuarios hasta que se reinicie el servicio. Poniendo
+# un techo acá cualquier comando colgado revienta con una excepción normal
+# en vez de trabarse: el caller la captura como cualquier otro error, el
+# job termina en 'error' y el permiso se libera solo.
+#
+# OJO: esto es un techo por COMANDO, no por operación. Selenium reintenta
+# automáticamente (a nivel urllib3) hasta 3 veces un comando que falla por
+# conexión rota, y CADA reintento vuelve a esperar el timeout completo — un
+# chromedriver realmente colgado puede terminar tardando hasta 3x esto
+# (~4.5 min) antes de que la excepción llegue a nuestro código. Visto en
+# producción. Es la razón de ser de limpiar_chrome_huerfano() más abajo:
+# ese driver.quit() del catch también depende de poder hablarle al mismo
+# chromedriver colgado, así que puede fallar en silencio y dejar el
+# proceso vivo consumiendo RAM mucho después de que el usuario ya vio el
+# error.
 TIMEOUT_COMANDO_SELENIUM = 90  # segundos
 RemoteConnection.set_timeout(TIMEOUT_COMANDO_SELENIUM)
 # Render starter (512 MB) ocasionalmente no tiene RAM libre en el instante exacto
@@ -61,6 +83,14 @@ RemoteConnection.set_timeout(TIMEOUT_COMANDO_SELENIUM)
 # resuelve el problema sin intervención del usuario.
 REINTENTOS_CHROME = 3
 ESPERA_ENTRE_REINTENTOS = 4  # segundos
+
+# Techo de edad para considerar un chromedriver/chrome "huérfano" (ver
+# limpiar_chrome_huerfano). Ningún Chrome legítimo de esta app vive más que
+# esto: el caso más largo es el login-relay esperando el código 2FA
+# (TIMEOUT_SESION_RELAY), y el pipeline de descarga cierra su Chrome bastante
+# antes que eso. El margen extra (120s) es para no pisarle los talones a un
+# caso legítimo apenas más lento de lo normal.
+EDAD_MAXIMA_CHROME_SEG = TIMEOUT_SESION_RELAY + 120
 
 # ── Almacén en memoria de drivers en espera de 2FA ────────────────────────────
 # Clave: session_id (string único por intento de login)
@@ -84,8 +114,86 @@ def _limpiar_drivers_viejos():
         logger.info(f"[AUTH_MV] Driver expirado eliminado: {sid[:8]}...")
 
 
+_EJECUTABLES_CHROME = ('chromedriver', 'chrome', 'google-chrome', 'google-chrome-stable')
+
+
+def limpiar_chrome_huerfano(edad_maxima_seg: float = None, fn_reloj=time.time) -> int:
+    """
+    Mata procesos chromedriver/chrome que llevan vivos más de edad_maxima_seg
+    (por defecto EDAD_MAXIMA_CHROME_SEG).
+
+    Por qué hace falta: cuando chromedriver mismo deja de responder -no sólo
+    una página lenta, sino el propio proceso colgado (visto en producción:
+    un comando agotó los 3 reintentos automáticos de Selenium, ~4.5 minutos
+    en total antes de tirar la excepción)- el driver.quit() de cada bloque
+    except también depende de poder hablarle a ESE MISMO chromedriver por
+    HTTP. Si está colgado de verdad, quit() falla en silencio (está envuelto
+    en un try/except en cada caller, a propósito, para no ocultar el error
+    real detrás de uno secundario) y el proceso queda como zombie
+    consumiendo RAM indefinidamente. En un servidor de 512 MB eso degrada
+    TODO lo que venga después -otros logins, otras descargas- no sólo al
+    usuario que tuvo la mala suerte original.
+
+    Basado en EDAD, no en un registro de qué PID está "en uso": es más
+    simple y no puede matar por error un Chrome legítimo, porque ningún
+    Chrome legítimo de esta app vive más que EDAD_MAXIMA_CHROME_SEG (ver esa
+    constante) — ni siquiera el que está esperando el código 2FA del
+    usuario.
+
+    Mismo patrón /proc que matar_procesos_soffice() en modulos/conversion.py
+    (sin psutil: no está instalado en la imagen), comparando el ejecutable
+    exacto para no matar por accidente algo que sólo mencione "chrome" en
+    un argumento.
+
+    Retorna la cantidad de procesos eliminados (para poder testear sin
+    parsear logs).
+    """
+    if edad_maxima_seg is None:
+        edad_maxima_seg = EDAD_MAXIMA_CHROME_SEG
+
+    ahora = fn_reloj()
+    eliminados = 0
+    try:
+        for entrada in os.listdir('/proc'):
+            if not entrada.isdigit():
+                continue
+            pid = int(entrada)
+            try:
+                with open(f'/proc/{pid}/cmdline', 'rb') as f:
+                    argv = f.read().decode('utf-8', errors='ignore').split('\x00')
+                ejecutable = os.path.basename(argv[0]) if argv and argv[0] else ''
+                if ejecutable not in _EJECUTABLES_CHROME:
+                    continue
+                edad = ahora - os.stat(f'/proc/{pid}').st_ctime
+            except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+                continue
+
+            if edad < edad_maxima_seg:
+                continue
+
+            try:
+                os.kill(pid, signal.SIGKILL)
+                eliminados += 1
+            except (ProcessLookupError, PermissionError):
+                pass
+
+        if eliminados:
+            logger.info(f"[AUTH_MV] {eliminados} proceso(s) Chrome/chromedriver huérfano(s) eliminado(s)")
+    except Exception as e:
+        logger.warning(f"[AUTH_MV] Error limpiando Chrome huérfano: {str(e)[:60]}")
+
+    return eliminados
+
+
 def _crear_driver_headless():
     """Crea un Chrome headless con las opciones correctas para Render."""
+    # Barrer zombies ANTES de pedirle RAM a un Chrome nuevo: es el mismo
+    # criterio que matar_procesos_soffice() en pipeline.py (liberar memoria
+    # justo antes del momento que más la necesita). Esta función es el único
+    # lugar de la app que crea un driver -login-relay y pipeline de descarga
+    # pasan los dos por acá- así que un solo llamado alcanza para cubrir
+    # ambos caminos.
+    limpiar_chrome_huerfano()
     options = webdriver.ChromeOptions()
 
     # ── Opciones base ──────────────────────────────────────────────────────────
