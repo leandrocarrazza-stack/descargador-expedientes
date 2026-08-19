@@ -46,7 +46,7 @@ services:
       - key: MAX_COLA_DESCARGAS
         value: "10"
       - key: UMBRAL_RAM_NAVEGADOR_MB
-        value: "220"
+        value: "150"  # bajado de 220: evidencia de prod muestra ~208MB libres en reposo (ver modulos/concurrencia.py)
       - key: SOLAPE_NAVEGADOR_CONVERSION
         value: "false"
 
