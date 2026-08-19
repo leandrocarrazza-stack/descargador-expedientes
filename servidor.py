@@ -158,6 +158,16 @@ def crear_app(config_obj=None):
     from modulos.conversion import matar_procesos_soffice
     matar_procesos_soffice()
 
+    # Mismo criterio para Chrome/chromedriver: si el proceso se reinició sin
+    # que un container nuevo reemplace al viejo (ej. un restart del worker
+    # de gunicorn), puede haber quedado un chromedriver colgado de una
+    # sesión anterior. limpiar_chrome_huerfano() también corre antes de CADA
+    # Chrome nuevo (ver _crear_driver_headless en modulos/auth_mv.py); esto
+    # es sólo para liberar esa RAM de entrada, sin esperar al próximo login
+    # o descarga.
+    from modulos.auth_mv import limpiar_chrome_huerfano
+    limpiar_chrome_huerfano()
+
     # ═════════════════════════════════════════════════════════════════════
     #  RUTAS PRINCIPALES
     # ═════════════════════════════════════════════════════════════════════
