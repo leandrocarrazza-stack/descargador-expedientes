@@ -44,7 +44,15 @@ logger = crear_logger(__name__)
 # ── Configuración por variable de entorno ──────────────────────────────────
 MAX_NAVEGADORES = int(os.environ.get('MAX_NAVEGADORES', '1'))
 MAX_COLA_DESCARGAS = int(os.environ.get('MAX_COLA_DESCARGAS', '10'))
-UMBRAL_RAM_NAVEGADOR_MB = int(os.environ.get('UMBRAL_RAM_NAVEGADOR_MB', '220'))
+# Bajado de 220 a 150 con evidencia real de producción: el 19/8 se midió
+# "libre=208MB" en un momento sin NINGUNA otra actividad (ni navegador ni
+# conversión en curso), y esa misma descarga arrancó y terminó bien sin
+# ningún síntoma de falta de memoria. 220 estaba calibrado por encima de la
+# memoria libre real que este servidor tiene en reposo, así que la puerta
+# terminaba frenando 30s (ESPERA_RAM_SIN_ACTIVIDAD_SEG) TODAS las descargas,
+# incluso siendo el único usuario. 150 deja margen de sobra contra un OOM
+# real sin forzar esa espera innecesaria.
+UMBRAL_RAM_NAVEGADOR_MB = int(os.environ.get('UMBRAL_RAM_NAVEGADOR_MB', '150'))
 MAX_ESPERA_COLA_SEG = int(os.environ.get('MAX_ESPERA_COLA_SEG', '900'))
 ESPERA_RAM_SIN_ACTIVIDAD_SEG = int(os.environ.get('ESPERA_RAM_SIN_ACTIVIDAD_SEG', '30'))
 SOLAPE_NAVEGADOR_CONVERSION = os.environ.get('SOLAPE_NAVEGADOR_CONVERSION', 'false').lower() == 'true'

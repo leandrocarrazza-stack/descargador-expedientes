@@ -340,6 +340,51 @@ def iniciar_login_mv(mv_usuario: str, mv_password: str) -> dict:
         return {'estado': 'error', 'mensaje': mensaje}
 
 
+def _recuperar_tras_timeout_2fa(driver, excepcion_original):
+    """
+    Si el click de "enviar código" o la espera del redirect posterior se
+    cuelga, decide si hay que darse por vencido o si alcanza con seguir
+    esperando el mismo redirect, en vez de tirar toda la sesión al toque.
+
+    Por qué hace falta: en producción se vio dos veces seguidas que, bajo
+    presión de memoria del servidor, un comando puntual de Selenium (el
+    click o el chequeo de document.readyState) tarda más de la cuenta y
+    tira una excepción — pero el login en Mesa Virtual muchas veces ya se
+    había completado igual del lado del navegador. Como completar_login_mv
+    borraba la sesión pendiente ante CUALQUIER excepción acá, el usuario
+    perdía todo el progreso y tenía que volver a escribir usuario Y
+    contraseña, no sólo el código 2FA — de ahí los reportes de "no puedo
+    loguearme" cuando en realidad sólo hacía falta esperar un poco más.
+
+    No reclickea el botón: el submit original puede haber llegado igual del
+    lado del navegador aunque la respuesta a nuestro comando se haya
+    perdido por el camino, y clickear de nuevo arriesga mandar el código
+    2FA dos veces. En cambio, hace un sondeo liviano (current_url, sin
+    ejecutar JS) para decidir:
+      - el driver no responde ni a esto -> está colgado de verdad, se
+        relanza la excepción original para que el caller limpie la sesión
+        (mismo comportamiento que antes de este cambio).
+      - ya llegamos a Mesa Virtual -> el timeout fue sólo del chequeo, no
+        hace falta nada más.
+      - todavía en Keycloak -> se espera de nuevo el mismo redirect, UNA
+        sola vez; si también expira, se deja propagar como antes.
+    """
+    try:
+        url_sondeo = driver.current_url
+    except Exception:
+        raise excepcion_original
+
+    ya_llego = "mesavirtual.jusentrerios.gov.ar" in url_sondeo and "ol-sso" not in url_sondeo
+    if ya_llego:
+        logger.info("[AUTH_MV] El timeout fue sólo del chequeo posterior: el login ya había llegado a destino")
+        return
+
+    logger.warning("[AUTH_MV] Reintentando una vez la espera del redirect tras el timeout")
+    WebDriverWait(driver, TIMEOUT_LOGIN).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+
+
 def completar_login_mv(session_id: str, codigo_2fa: str) -> dict:
     """
     Paso 2 del Login Relay: recibe el código 2FA, lo ingresa en el
@@ -378,13 +423,19 @@ def completar_login_mv(session_id: str, codigo_2fa: str) -> dict:
         boton_submit = driver.find_element(
             By.CSS_SELECTOR, "input[type='submit'], button[type='submit']"
         )
-        boton_submit.click()
-
-        # Esperar a que redirija a Mesa Virtual
-        time.sleep(3)
-        WebDriverWait(driver, TIMEOUT_LOGIN).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
+        try:
+            boton_submit.click()
+            # Esperar a que redirija a Mesa Virtual
+            time.sleep(3)
+            WebDriverWait(driver, TIMEOUT_LOGIN).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+        except Exception as e_timeout:
+            # Un comando puntual se colgó (ver _recuperar_tras_timeout_2fa):
+            # antes de tirar la sesión entera, evaluar si alcanza con
+            # esperar un poco más.
+            logger.warning(f"[AUTH_MV] Timeout tras enviar 2FA, evaluando recuperación: {e_timeout}")
+            _recuperar_tras_timeout_2fa(driver, e_timeout)
 
         url_actual = driver.current_url
         logger.info(f"[AUTH_MV] Después de 2FA: {url_actual[:80]}")
