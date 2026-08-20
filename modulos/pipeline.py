@@ -93,6 +93,23 @@ class PipelineDescargador:
         except Exception:
             logger.debug("Callback de progreso falló (ignorado)", exc_info=True)
 
+    def _autenticar(self, cookies_mv: Optional[list]) -> Optional[ClienteSelenium]:
+        """
+        Crea un cliente autenticado en Mesa Virtual. Usado tanto por PASO 1
+        (auth inicial) como por el reciclaje proactivo de navegador (ver
+        _reconectar en ejecutar()), para que ambos caminos de login no se
+        desincronicen si el flujo de autenticación cambia.
+
+        Retorna None si falla (el caller decide qué error mostrar).
+        """
+        if cookies_mv:
+            # Usar las cookies del usuario (Login Relay) — camino normal en producción
+            logger.info("Usando cookies del usuario (Login Relay)")
+            return crear_cliente_desde_cookies(cookies_mv)
+        # Fallback: sesión local (solo para desarrollo/testing)
+        logger.info("Sin cookies_mv, usando sesión local (modo desarrollo)")
+        return crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+
     def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
@@ -136,26 +153,14 @@ class PipelineDescargador:
             logger.info("[PASO 1/5] Autenticación en Mesa Virtual")
             self._emitir(fase='auth', actual=0, total=None, total_exacto=False)
 
-            if cookies_mv:
-                # Usar las cookies del usuario (Login Relay) — camino normal en producción
-                logger.info("[PASO 1/5] Usando cookies del usuario (Login Relay)")
-                self.cliente = crear_cliente_desde_cookies(cookies_mv)
-                if not self.cliente:
-                    return ResultadoPipeline(
-                        exito=False,
-                        error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.",
-                        tipo_error="auth_failed"
-                    )
-            else:
-                # Fallback: sesión local (solo para desarrollo/testing)
-                logger.info("[PASO 1/5] Sin cookies_mv, usando sesión local (modo desarrollo)")
-                self.cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
-                if not self.cliente:
-                    return ResultadoPipeline(
-                        exito=False,
-                        error="No se pudo crear sesión. Intenta nuevamente.",
-                        tipo_error="auth_failed"
-                    )
+            self.cliente = self._autenticar(cookies_mv)
+            if not self.cliente:
+                return ResultadoPipeline(
+                    exito=False,
+                    error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta."
+                        if cookies_mv else "No se pudo crear sesión. Intenta nuevamente.",
+                    tipo_error="auth_failed"
+                )
 
             _log_memoria("autenticación (Chrome recién arrancado)")
 
@@ -211,10 +216,7 @@ class PipelineDescargador:
             # queda como único paliativo, y en la práctica libera 0-16 MB con
             # el servidor ya en el límite de los 512 MB del plan.
             def _reconectar():
-                if cookies_mv:
-                    nuevo_cliente = crear_cliente_desde_cookies(cookies_mv)
-                else:
-                    nuevo_cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+                nuevo_cliente = self._autenticar(cookies_mv)
                 if not nuevo_cliente:
                     return None
                 nuevo_buscador = BuscadorExpedientes(nuevo_cliente)
@@ -231,6 +233,14 @@ class PipelineDescargador:
             archivos_descargados = self.descargador.descargar_todo_por_paginas(
                 numero_expediente, on_progreso=self._on_progreso
             )
+            # Re-sincronizar: si hubo reciclaje de navegador (ver
+            # _reciclar_navegador_en_pagina en modulos/descarga.py), el
+            # descargador se quedó con un cliente nuevo — self.cliente todavía
+            # apunta al original, YA CERRADO por el propio reciclaje. Sin este
+            # re-sync, el cierre de abajo y el finally cierran un objeto muerto
+            # y el navegador real (el último vivo) queda huérfano para
+            # siempre, exactamente lo que este reciclaje debía evitar.
+            self.cliente = self.descargador.cliente
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
             _log_memoria("descarga (Chrome todavía abierto)")
 
@@ -412,6 +422,12 @@ class PipelineDescargador:
             # ═══════════════════════════════════════════════════════════════
 
             # 1. Cerrar navegador Chrome (liberar RAM)
+            # Backstop: si el pipeline salió por una excepción DURANTE
+            # descargar_todo_por_paginas (ej. SESION_MV_EXPIRADA), el re-sync
+            # de más arriba nunca corrió — tomar el cliente vivo directo del
+            # descargador si hubo reciclaje, para no dejarlo huérfano acá también.
+            if self.descargador and self.descargador.cliente:
+                self.cliente = self.descargador.cliente
             if self.cliente:
                 try:
                     self.cliente.cerrar()
