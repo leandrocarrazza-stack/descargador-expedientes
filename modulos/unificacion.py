@@ -215,17 +215,18 @@ class UnificadorPDF:
                     emitir(idx_lote + len(lote))
                     gc.collect()  # Forzar liberación de memoria entre lotes
 
-                # Merge final de los archivos intermedios
-                print(f"      Merge final: {len(archivos_lote)} lotes...", end=" ", flush=True)
-                self._merge_lista(archivos_lote, ruta_salida)
+                # Merge final de los archivos intermedios: recursivo, en
+                # rondas de a lo sumo LOTE_UNIFICACION por vez (ver
+                # _reducir_a_uno). Con expedientes grandes, la cantidad de
+                # lotes intermedios puede superar LOTE_UNIFICACION (ej. 208
+                # archivos / lote 5 = 42 intermedios) — un merge plano de
+                # todos juntos acá reproduce el mismo pico de memoria que el
+                # loteo de primer nivel existe para evitar, un escalón más
+                # arriba. _reducir_a_uno también limpia los intermedios de
+                # todos los niveles.
+                print(f"      Merge final: {len(archivos_lote)} lote(s)...", end=" ", flush=True)
+                self._reducir_a_uno(archivos_lote, ruta_salida)
                 print("[OK]")
-
-                # Limpiar archivos intermedios de lotes
-                for ruta_lote in archivos_lote:
-                    try:
-                        ruta_lote.unlink()
-                    except Exception:
-                        pass
 
             # Verificar resultado
             if not ruta_salida.exists():
@@ -250,6 +251,46 @@ class UnificadorPDF:
         except Exception as e:
             print(f"\n[NO] Error unificando PDFs: {e}")
             return None
+
+    def _reducir_a_uno(self, rutas: List[Path], salida: Path, nivel: int = 0) -> None:
+        """
+        Reduce una lista de PDFs a uno solo (`salida`), en rondas de a lo
+        sumo LOTE_UNIFICACION por vez, en vez de un único merge plano con
+        todos juntos — aplicando el mismo loteo de `unificar()` de forma
+        recursiva, tantos niveles como haga falta.
+
+        Por qué: el loteo de primer nivel ya reduce N archivos originales a
+        N/LOTE_UNIFICACION intermedios, pero si esa cantidad de intermedios
+        sigue siendo mayor a LOTE_UNIFICACION, un merge final "plano" de
+        todos esos intermedios juntos reproduce el mismo problema de
+        memoria que el loteo existe para evitar, un escalón más arriba (en
+        producción: 208 archivos / lote 5 = 42 intermedios, merge final
+        plano con los 42 a la vez dejó el servidor en 1 MB libre).
+
+        Borra `rutas` al terminar (ya sea el merge directo o, en el caso
+        recursivo, tras copiarlas al nivel siguiente): así no se acumulan
+        varios niveles de PDFs intermedios en disco a la vez.
+        """
+        if len(rutas) <= LOTE_UNIFICACION:
+            self._merge_lista(rutas, salida)
+        else:
+            print(f"\n      [MERGE] {len(rutas)} intermedios de más, agrupando de a "
+                  f"{LOTE_UNIFICACION} (nivel {nivel + 1})...", end=" ", flush=True)
+            siguiente_nivel = []
+            for idx in range(0, len(rutas), LOTE_UNIFICACION):
+                grupo = rutas[idx:idx + LOTE_UNIFICACION]
+                ruta_grupo = self.carpeta_temp / f"_nivel{nivel}_{idx // LOTE_UNIFICACION}.pdf"
+                self._merge_lista(grupo, ruta_grupo)
+                siguiente_nivel.append(ruta_grupo)
+                gc.collect()
+            print("[OK]")
+            self._reducir_a_uno(siguiente_nivel, salida, nivel=nivel + 1)
+
+        for ruta in rutas:
+            try:
+                ruta.unlink()
+            except Exception:
+                pass
 
     def _merge_lista(self, rutas: List[Path], salida: Path) -> List[Path]:
         """
