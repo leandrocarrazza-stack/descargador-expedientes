@@ -132,6 +132,9 @@ class _ControlJobNulo:
     def permite_matar_soffice(self) -> bool:
         return True
 
+    def nadie_mas_convirtiendo(self) -> bool:
+        return True
+
     def liberar_todo(self) -> None:
         pass
 
@@ -207,6 +210,25 @@ class ControlJob:
         """
         with self._lock:
             return self._conversion_tomada and not self._conversion_liberada
+
+    def nadie_mas_convirtiendo(self) -> bool:
+        """
+        True si AHORA MISMO ningún job del proceso (ni siquiera otro que
+        no sea éste) tiene el permiso de conversión tomado — seguro para
+        matar TODOS los soffice.bin del sistema sin arriesgar la conversión
+        de otro job en vuelo. A diferencia de permite_matar_soffice() (que
+        mira si ESTE job tiene el permiso), esto se usa ANTES de pedirlo,
+        típicamente al arrancar un pipeline nuevo, para limpiar un
+        soffice.bin huérfano que haya quedado de un job anterior que
+        crasheó (excepción, OOM-kill) sin pasar por su propio cleanup.
+
+        Ventana de carrera pequeña e intencional (mismo trade-off que
+        permite_matar_soffice): entre este chequeo y el matar_procesos_soffice()
+        del caller, otro job podría tomar el permiso y arrancar su soffice
+        justo a tiempo de ser matado. Se acepta por ser un best-effort de
+        limpieza, no una garantía dura.
+        """
+        return self._gestor.nadie_convirtiendo()
 
     def liberar_todo(self) -> None:
         """
@@ -429,6 +451,10 @@ class GestorConcurrencia:
     def hay_actividad(self) -> bool:
         with self._cond:
             return self._navegadores_en_uso > 0 or self._conversiones_en_uso > 0
+
+    def nadie_convirtiendo(self) -> bool:
+        with self._cond:
+            return self._conversiones_en_uso == 0
 
     def estado(self) -> dict:
         with self._cond:
