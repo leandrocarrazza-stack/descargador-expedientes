@@ -203,8 +203,27 @@ class PipelineDescargador:
             self.carpeta_temp = Path(config.TEMP_DIR) / f"exp_{numero_expediente.replace('/', '_')}_{self._token}"
             self.carpeta_temp.mkdir(parents=True, exist_ok=True)
 
+            # fn_reconectar: recrea el cliente autenticado (mismo camino que PASO 1)
+            # y vuelve a buscar el expediente, para el reciclaje proactivo de
+            # navegador en expedientes largos (ver DescargadorArchivos y
+            # _reciclar_navegador_en_pagina en modulos/descarga.py). Sin esto,
+            # el purgado de memoria de Chrome (HeapProfiler.collectGarbage)
+            # queda como único paliativo, y en la práctica libera 0-16 MB con
+            # el servidor ya en el límite de los 512 MB del plan.
+            def _reconectar():
+                if cookies_mv:
+                    nuevo_cliente = crear_cliente_desde_cookies(cookies_mv)
+                else:
+                    nuevo_cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+                if not nuevo_cliente:
+                    return None
+                nuevo_buscador = BuscadorExpedientes(nuevo_cliente)
+                if not nuevo_buscador.buscar(numero_expediente, indice_expediente=indice_expediente):
+                    return None
+                return nuevo_cliente
+
             # Crear descargador con carpeta temp
-            self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp)
+            self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp, fn_reconectar=_reconectar)
 
             # Descargar por paginas: en cada pagina descargamos todos los archivos
             # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
