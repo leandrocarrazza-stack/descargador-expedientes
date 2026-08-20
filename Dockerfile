@@ -75,18 +75,22 @@ EXPOSE 5000
 # Timeout 330s: techo de seguridad para cualquier request individual (ya no está
 # calibrado contra el long-poll, que ahora es corto) — suficientemente holgado
 # para no matar al worker en medio de trabajo legítimo lento.
-# Threads en 12 (antes 4): con la cola de concurrencia (modulos/concurrencia.py)
-# puede haber varios jobs "activos" a la vez —cada uno reteniendo un hilo en el
-# long-poll de /descargas/estado (~25s)— más /descargas/progreso (liviano),
-# el healthcheck de Render y la navegación normal. Los jobs en cola NO
-# long-pollean (ver templates/descargar_expediente.html), así que el consumo
-# real de hilos escala con MAX_NAVEGADORES + 1 (el que está en conversión),
-# no con el tamaño de la cola.
+# Threads en 6 (se probó 12, bajado de nuevo): con la cola de concurrencia
+# (modulos/concurrencia.py) puede haber varios jobs "activos" a la vez —cada
+# uno reteniendo un hilo en el long-poll de /descargas/estado (~25s)— más
+# /descargas/progreso (liviano), el healthcheck de Render y la navegación
+# normal. Los jobs en cola NO long-pollean (ver
+# templates/descargar_expediente.html), así que el consumo real de hilos
+# escala con MAX_NAVEGADORES + 1 (el que está en conversión), no con el
+# tamaño de la cola: con MAX_NAVEGADORES=1 son 2 hilos activos + margen para
+# healthcheck/navegación normal. 12 era 3x ese cálculo y en un plan de 512 MB
+# cada hilo de más es memoria que no le queda a Chrome — la instancia se vio
+# reiniciándose sola cada ~12-13 min por OOM con ese valor.
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
      "--workers", "1", \
      "--worker-class", "gthread", \
-     "--threads", "12", \
+     "--threads", "6", \
      "--timeout", "330", \
      "--access-logfile", "-", \
      "--log-level", "info", \

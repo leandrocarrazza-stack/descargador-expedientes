@@ -142,10 +142,12 @@ class PipelineDescargador:
             # conversión (excepción no manejada, OOM-kill del proceso), puede haber
             # dejado un soffice.bin residente consumiendo memoria desde entonces.
             # Se libera ANTES de arrancar Chrome, que es lo que más RAM necesita.
-            # Con concurrencia real (control no nulo) esto sólo corre una vez al
-            # arrancar la app (ver servidor.py): hacerlo acá mataría la conversión
-            # en vuelo de otro job que esté corriendo al mismo tiempo.
-            if control.es_nulo:
+            # nadie_mas_convirtiendo() (en vez de control.es_nulo) deja esto activo
+            # también con concurrencia real: antes se apagaba del todo en
+            # producción porque control nunca es nulo ahí, así que un soffice
+            # huérfano de un crash (ver los reinicios de instancia por OOM) sólo
+            # se limpiaba al reiniciar el contenedor entero, nunca entre jobs.
+            if control.nadie_mas_convirtiendo():
                 matar_procesos_soffice()
             _log_memoria("inicio")
 
