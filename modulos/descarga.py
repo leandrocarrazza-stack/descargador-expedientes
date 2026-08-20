@@ -28,7 +28,8 @@ logger = crear_logger(__name__)
 class DescargadorArchivos:
     """Cliente para descargar archivos de un expediente (Web Scraping)."""
 
-    def __init__(self, cliente_selenium, carpeta_temp, timeout=60, tamanio_lote=3, crear_cliente_fn=None):
+    def __init__(self, cliente_selenium, carpeta_temp, timeout=60, tamanio_lote=3, crear_cliente_fn=None,
+                 fn_reconectar=None):
         """
         Inicializa el descargador de archivos.
 
@@ -37,13 +38,20 @@ class DescargadorArchivos:
             carpeta_temp: Path de la carpeta temporal
             timeout: Timeout para esperados (segundos)
             tamanio_lote: Cantidad de archivos a descargar antes de reciclar navegador
-            crear_cliente_fn: Función lambda para recrear cliente (para reciclaje de navegador)
+            crear_cliente_fn: Función lambda para recrear cliente (para reciclaje de navegador,
+                usado por descargar_archivos()/el reciclaje reactivo ante driver muerto)
+            fn_reconectar: Callable sin argumentos que crea un cliente nuevo Y vuelve a
+                buscar el expediente (dejando la tabla en página 1), para el reciclaje
+                PROACTIVO de descargar_todo_por_paginas() (ver _reciclar_navegador_en_pagina).
+                Distinto de crear_cliente_fn porque acá hay que reponer también la búsqueda,
+                no solo el navegador.
         """
         self.cliente = cliente_selenium
         self.carpeta_temp = Path(carpeta_temp)
         self.timeout = timeout
         self.tamanio_lote = tamanio_lote  # Descargar N archivos, luego reciclar
         self.crear_cliente_fn = crear_cliente_fn  # Función para reciclar navegador
+        self.fn_reconectar = fn_reconectar  # Función para reciclaje proactivo por página
         self.contador_descargas = 0  # Contador de descargas para reciclaje preventivo
         self._ultimo_fallo_fue_auth = False  # True si el último intento falló por sesión expirada
         self.carpeta_temp.mkdir(parents=True, exist_ok=True)
@@ -909,6 +917,69 @@ class DescargadorArchivos:
         if antes is not None and despues is not None:
             print(f"      [MEMORIA] Purgado Chrome: {antes} MB -> {despues} MB disponibles")
 
+    def _reciclar_navegador_en_pagina(self, driver_actual, pagina_objetivo):
+        """
+        Cierra Chrome y lo abre de nuevo para liberar memoria NATIVA (procesos,
+        cachés de imágenes, etc.) que _purgar_memoria_chrome no puede tocar
+        porque HeapProfiler.collectGarbage sólo limpia basura del heap de
+        JavaScript. En producción esa purga liviana liberaba 0-16 MB con el
+        servidor ya en el límite de los 512 MB — no alcanza.
+
+        A diferencia de _reciclar_navegador() (pensado para descargar_archivos(),
+        que no tiene noción de "página"), acá hay que reponer también la
+        posición en la tabla paginada: fn_reconectar deja la búsqueda en
+        página 1, así que se clickea "Siguiente" hasta volver a pagina_objetivo.
+
+        Si algo falla (fn_reconectar no configurado, login caído, no se pudo
+        re-navegar), se sigue con el driver anterior: peor con memoria
+        ajustada que perder la descarga entera a mitad de camino.
+
+        Retorna el driver a usar de acá en más (el nuevo si se pudo reciclar,
+        el mismo de antes si no).
+        """
+        if not self.fn_reconectar:
+            return driver_actual
+
+        antes = memoria_disponible_mb()
+        print(f"\n      [RECYCLE] Reciclando navegador en pagina {pagina_objetivo} (RAM libre: {antes} MB)...")
+
+        try:
+            nuevo_cliente = self.fn_reconectar()
+        except Exception as e:
+            print(f"      [ERROR] fn_reconectar falló: {str(e)[:80]}")
+            return driver_actual
+
+        if not nuevo_cliente or not getattr(nuevo_cliente, 'driver', None):
+            print(f"      [ERROR] No se pudo recrear el navegador, sigo con el anterior")
+            return driver_actual
+
+        # Recién ahora cerrar el viejo: si fn_reconectar hubiese fallado antes,
+        # todavía tendríamos un driver funcional con el que seguir.
+        cliente_viejo = self.cliente
+        try:
+            if cliente_viejo:
+                cliente_viejo.cerrar()
+        except Exception as e:
+            print(f"      [WARN] Error cerrando navegador anterior: {str(e)[:60]}")
+
+        self.cliente = nuevo_cliente
+        nuevo_driver = nuevo_cliente.driver
+
+        # fn_reconectar deja la búsqueda en página 1: volver a pagina_objetivo
+        pagina_lograda = 1
+        for _ in range(pagina_objetivo - 1):
+            if not self._navegar_siguiente_pagina(nuevo_driver):
+                print(f"      [WARN] No se pudo re-navegar hasta pagina {pagina_objetivo} "
+                      f"tras reciclar (quedó en pagina {pagina_lograda})")
+                break
+            pagina_lograda += 1
+
+        self._esperar_tabla_cargada(nuevo_driver)
+
+        despues = memoria_disponible_mb()
+        print(f"      [RECYCLE] OK, en pagina {pagina_lograda}: {antes} MB -> {despues} MB disponibles")
+        return nuevo_driver
+
     def descargar_todo_por_paginas(self, numero: str, on_progreso=None) -> List[dict]:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
@@ -1022,7 +1093,10 @@ class DescargadorArchivos:
                 # rompió el execution context del frame en producción (ver
                 # _purgar_memoria_chrome).
                 if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
-                    self._purgar_memoria_chrome(driver)
+                    if self.fn_reconectar:
+                        driver = self._reciclar_navegador_en_pagina(driver, pagina_actual)
+                    else:
+                        self._purgar_memoria_chrome(driver)
 
                 print(f"  [PAG {pagina_actual}] Buscando botones de descarga...")
                 time.sleep(1)
