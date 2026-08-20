@@ -932,13 +932,19 @@ class DescargadorArchivos:
 
         Si algo falla (fn_reconectar no configurado, login caído, no se pudo
         re-navegar), se sigue con el driver anterior: peor con memoria
-        ajustada que perder la descarga entera a mitad de camino.
+        ajustada que perder la descarga entera a mitad de camino. En ese caso
+        se hace al menos el purgado liviano (_purgar_memoria_chrome) como
+        paliativo, para no dejar el checkpoint de memoria sin hacer nada.
 
-        Retorna el driver a usar de acá en más (el nuevo si se pudo reciclar,
-        el mismo de antes si no).
+        Retorna (driver, pagina_real): el driver a usar de acá en más (el
+        nuevo si se pudo reciclar, el mismo de antes si no) y la página en la
+        que realmente quedó posicionado — que el caller DEBE usar para
+        actualizar su pagina_actual, porque si el reciclaje se recuperó pero
+        la re-navegación quedó corta, pagina_real puede ser menor a
+        pagina_objetivo.
         """
         if not self.fn_reconectar:
-            return driver_actual
+            return driver_actual, pagina_objetivo
 
         antes = memoria_disponible_mb()
         print(f"\n      [RECYCLE] Reciclando navegador en pagina {pagina_objetivo} (RAM libre: {antes} MB)...")
@@ -947,11 +953,13 @@ class DescargadorArchivos:
             nuevo_cliente = self.fn_reconectar()
         except Exception as e:
             print(f"      [ERROR] fn_reconectar falló: {str(e)[:80]}")
-            return driver_actual
+            self._purgar_memoria_chrome(driver_actual)
+            return driver_actual, pagina_objetivo
 
         if not nuevo_cliente or not getattr(nuevo_cliente, 'driver', None):
             print(f"      [ERROR] No se pudo recrear el navegador, sigo con el anterior")
-            return driver_actual
+            self._purgar_memoria_chrome(driver_actual)
+            return driver_actual, pagina_objetivo
 
         # Recién ahora cerrar el viejo: si fn_reconectar hubiese fallado antes,
         # todavía tendríamos un driver funcional con el que seguir.
@@ -978,7 +986,7 @@ class DescargadorArchivos:
 
         despues = memoria_disponible_mb()
         print(f"      [RECYCLE] OK, en pagina {pagina_lograda}: {antes} MB -> {despues} MB disponibles")
-        return nuevo_driver
+        return nuevo_driver, pagina_lograda
 
     def descargar_todo_por_paginas(self, numero: str, on_progreso=None) -> List[dict]:
         """
@@ -1094,7 +1102,11 @@ class DescargadorArchivos:
                 # _purgar_memoria_chrome).
                 if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
                     if self.fn_reconectar:
-                        driver = self._reciclar_navegador_en_pagina(driver, pagina_actual)
+                        # pagina_actual se actualiza a la página REAL en la que
+                        # quedó el driver: si la re-navegación post-reciclaje
+                        # quedó corta, hay que seguir desde ahí, no desde donde
+                        # creíamos estar (sino se duplican/mal-etiquetan movimientos).
+                        driver, pagina_actual = self._reciclar_navegador_en_pagina(driver, pagina_actual)
                     else:
                         self._purgar_memoria_chrome(driver)
 
