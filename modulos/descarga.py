@@ -20,6 +20,7 @@ from modulos.logger import crear_logger
 from modulos.excepciones import ErrorDescarga
 from modulos.modelos import Archivo, Movimiento
 from modulos.conversion import memoria_disponible_mb
+from modulos.concurrencia import UMBRAL_RAM_NAVEGADOR_MB
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 
 logger = crear_logger(__name__)
@@ -949,26 +950,51 @@ class DescargadorArchivos:
         antes = memoria_disponible_mb()
         print(f"\n      [RECYCLE] Reciclando navegador en pagina {pagina_objetivo} (RAM libre: {antes} MB)...")
 
+        # Con margen de sobra, conviene cerrar el viejo recién DESPUÉS de
+        # confirmar que el nuevo levantó: si fn_reconectar fallara, seguimos
+        # con el viejo en vez de quedarnos sin ninguno. Pero con RAM ya
+        # crítica (mismo umbral que gatea un Chrome nuevo al inicio del job,
+        # ver UMBRAL_RAM_NAVEGADOR_MB en concurrencia.py) NO HAY margen para
+        # tener el viejo Y el nuevo vivos a la vez — un Chrome nuevo solo para
+        # arrancar ya pide ~350-400 MB (ver _crear_driver_headless). En
+        # producción, el 21/08, esto tiró abajo TODA la instancia de Render
+        # con 2 MB libres en este mismo punto. Con RAM crítica cerramos el
+        # viejo PRIMERO: más arriesgado si fn_reconectar falla (nos quedamos
+        # sin driver y hay que abortar el job), pero un job abortado es
+        # infinitamente mejor que un OOM que se lleva puesto el contenedor
+        # entero con todos los demás jobs en curso.
+        critico = antes is not None and antes < UMBRAL_RAM_NAVEGADOR_MB
+        if critico and self.cliente:
+            print(f"      [RECYCLE] RAM crítica (<{UMBRAL_RAM_NAVEGADOR_MB} MB): cierro el navegador viejo antes de crear el nuevo")
+            try:
+                self.cliente.cerrar()
+            except Exception as e:
+                print(f"      [WARN] Error cerrando navegador anterior: {str(e)[:60]}")
+            self.cliente = None
+
         try:
             nuevo_cliente = self.fn_reconectar()
         except Exception as e:
+            if critico:
+                raise ErrorDescarga(f"RAM crítica ({antes} MB) y no se pudo reciclar el navegador: {e}") from e
             print(f"      [ERROR] fn_reconectar falló: {str(e)[:80]}")
             self._purgar_memoria_chrome(driver_actual)
             return driver_actual, pagina_objetivo
 
         if not nuevo_cliente or not getattr(nuevo_cliente, 'driver', None):
+            if critico:
+                raise ErrorDescarga(f"RAM crítica ({antes} MB) y no se pudo recrear el navegador")
             print(f"      [ERROR] No se pudo recrear el navegador, sigo con el anterior")
             self._purgar_memoria_chrome(driver_actual)
             return driver_actual, pagina_objetivo
 
-        # Recién ahora cerrar el viejo: si fn_reconectar hubiese fallado antes,
-        # todavía tendríamos un driver funcional con el que seguir.
-        cliente_viejo = self.cliente
-        try:
-            if cliente_viejo:
-                cliente_viejo.cerrar()
-        except Exception as e:
-            print(f"      [WARN] Error cerrando navegador anterior: {str(e)[:60]}")
+        # Si todavía queda el viejo vivo (no era caso crítico), cerrarlo
+        # ahora que ya confirmamos que el nuevo funciona.
+        if self.cliente:
+            try:
+                self.cliente.cerrar()
+            except Exception as e:
+                print(f"      [WARN] Error cerrando navegador anterior: {str(e)[:60]}")
 
         self.cliente = nuevo_cliente
         nuevo_driver = nuevo_cliente.driver
