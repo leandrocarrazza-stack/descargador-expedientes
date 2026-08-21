@@ -381,6 +381,85 @@ class DescargadorArchivos:
             logger.debug("No se pudo estimar el total de movimientos", exc_info=True)
             return None, False, None
 
+    def _seleccionar_filas_por_pagina(self, driver):
+        """
+        Sube el tamaño de página de la tabla de movimientos al valor más
+        grande que ofrezca el selector "Registros por página" (confirmado en
+        vivo: opciones 10/20/50, no es el TablePagination estándar de MUI —
+        es un componente propio con clases PageSizeSelector-*/Pager-*, aunque
+        el popup interno de opciones sí es un <ul role="listbox"> con
+        <li role="option" data-value="N"> como cualquier MUI Select).
+
+        Por qué: menos páginas totales = menos clics de "Siguiente", tanto en
+        la navegación normal como (sobre todo) en la recuperación tras
+        reciclar el navegador (_reciclar_navegador_en_pagina): ese costo
+        crece con el CUADRADO de la cantidad de páginas, porque cada
+        reciclaje reinicia en página 1 y hay que re-clickear hasta
+        pagina_objetivo. Pasar de 10 a 50 filas por página no ahorra 5x,
+        ahorra ~25x en ese punto puntual.
+
+        Se toma el valor MÁS GRANDE disponible en vez de un número fijo
+        (ej. 100): así no se rompe si el máximo real cambia o difiere entre
+        vistas, en vez de asumir una opción que puede no existir.
+
+        Se llama una sola vez por sesión de navegador nueva (al arrancar y de
+        nuevo después de cada reciclaje, porque fn_reconectar arranca una
+        tabla nueva con el tamaño de página por defecto). Si no encuentra el
+        selector o falla el click, NO aborta el job: sigue con lo que ya
+        estaba, igual que el resto de las funciones de esta clase ante un
+        fallo de interacción con la UI.
+
+        Retorna:
+            bool: True si logró cambiar el valor, False si no (se sigue
+            paginando con el tamaño que ya estaba activo).
+        """
+        selectores_combo = [
+            ".PageSizeSelector-inputRoot [role='combobox']",  # Confirmado en vivo
+            "[class*='PageSizeSelector'] [role='combobox']",  # Por si cambia el sufijo de css-in-js
+            "div[aria-haspopup='listbox']",                   # Fallback genérico MUI Select
+        ]
+        try:
+            for selector in selectores_combo:
+                try:
+                    combo = WebDriverWait(driver, 3).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                except Exception:
+                    continue
+                try:
+                    driver.execute_script("arguments[0].scrollIntoView(true);", combo)
+                    combo.click()
+                    opciones = WebDriverWait(driver, 3).until(
+                        EC.presence_of_all_elements_located(
+                            (By.CSS_SELECTOR, "ul[role='listbox'] li[role='option']")
+                        )
+                    )
+                    # Elegir la opción con el valor numérico más alto, no un
+                    # número fijo: el máximo real (hoy 50) puede cambiar.
+                    mejor = max(
+                        opciones,
+                        key=lambda li: int(li.get_attribute('data-value') or li.text or 0)
+                    )
+                    valor_elegido = mejor.get_attribute('data-value') or mejor.text
+                    mejor.click()
+                    time.sleep(1.5)  # Dejar que React re-renderice la tabla completa
+                    print(f"      [INFO] Filas por página: {valor_elegido}")
+                    return True
+                except Exception:
+                    # El popup pudo haber quedado abierto sin elegir nada:
+                    # cerrarlo para no dejarlo tapando la tabla.
+                    try:
+                        driver.execute_script("document.activeElement.blur();")
+                    except Exception:
+                        pass
+                    continue
+
+            print(f"      [WARN] No se encontró el selector de filas por página, sigo con el tamaño actual")
+            return False
+        except Exception as e:
+            print(f"      [WARN] Error seleccionando filas por página: {str(e)[:80]}")
+            return False
+
     def _navegar_siguiente_pagina(self, driver, paginacion_cacheada=_SIN_CACHE):
         """
         Intenta navegar a la siguiente página usando diferentes estrategias.
@@ -999,6 +1078,13 @@ class DescargadorArchivos:
         self.cliente = nuevo_cliente
         nuevo_driver = nuevo_cliente.driver
 
+        # fn_reconectar arranca una tabla nueva con el tamaño de página por
+        # defecto: hay que volver a subirlo al máximo ANTES de re-navegar, o
+        # pagina_objetivo (contado en páginas del tamaño grande) quedaría
+        # desalineado con esta tabla nueva (que volvería a paginar de a poco).
+        self._esperar_tabla_cargada(nuevo_driver)
+        self._seleccionar_filas_por_pagina(nuevo_driver)
+
         # fn_reconectar deja la búsqueda en página 1: volver a pagina_objetivo
         pagina_lograda = 1
         for _ in range(pagina_objetivo - 1):
@@ -1108,6 +1194,13 @@ class DescargadorArchivos:
 
         try:
             driver = self.cliente.driver
+
+            # Subir a la mayor cantidad de filas por página disponible ANTES
+            # de arrancar a paginar: menos páginas totales de entrada, y sobre
+            # todo mucho menos costo de recuperación cada vez que se recicle
+            # el navegador más abajo (ver _seleccionar_filas_por_pagina).
+            self._esperar_tabla_cargada(driver)
+            self._seleccionar_filas_por_pagina(driver)
 
             while True:
                 print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
