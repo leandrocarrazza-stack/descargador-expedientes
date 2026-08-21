@@ -230,7 +230,15 @@ def _crear_driver_headless():
     #   usamos, cada uno con su propio overhead de memoria/red en background.
     options.add_argument(
         '--disable-features=IsolateOrigins,site-per-process,BackForwardCache,'
-        'Translate,AutofillServerCommunication,OptimizationHints'
+        'Translate,AutofillServerCommunication,OptimizationHints,'
+        'MediaRouter,'                        # Descubrimiento de Chromecast en background
+        'DialMediaRouteProvider,'             # Complementa a MediaRouter (otro descubrimiento de red)
+        'OptimizationGuideModelDownloading,'  # Evita descarga de modelos de ML en background
+        'OptimizationHintsFetching,'          # Cierra la familia "optimization guide" (fetch en background)
+        'OptimizationTargetPrediction,'       # Idem, tercer miembro de la misma familia
+        'PrivacySandboxSettings4,'            # Evita diálogo de privacidad que podría robar foco
+        'HeavyAdPrivacyMitigations,'          # Detección de "heavy ads" sin uso (no hay ads en el flujo)
+        'AudioServiceOutOfProcess'            # Audio service in-process en vez de proceso aparte
     )
     options.add_argument('--renderer-process-limit=1')
     # No cargar imágenes: el DOM no cambia (los íconos de Mesa Virtual son SVG
@@ -243,6 +251,15 @@ def _crear_driver_headless():
     options.add_argument('--disable-domain-reliability')   # Sin telemetría interna de Chrome
     options.add_argument('--disable-hang-monitor')         # Sin monitor de "página no responde"
     options.add_argument('--disable-client-side-phishing-detection')  # Sin Safe Browsing local
+
+    # ── GPU/rasterizador de software: sin GPU real, Chrome igual levanta un proceso
+    # GPU con SwiftShader (rasterizador por software) como fallback para WebGL/3D.
+    # Mesa Virtual no usa nada de esto (íconos son SVG inline, sin canvas 3D).
+    options.add_argument('--disable-software-rasterizer')      # Evita el proceso GPU en modo fallback software
+    options.add_argument('--disable-webgl')                    # Sin WebGL: no hay motivo para abrir contexto 3D
+    options.add_argument('--disable-3d-apis')                  # Cierra el resto de superficie 3D a nivel renderer
+    options.add_argument('--disable-accelerated-2d-canvas')    # Canvas 2D por CPU, sin vía a GPU
+    options.add_argument('--disable-accelerated-video-decode') # Sin intento de decodificar video por GPU
 
     # Sin webdriver_manager: Selenium Manager elige el driver correcto automáticamente
     ultimo_error = None
