@@ -130,7 +130,7 @@ def crear_app(config_obj=None):
 
     from rutas.auth import auth_bp
     from rutas.pagos import pagos_bp
-    from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos
+    from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos, iniciar_limpieza_periodica_pdfs
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
     from rutas.jurisprudencia import jurisprudencia_bp
@@ -144,9 +144,12 @@ def crear_app(config_obj=None):
 
     logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, jurisprudencia)")
 
-    # Limpiar PDFs antiguos del disco al iniciar la app
-    # Evita que el disco del servidor se llene con descargas viejas
+    # Limpiar PDFs antiguos del disco al iniciar la app, y repetirlo cada
+    # hora mientras el proceso siga vivo (ver iniciar_limpieza_periodica_pdfs):
+    # sin la repetición, un proceso que corre varios días sin reiniciarse
+    # deja que el disco se llene de a poco entre deploys.
     limpiar_pdfs_antiguos()
+    iniciar_limpieza_periodica_pdfs()
 
     # Matar cualquier soffice.bin residual de un proceso anterior (crash,
     # redeploy a mitad de una conversión). Se hace UNA sola vez acá, al
