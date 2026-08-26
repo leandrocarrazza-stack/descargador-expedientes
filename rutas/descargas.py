@@ -314,6 +314,29 @@ def limpiar_pdfs_antiguos():
         logger.warning(f"[CLEANUP] Error limpiando PDFs antiguos: {e}")
 
 
+# Cada cuánto se repite limpiar_pdfs_antiguos() una vez arrancada la app.
+INTERVALO_LIMPIEZA_PDFS_SEG = 3600  # 1 hora
+
+
+def iniciar_limpieza_periodica_pdfs():
+    """
+    Repite limpiar_pdfs_antiguos() cada INTERVALO_LIMPIEZA_PDFS_SEG en un
+    hilo de fondo, en vez de una sola vez al arrancar.
+
+    Por qué: esta app puede seguir viva varios días sin reiniciarse (el
+    último redeploy fue hace más de 5 días cuando se detectó esto). Sin
+    repetición, los PDFs de más de PDF_TTL_HOURS se iban acumulando en
+    output/ sin que nada los tocara hasta el próximo deploy o reinicio
+    manual — disco silenciosamente lleno entre medio.
+    """
+    def _loop():
+        while True:
+            time.sleep(INTERVALO_LIMPIEZA_PDFS_SEG)
+            limpiar_pdfs_antiguos()
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+
 def _borrar_diferido(ruta: str, delay: int = 10):
     """
     Borra un archivo después de N segundos en un hilo background.
