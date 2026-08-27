@@ -715,8 +715,9 @@
     // Long-polling: cadena de requests cortos (~25s c/u en el servidor) hasta que el job
     // complete. startTime se preserva entre llamadas recursivas para saber cuánto tiempo
     // real pasó y recién entonces mostrar el aviso de "muchos movimientos".
-    async function longPolling(jobId, startTime) {
+    async function longPolling(jobId, startTime, reintentosFallo) {
         if (!startTime) startTime = Date.now();
+        if (reintentosFallo === undefined) reintentosFallo = 0;
         try {
             console.log(`[LONG-POLL] Esperando resultado del job ${jobId.substring(0, 8)}`);
 
@@ -776,6 +777,19 @@
             }
 
         } catch (err) {
+            // Corte de red pasajero del lado del cliente (wifi, la compu se
+            // suspendió, la pestaña estuvo en background) - el job puede seguir
+            // vivo y terminar bien en el servidor aunque este fetch puntual haya
+            // fallado. Reintentar antes de rendirse: sin esto, un corte de unos
+            // segundos mostraba "No se pudo completar" aunque la descarga
+            // terminara OK del lado del servidor (el archivo aparecía igual en
+            // el historial, pero acá nunca se enteraba).
+            const MAX_REINTENTOS_FALLO_RED = 5;
+            if (reintentosFallo < MAX_REINTENTOS_FALLO_RED) {
+                console.log(`[LONG-POLL] Fetch falló (${err.message}), reintentando en 3s... (${reintentosFallo + 1}/${MAX_REINTENTOS_FALLO_RED})`);
+                setTimeout(() => longPolling(jobId, startTime, reintentosFallo + 1), 3000);
+                return;
+            }
             animarError();
             setTimeout(() => {
                 document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
