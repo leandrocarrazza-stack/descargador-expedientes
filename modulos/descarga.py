@@ -1152,10 +1152,25 @@ class DescargadorArchivos:
         # una (horas), bloqueando el único slot de descarga del servidor para
         # todos los usuarios, en vez de abortar apenas queda claro que nada baja.
         MAX_FALLOS_CONSECUTIVOS_TOTALES = 5
-        # Cada cuántas páginas pedirle a Chrome que libere memoria acumulada
-        # (ver _purgar_memoria_chrome). En expedientes de 200+ páginas, Chrome
-        # va acumulando memoria a lo largo de la sesión hasta agotar los 512 MB
-        # cerca del final, aun con todo funcionando bien.
+        # Umbral de RAM libre por debajo del cual conviene liberar memoria
+        # (ver _purgar_memoria_chrome/_reciclar_navegador_en_pagina), en vez
+        # de reciclar por calendario cada N páginas sin mirar si hace falta.
+        # En expedientes de 200+ páginas, Chrome va acumulando memoria a lo
+        # largo de la sesión hasta agotar los 512 MB cerca del final, pero un
+        # expediente liviano puede no necesitar reciclar nunca — reciclar
+        # igual ahí sólo suma el costo completo de recrear Chrome y
+        # re-navegar hasta la página donde estaba, sin ningún beneficio.
+        #
+        # NO es el mismo umbral que UMBRAL_RAM_NAVEGADOR_MB (150, en
+        # concurrencia.py): ese gatea si HAY margen para arrancar un Chrome
+        # nuevo desde cero (~350-400 MB de arranque). Éste decide si un
+        # Chrome que YA está corriendo necesita reciclarse — la memoria libre
+        # normal en ese caso ronda 40-70 MB (ver [MEMORIA] en producción), así
+        # que usar 150 acá dispararía un reciclaje en casi cada página.
+        UMBRAL_RECICLAJE_PAGINA_MB = 30
+        # Red de seguridad si memoria_disponible_mb() no pudo leer el límite
+        # del cgroup (ej. corriendo fuera de Docker): sin esa visibilidad,
+        # mejor seguir reciclando por calendario que no reciclar nunca.
         PURGAR_MEMORIA_CADA_N_PAGINAS = 5
 
         # ── Progreso hacia el frontend ────────────────────────────────────
@@ -1219,7 +1234,17 @@ class DescargadorArchivos:
                 # (React todavía re-renderizando/haciendo fetch de la tabla nueva)
                 # rompió el execution context del frame en producción (ver
                 # _purgar_memoria_chrome).
-                if pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0:
+                #
+                # Se mide en CADA página (una lectura de cgroup es liviana,
+                # nada que ver con el costo de reciclar) para no depender de
+                # que el drenaje de memoria coincida con el calendario fijo.
+                disponible_ahora = memoria_disponible_mb()
+                if disponible_ahora is not None:
+                    hace_falta_liberar = disponible_ahora < UMBRAL_RECICLAJE_PAGINA_MB
+                else:
+                    hace_falta_liberar = pagina_actual % PURGAR_MEMORIA_CADA_N_PAGINAS == 0
+
+                if hace_falta_liberar:
                     if self.fn_reconectar:
                         # pagina_actual se actualiza a la página REAL en la que
                         # quedó el driver: si la re-navegación post-reciclaje
