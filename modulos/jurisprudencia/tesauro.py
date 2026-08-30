@@ -12,19 +12,18 @@ Se carga UNA SOLA VEZ al startup y se almacena en current_app.config.
 import json
 import logging
 from pathlib import Path
-from unicodedata import normalize
+
+# Definicion unica en el paquete stjer. Se re-exporta aca para no romper los
+# call sites existentes (chat.py, pdf_extractor.py, rutas/jurisprudencia.py).
+# La version anterior vivia en este archivo y conservaba toda la puntuacion
+# ASCII, con lo cual el match por token de abajo nunca enganchaba junto a
+# comas o puntos.
+from modulos.jurisprudencia.stjer.normalizacion import (  # noqa: F401
+    STOP_WORDS as _STOP_WORDS_COMPARTIDAS,
+    normalizar_texto,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def normalizar_texto(texto: str) -> str:
-    """Normaliza texto: lowercase, sin acentos."""
-    if not texto:
-        return ""
-    # NFD decompose para separar acentos
-    nfd = normalize('NFD', texto.lower())
-    # Filtrar caracteres sin acentos
-    return ''.join(c for c in nfd if ord(c) < 128 or c.isalpha())
 
 
 def cargar_tesauros(app):
@@ -75,25 +74,36 @@ def obtener_voces_para_consulta(consulta: str, tesauro: dict) -> list:
     """
     Dado un texto en español, retorna lista de voces STJER relacionadas.
 
-    Estrategia: normalizar tokens, filtrar stop words, buscar coincidencias
-    exactas de palabras completas en claves del tesauro y sinónimos.
+    Si ya se cosechó el tesauro REAL del sitio
+    (`data/jurisprudencia/tesauro_stjer.json`, ver `scripts/stjer.py tesauro
+    --cosechar`), se usa ese, con matcheo por puntaje. Si todavía no existe,
+    se cae al `tesauro` que venga por parámetro —que hoy es el placeholder de
+    10 categorías inventadas— con la estrategia vieja de coincidencia exacta
+    de tokens.
 
     Args:
         consulta: Texto de la consulta del usuario
-        tesauro: Dict del tesauro cargado en memoria
+        tesauro: Dict del tesauro cargado en memoria (respaldo)
 
     Returns:
         list: Voces jurídicas encontradas (strings)
     """
-    if not tesauro or not consulta:
+    if not consulta:
         return []
 
-    # Stop words comunes en español
-    STOP_WORDS = {
-        'y', 'o', 'de', 'la', 'el', 'en', 'un', 'una', 'los', 'las',
-        'es', 'son', 'está', 'estoy', 'tienen', 'tiene', 'del', 'al',
-        'por', 'para', 'con', 'sin', 'que', 'si', 'este', 'ese', 'aquel'
-    }
+    try:
+        from modulos.jurisprudencia.stjer.tesauro_stjer import Tesauro
+
+        real = Tesauro.cargar()
+        if real:
+            return [voz for voz, _ in real.buscar_por_etiqueta(consulta, n=10)]
+    except Exception as e:  # nunca romper el chat web por esto
+        logger.debug("Tesauro real no disponible, se usa el de respaldo: %s", e)
+
+    if not tesauro:
+        return []
+
+    STOP_WORDS = _STOP_WORDS_COMPARTIDAS
 
     voces_encontradas = set()
     consulta_norm = normalizar_texto(consulta)

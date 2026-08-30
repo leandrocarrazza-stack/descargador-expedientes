@@ -45,12 +45,38 @@ def chat_main():
 #  API - CHAT CONVERSACIONAL
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _abrir_chat_stjer():
+    """
+    Arma un ChatSTJER contra el corpus local real (corpus_stjer.sqlite).
+
+    Con ANTHROPIC_API_KEY configurada usa Claude para interpretar la
+    consulta; sin key, ChatSTJER cae solo a la busqueda local por palabras
+    clave (ver modulos/jurisprudencia/stjer/chat.py).
+
+    Devuelve (chat, con) - quien llama es responsable de cerrar `con`.
+    """
+    import config
+    from modulos.jurisprudencia.stjer import ajustes as stjer_ajustes
+    from modulos.jurisprudencia.stjer import corpus as stjer_corpus
+    from modulos.jurisprudencia.stjer.chat import ChatSTJER
+
+    con = stjer_corpus.abrir(stjer_ajustes.CORPUS_PATH, solo_lectura=True)
+    cliente = None
+    if config.ANTHROPIC_API_KEY:
+        try:
+            import anthropic
+            cliente = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        except ImportError:
+            pass
+    return ChatSTJER(con, cliente_anthropic=cliente), con
+
+
 @jurisprudencia_bp.route('/chat', methods=['POST'])
 @csrf.exempt
 @limiter.limit("5 per minute; 50 per hour")
 def chat_api():
     """
-    Endpoint de chat conversacional.
+    Endpoint de chat conversacional sobre el corpus real de STJER.
 
     Request:
         POST /jurisprudencia/chat
@@ -74,33 +100,18 @@ def chat_api():
         if not mensaje:
             return jsonify({'error': 'Mensaje vacío'}), 400
 
-        # Recuperar historial de sesión
         historial = session.get('jur_historial', [])
 
-        import config
-        if not config.ANTHROPIC_API_KEY:
-            # Modo sin Claude: búsqueda directa por palabras clave
-            return _busqueda_directa(mensaje, historial)
-
-        # Inicializar componentes
         try:
-            import anthropic
-            from modulos.jurisprudencia.chat import ChatJurisprudencia
-            from modulos.jurisprudencia.buscador import BuscadorJurisprudencia
-            from modulos.database import db
+            chat, con = _abrir_chat_stjer()
+        except FileNotFoundError as e:
+            return jsonify({'error': str(e)}), 503
 
-            dialect = db.engine.dialect.name
-            buscador = BuscadorJurisprudencia(dialect)
-            tesauro = current_app.config.get('TESAURO', {})
-            client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
-            chat = ChatJurisprudencia(client, buscador, tesauro)
-
+        try:
             respuesta = chat.procesar_mensaje(mensaje, historial)
+        finally:
+            con.close()
 
-        except ImportError:
-            return _busqueda_directa(mensaje, historial)
-
-        # Actualizar historial (máx 10 mensajes)
         historial.append({'role': 'user', 'content': mensaje})
         historial.append({'role': 'assistant', 'content': respuesta.get('respuesta', '')})
         session['jur_historial'] = historial[-10:]
@@ -112,36 +123,58 @@ def chat_api():
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-def _busqueda_directa(mensaje: str, historial: list) -> tuple:
-    """Búsqueda sin Claude: tokeniza la consulta y busca directamente."""
+@jurisprudencia_bp.route('/chat/escrito', methods=['POST'])
+@csrf.exempt
+@limiter.limit("3 per minute; 20 per hour")
+def chat_escrito():
+    """
+    Sube un escrito (PDF o DOCX) y sugiere jurisprudencia relacionada.
+
+    Request:
+        POST /jurisprudencia/chat/escrito
+        Content-Type: multipart/form-data, campo 'archivo'
+
+    Response: misma forma que /chat.
+    """
     try:
-        from modulos.jurisprudencia.tesauro import obtener_voces_para_consulta
-        from modulos.jurisprudencia.buscador import BuscadorJurisprudencia
-        from modulos.database import db
+        archivo = request.files.get('archivo')
+        if not archivo or not archivo.filename:
+            return jsonify({'error': 'No se recibió ningún archivo'}), 400
 
-        tesauro = current_app.config.get('TESAURO', {})
-        voces = obtener_voces_para_consulta(mensaje, tesauro)
+        MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+        datos = archivo.read(MAX_BYTES + 1)
+        if len(datos) > MAX_BYTES:
+            return jsonify({'error': 'El archivo supera los 15 MB'}), 400
 
-        palabras_stop = {'y', 'o', 'de', 'la', 'el', 'en', 'un', 'una', 'los',
-                         'las', 'del', 'al', 'por', 'para', 'con', 'que', 'si'}
-        terminos = [t for t in mensaje.lower().split()
-                    if t not in palabras_stop and len(t) > 2]
+        from modulos.jurisprudencia.stjer.extraccion_documento import (
+            extraer_texto, ErrorExtraccion,
+        )
+        try:
+            texto = extraer_texto(datos, archivo.filename)
+        except ErrorExtraccion as e:
+            return jsonify({'error': str(e)}), 400
 
-        dialect = db.engine.dialect.name
-        buscador = BuscadorJurisprudencia(dialect)
-        resultados = buscador.buscar(terminos=terminos, voces_tesauro=voces, limite=5)
+        if not texto.strip():
+            return jsonify({
+                'error': 'No se pudo extraer texto del archivo '
+                         '(¿está escaneado como imagen?)'
+            }), 400
 
-        nota = " (Modo directo — IA no disponible, configure ANTHROPIC_API_KEY)"
-        return jsonify({
-            'respuesta': f'Búsqueda por términos: {", ".join(terminos[:3])}{nota}',
-            'resultados': resultados,
-            'terminos_usados': terminos,
-            'voces_usadas': voces
-        }), 200
+        try:
+            chat, con = _abrir_chat_stjer()
+        except FileNotFoundError as e:
+            return jsonify({'error': str(e)}), 503
+
+        try:
+            respuesta = chat.procesar_documento(texto, archivo.filename)
+        finally:
+            con.close()
+
+        return jsonify(respuesta), 200
 
     except Exception as e:
-        logger.error(f"Error en búsqueda directa: {e}")
-        return jsonify({'error': 'Error en búsqueda'}), 500
+        logger.error(f"[ERROR] /chat/escrito: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
 
 
 # ═══════════════════════════════════════════════════════════════════════════
