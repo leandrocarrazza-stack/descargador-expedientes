@@ -36,6 +36,8 @@ from selenium.webdriver.remote.remote_connection import RemoteConnection
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+from modulos.concurrencia import gestor
+
 logger = logging.getLogger(__name__)
 
 # ── Constantes ────────────────────────────────────────────────────────────────
@@ -52,6 +54,16 @@ TIMEOUT_LOGIN = 30        # segundos para que cargue cada página
 # margen real para un segundo intento sin que el costo sea alto: sigue
 # siendo un techo, no una espera indefinida.
 TIMEOUT_SESION_RELAY = 300  # segundos que guardamos el driver en memoria (5 min)
+# Cuánto espera iniciar_login_mv() por un permiso de "navegador" libre (ver
+# modulos/concurrencia.py) antes de decirle al usuario que reintente. El
+# Chrome del login vive hasta TIMEOUT_SESION_RELAY compitiendo por RAM con
+# el de cualquier descarga en curso -antes de esto, ni siquiera esperaba:
+# arrancaba su propio Chrome sin importar si ya había otro abierto, lo que
+# causó un OOM real en producción (dos usuarios con Chrome simultáneo). 60s
+# alcanza para que una descarga que ya estaba usando el único cupo libere
+# el suyo (cierra Chrome antes de convertir/unificar); no tiene sentido
+# hacer esperar más a una request HTTP sincrónica como ésta.
+TIMEOUT_ESPERA_NAVEGADOR_LOGIN = 60
 # Selenium NO pone timeout de socket por defecto en el comando HTTP que manda a
 # chromedriver (RemoteConnection._timeout queda sin setear = bloquea para
 # siempre). Si el renderer de Chrome se cuelga (memoria, proceso zombie, etc.)
@@ -98,6 +110,27 @@ EDAD_MAXIMA_CHROME_SEG = TIMEOUT_SESION_RELAY + 120
 _drivers_pendientes: dict = {}
 
 
+def _cerrar_driver_relay(driver, session_id: str = None) -> None:
+    """
+    Cierra un driver del login relay Y libera el permiso de "navegador" que
+    tomó al crearse (ver tomar_navegador_directo() en modulos/concurrencia.py).
+
+    Centralizado acá a propósito: iniciar_login_mv/completar_login_mv tienen
+    varios puntos de salida (éxito, credenciales/código incorrectos, estado
+    desconocido, excepción, expiración por tiempo) y cada uno necesita esta
+    misma pareja de pasos exactamente una vez. Hacerlo a mano en cada lugar
+    arriesga un release-doble (deja pasar un Chrome de más) o uno faltante
+    (el cupo queda tomado para siempre, bloqueando a todo el mundo).
+    """
+    if session_id is not None:
+        _drivers_pendientes.pop(session_id, None)
+    try:
+        driver.quit()
+    except Exception:
+        pass
+    gestor.soltar_navegador_directo()
+
+
 def _limpiar_drivers_viejos():
     """Elimina drivers que llevan más de TIMEOUT_SESION_RELAY segundos esperando."""
     ahora = time.time()
@@ -106,11 +139,9 @@ def _limpiar_drivers_viejos():
         if ahora - datos['timestamp'] > TIMEOUT_SESION_RELAY
     ]
     for sid in ids_viejos:
-        try:
-            _drivers_pendientes[sid]['driver'].quit()
-        except Exception:
-            pass
-        del _drivers_pendientes[sid]
+        datos = _drivers_pendientes.get(sid)
+        if datos:
+            _cerrar_driver_relay(datos['driver'], sid)
         logger.info(f"[AUTH_MV] Driver expirado eliminado: {sid[:8]}...")
 
 
@@ -362,6 +393,15 @@ def iniciar_login_mv(mv_usuario: str, mv_password: str) -> dict:
     """
     _limpiar_drivers_viejos()
 
+    # Tomar el mismo permiso de "navegador" que usan las descargas (ver
+    # tomar_navegador_directo() en modulos/concurrencia.py): sin esto, este
+    # Chrome se creaba sin importar si ya había otro abierto (el de una
+    # descarga en curso, por ejemplo) — dos Chrome completos compitiendo
+    # por los 512 MB del servidor causaron un OOM real en producción.
+    if not gestor.tomar_navegador_directo(timeout=TIMEOUT_ESPERA_NAVEGADOR_LOGIN):
+        logger.warning("[AUTH_MV] No se pudo tomar el permiso de navegador (servidor ocupado)")
+        return {'estado': 'error', 'mensaje': 'El servidor está ocupado en este momento. Esperá unos segundos e intentá de nuevo.'}
+
     driver = None
     try:
         logger.info(f"[AUTH_MV] Iniciando login para usuario: {mv_usuario}")
@@ -429,7 +469,7 @@ def iniciar_login_mv(mv_usuario: str, mv_password: str) -> dict:
         if ("mesavirtual.jusentrerios.gov.ar" in url_actual and
                 "ol-sso" not in url_actual):
             cookies = _capturar_todas_las_cookies(driver)
-            driver.quit()
+            _cerrar_driver_relay(driver)
             logger.info(f"[AUTH_MV] Login exitoso sin 2FA para {mv_usuario}")
             return {'estado': 'ok', 'cookies': cookies, 'mv_usuario': mv_usuario}
 
@@ -439,24 +479,26 @@ def iniciar_login_mv(mv_usuario: str, mv_password: str) -> dict:
                 By.CSS_SELECTOR, ".alert-error, #input-error, .kc-feedback-text, [class*='error']"
             )
             mensaje_error = error_elem.text.strip()
-            driver.quit()
+            _cerrar_driver_relay(driver)
             logger.warning(f"[AUTH_MV] Credenciales incorrectas: {mensaje_error}")
             return {'estado': 'error', 'mensaje': 'Usuario o contraseña incorrectos'}
         except Exception:
             pass
 
         # Estado desconocido
-        driver.quit()
+        _cerrar_driver_relay(driver)
         logger.error(f"[AUTH_MV] Estado desconocido después de login: {url_actual}")
         return {'estado': 'error', 'mensaje': 'No se pudo completar el login. Intentá de nuevo.'}
 
     except Exception as e:
         logger.error(f"[AUTH_MV] Error en iniciar_login_mv: {e}", exc_info=True)
         if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+            _cerrar_driver_relay(driver)
+        else:
+            # _crear_driver_headless() falló antes de devolver un driver: el
+            # permiso ya se había tomado más arriba, así que hay que
+            # soltarlo igual aunque no haya nada que hacerle quit().
+            gestor.soltar_navegador_directo()
         if isinstance(e, WebDriverException):
             # No mostrar el stacktrace crudo de Selenium al usuario
             mensaje = 'El servidor está ocupado en este momento. Esperá unos segundos e intentá de nuevo.'
@@ -571,9 +613,8 @@ def completar_login_mv(session_id: str, codigo_2fa: str) -> dict:
             time.sleep(2)  # Dejar que se asienten todas las cookies
             cookies = _capturar_todas_las_cookies(driver)
 
-            # Limpiar el driver de memoria
-            del _drivers_pendientes[session_id]
-            driver.quit()
+            # Limpiar el driver de memoria (y soltar el permiso de navegador)
+            _cerrar_driver_relay(driver, session_id)
 
             logger.info(f"[AUTH_MV] Login completo con 2FA para {mv_usuario}")
             return {'estado': 'ok', 'cookies': cookies, 'mv_usuario': mv_usuario}
@@ -591,19 +632,13 @@ def completar_login_mv(session_id: str, codigo_2fa: str) -> dict:
             pass
 
         # Si llegamos aquí, algo raro pasó
-        del _drivers_pendientes[session_id]
-        driver.quit()
+        _cerrar_driver_relay(driver, session_id)
         return {'estado': 'error', 'mensaje': 'Error desconocido al verificar el código. Intentá de nuevo.'}
 
     except Exception as e:
         logger.error(f"[AUTH_MV] Error en completar_login_mv: {e}", exc_info=True)
         # Limpiar driver en caso de error
-        try:
-            if session_id in _drivers_pendientes:
-                del _drivers_pendientes[session_id]
-            driver.quit()
-        except Exception:
-            pass
+        _cerrar_driver_relay(driver, session_id)
         return {'estado': 'error', 'mensaje': f'Error al verificar el código: {str(e)}'}
 
 
