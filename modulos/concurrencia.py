@@ -429,6 +429,51 @@ class GestorConcurrencia:
                 self._navegadores_en_uso -= 1
             self._cond.notify_all()
 
+    def tomar_navegador_directo(self, timeout: float) -> bool:
+        """
+        Toma un permiso de "navegador" sin pasar por la cola FIFO de
+        descargas (pensado para el login relay de 2FA en auth_mv.py: una
+        request HTTP sincrónica, sin UI de posición en cola como las
+        descargas). Bloquea hasta que haya cupo Y RAM suficiente, o hasta
+        `timeout` segundos.
+
+        Por qué hacía falta: el Chrome del login relay vive hasta
+        TIMEOUT_SESION_RELAY (5 min) esperando que el usuario tipee el
+        código 2FA, pero antes de este método se creaba completamente por
+        fuera de este gestor — dos usuarios pudiendo tener cada uno su
+        propio Chrome vivo a la vez (uno descargando, otro logueándose),
+        exactamente el escenario de OOM que MAX_NAVEGADORES=1 existe para
+        evitar. Visto en producción: un login arrancó su Chrome mientras
+        una descarga ya tenía el suyo abierto, y el worker murió por
+        SIGKILL segundos después.
+
+        No respeta el orden FIFO frente a las descargas que sí están en
+        cola de gestor.encolar() -no hace falta: comparten el mismo
+        contador `_navegadores_en_uso`, así que ninguno de los dos arranca
+        su Chrome mientras el otro tenga el suyo abierto- pero SÍ puede
+        "colarse" delante de una descarga que llegó antes y sigue
+        esperando turno, porque no pasa por esa misma cola. Aceptable: un
+        login es corto comparado a una descarga completa, y bloquear un
+        login detrás de una fila larga de descargas sería peor experiencia
+        que el trade-off inverso.
+        """
+        deadline = self._fn_reloj() + timeout
+        with self._cond:
+            while True:
+                if self._navegadores_en_uso < self._max_navegadores and self._puede_admitir_ram():
+                    self._navegadores_en_uso += 1
+                    self._sin_ram_desde = None
+                    self._cond.notify_all()
+                    return True
+                restante = deadline - self._fn_reloj()
+                if restante <= 0:
+                    return False
+                self._cond.wait(min(_INTERVALO_DESPERTAR_SEG, restante))
+
+    def soltar_navegador_directo(self) -> None:
+        """Libera un permiso tomado con tomar_navegador_directo()."""
+        self._liberar_navegador()
+
     def _adquirir_conversion(self, timeout: float = 600) -> bool:
         deadline = self._fn_reloj() + timeout
         with self._cond:
