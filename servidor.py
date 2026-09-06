@@ -118,13 +118,6 @@ def crear_app(config_obj=None):
                 raise
 
     # ═════════════════════════════════════════════════════════════════════
-    #  CARGAR TESAURO DE JURISPRUDENCIA
-    # ═════════════════════════════════════════════════════════════════════
-
-    from modulos.jurisprudencia.tesauro import cargar_tesauros
-    cargar_tesauros(app)
-
-    # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
     # ═════════════════════════════════════════════════════════════════════
 
@@ -133,16 +126,14 @@ def crear_app(config_obj=None):
     from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos, iniciar_limpieza_periodica_pdfs
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
-    from rutas.jurisprudencia import jurisprudencia_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(contacto_bp)
-    app.register_blueprint(jurisprudencia_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, jurisprudencia)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
 
     # Limpiar PDFs antiguos del disco al iniciar la app, y repetirlo cada
     # hora mientras el proceso siga vivo (ver iniciar_limpieza_periodica_pdfs):
