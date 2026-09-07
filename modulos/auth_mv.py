@@ -299,6 +299,34 @@ def _crear_driver_headless():
             return webdriver.Chrome(options=options)
         except WebDriverException as e:
             ultimo_error = e
+            # webdriver.Chrome() falló SIN devolvernos un driver: no hay ningún
+            # objeto sobre el que llamar .quit(), pero chromedriver YA había
+            # arrancado su propio proceso (el Service) y, casi siempre, un
+            # Chrome a medio levantar. Selenium 4.12 no los frena cuando
+            # NEW_SESSION falla ("session not created: from chrome not
+            # reachable"), así que quedan huérfanos consumiendo RAM. Barrerlos
+            # acá es lo que convierte ese error de transitorio (falta puntual
+            # de RAM) en recuperable:
+            #   - antes del próximo reintento, para que éste compita por la RAM
+            #     que el arranque fallido dejó tomada (si no, cada reintento
+            #     suma otro Chrome zombie y se asegura de fallar también);
+            #   - y SOBRE TODO tras el último intento: si no, ese zombie
+            #     sobrevive hasta EDAD_MAXIMA_CHROME_SEG (~7 min) —el barrido
+            #     por edad del arranque de esta función no lo toca por ser
+            #     demasiado joven— y envenena el PRÓXIMO login/descarga del
+            #     usuario, que vuelve a ver "chrome not reachable" aunque el
+            #     servidor ya esté libre. Es exactamente el encadenamiento que
+            #     se vio en producción: una descarga falla el arranque y, dos
+            #     minutos después, el login del mismo usuario falla por el
+            #     zombie que aquélla dejó.
+            # Se mata por edad 0 (cualquier chrome/chromedriver vivo, no sólo
+            # los viejos) porque quien llega hasta acá SIEMPRE tiene tomado el
+            # único permiso de navegador (MAX_NAVEGADORES, vía
+            # tomar_navegador_directo() en iniciar_login_mv o el ControlJob del
+            # pipeline en crear_cliente_desde_cookies), así que el único Chrome
+            # que puede existir en este instante es este arranque fallido —
+            # nunca uno legítimo de otro job corriendo en paralelo.
+            limpiar_chrome_huerfano(edad_maxima_seg=0)
             if intento < REINTENTOS_CHROME:
                 logger.warning(
                     f"[AUTH_MV] Chrome no arrancó (intento {intento}/{REINTENTOS_CHROME}): {e}. "
