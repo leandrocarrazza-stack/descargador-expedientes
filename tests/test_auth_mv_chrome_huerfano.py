@@ -58,7 +58,7 @@ def _matar_si_sigue_vivo(proceso: subprocess.Popen):
     proceso.wait()
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 
 def test_no_toca_procesos_jovenes():
     print("\n[1] No mata un chromedriver recién arrancado (podría estar en uso de verdad)")
@@ -125,6 +125,64 @@ def test_no_lanza_si_proc_no_esta():
     check("corre sobre el /proc real sin lanzar", ok)
 
 
+def test_edad_cero_mata_procesos_jovenes():
+    print("\n[6] Con edad_maxima_seg=0 barre hasta un chromedriver recién arrancado")
+    # Es el modo que usa _crear_driver_headless() en el except del arranque:
+    # el chromedriver/Chrome que dejó huérfano webdriver.Chrome() al fallar es
+    # justamente joven, y hay que matarlo YA (no esperar a EDAD_MAXIMA) porque
+    # sigue tomando la RAM que el próximo reintento/login necesita.
+    proceso = _lanzar_proceso_falso("chromedriver")
+    try:
+        eliminados = limpiar_chrome_huerfano(edad_maxima_seg=0)
+        check("cuenta el joven como eliminado", eliminados == 1, f"eliminó {eliminados}")
+        time.sleep(0.3)  # dar tiempo al kernel a procesar el SIGKILL
+        check("el chromedriver joven ya no está vivo", not _sigue_vivo(proceso))
+    finally:
+        _matar_si_sigue_vivo(proceso)
+
+
+def test_crear_driver_barre_chrome_al_fallar_arranque():
+    print("\n[7] _crear_driver_headless() barre el Chrome huérfano cuando el arranque falla")
+    # Reproduce "session not created: from chrome not reachable" sin depender
+    # de un Chrome real ni de la RAM del entorno: se fuerza a webdriver.Chrome
+    # a lanzar siempre y se comprueba que el chromedriver que quedó huérfano
+    # (acá simulado por un proceso falso ya vivo) termina eliminado en vez de
+    # sobrevivir a envenenar el próximo intento.
+    import modulos.auth_mv as auth_mv
+    from selenium.common.exceptions import WebDriverException as _WDE
+
+    proceso = _lanzar_proceso_falso("chromedriver")
+
+    orig_chrome = auth_mv.webdriver.Chrome
+    orig_reintentos = auth_mv.REINTENTOS_CHROME
+
+    def _falla_arranque(*_a, **_k):
+        raise _WDE("session not created: from chrome not reachable")
+
+    try:
+        auth_mv.webdriver.Chrome = _falla_arranque
+        # REINTENTOS_CHROME=1: un solo intento, así el except no entra en la
+        # rama que hace time.sleep(ESPERA_ENTRE_REINTENTOS) y el test corre al
+        # instante sin tener que tocar time.sleep (parchearlo rompería el
+        # propio time.sleep de este test, que es el mismo objeto de módulo).
+        auth_mv.REINTENTOS_CHROME = 1
+
+        lanzo = False
+        try:
+            auth_mv._crear_driver_headless()
+        except _WDE:
+            lanzo = True
+
+        check("propaga la excepción tras agotar los reintentos", lanzo)
+        time.sleep(0.3)  # dar tiempo al kernel a procesar el SIGKILL
+        check("el chromedriver huérfano del arranque fallido fue eliminado",
+              not _sigue_vivo(proceso))
+    finally:
+        auth_mv.webdriver.Chrome = orig_chrome
+        auth_mv.REINTENTOS_CHROME = orig_reintentos
+        _matar_si_sigue_vivo(proceso)
+
+
 if __name__ == '__main__':
     print("=" * 70)
     print(" TESTS DE LIMPIEZA DE CHROME HUÉRFANO")
@@ -135,6 +193,8 @@ if __name__ == '__main__':
     test_no_toca_procesos_no_relacionados()
     test_edad_maxima_por_defecto_es_generosa()
     test_no_lanza_si_proc_no_esta()
+    test_edad_cero_mata_procesos_jovenes()
+    test_crear_driver_barre_chrome_al_fallar_arranque()
 
     print("\n" + "=" * 70)
     if _fallos:
