@@ -24,7 +24,7 @@ from pathlib import Path
 # Agregar proyecto a sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from flask_login import LoginManager, UserMixin
 from flask_cors import CORS
 
@@ -178,25 +178,18 @@ def crear_app(config_obj=None):
 
     @app.route('/')
     def index():
-        """Página de inicio."""
+        """Página de inicio: Descargar es la sección principal para un usuario logueado."""
         from flask_login import current_user
 
         if current_user.is_authenticated:
-            return render_template('dashboard.html')
+            return redirect(url_for('descargas.descargar_expediente_sync'))
         else:
             return render_template('inicio.html')
 
     @app.route('/dashboard')
     def dashboard():
-        """Dashboard del usuario (requiere login)."""
-        from flask_login import login_required
-
-        @login_required
-        def _dashboard():
-            from flask_login import current_user
-            return render_template('dashboard.html', usuario=current_user)
-
-        return _dashboard()
+        """Alias viejo del panel: redirige permanentemente a Descargar, ahora la página principal."""
+        return redirect(url_for('descargas.descargar_expediente_sync'), code=301)
 
     # ═════════════════════════════════════════════════════════════════════
     #  SECURITY HEADERS

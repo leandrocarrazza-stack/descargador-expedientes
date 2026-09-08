@@ -479,14 +479,13 @@
 
             <ul class="foja-nav-links" id="foja-menu">
                 {% if current_user.is_authenticated %}
-                    <li><a href="/dashboard">Mi panel</a></li>
-                    <li><a href="{{ url_for('descargas.descargar_expediente_sync') }}">Descargar</a></li>
-                    <li><a href="{{ url_for('descargas.historial_descargas') }}">Historial</a></li>
-                    <li><a href="{{ url_for('pagos.mostrar_planes') }}">Planes</a></li>
+                    <li><a href="{{ url_for('descargas.descargar_expediente_sync') }}" class="{{ 'active' if request.endpoint == 'descargas.descargar_expediente_sync' else '' }}">Descargar</a></li>
+                    <li><a href="{{ url_for('descargas.historial_descargas') }}" class="{{ 'active' if request.endpoint == 'descargas.historial_descargas' else '' }}">Historial</a></li>
+                    <li><a href="{{ url_for('pagos.mostrar_planes') }}" class="{{ 'active' if request.endpoint == 'pagos.mostrar_planes' else '' }}">Planes</a></li>
                     {% if current_user.is_admin %}
                         <li><a href="/admin/" style="color: var(--gold);"><i class="bi bi-shield-check"></i> Admin</a></li>
                     {% endif %}
-                    <li><a href="{{ url_for('cuenta.mi_cuenta') }}"><i class="bi bi-person-circle"></i> Mi cuenta</a></li>
+                    <li><a href="{{ url_for('cuenta.mi_cuenta') }}" class="{{ 'active' if request.endpoint == 'cuenta.mi_cuenta' else '' }}"><i class="bi bi-person-circle"></i> Mi cuenta</a></li>
                     <li><a href="/auth/logout" class="btn-foja-nav"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
                 {% else %}
                     <li><a href="/#como-funciona">Cómo funciona</a></li>
@@ -544,7 +543,7 @@
                     <h5 class="mono" style="color: var(--gold); font-size: .75rem; letter-spacing: .2em; text-transform: uppercase; margin-bottom: 1rem;">Cuenta</h5>
                     <ul class="list-unstyled m-0" style="line-height: 2.2;">
                         {% if current_user.is_authenticated %}
-                            <li><a href="/dashboard">Mi panel</a></li>
+                            <li><a href="{{ url_for('descargas.descargar_expediente_sync') }}">Descargar</a></li>
                             <li><a href="{{ url_for('descargas.historial_descargas') }}">Historial</a></li>
                             <li><a href="/auth/logout">Cerrar sesión</a></li>
                         {% else %}

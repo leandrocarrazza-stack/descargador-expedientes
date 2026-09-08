@@ -373,7 +373,7 @@
                 <div>Carátula</div>
                 <div>Tribunal</div>
                 <div>Fecha</div>
-                <div style="text-align: right;">Fojas</div>
+                <div style="text-align: right;">Archivos</div>
                 <div>Estado</div>
                 <div></div>
             </div>
@@ -386,11 +386,7 @@
                 <div class="col-fecha">{{ exp.creado_en.strftime('%d/%m %H:%M') if exp.creado_en else '—' }}</div>
                 <div class="col-fojas">
                     {% if exp.estado == 'completed' %}
-                        {% if exp.pdf_ruta_temporal %}
-                            Sí <span class="size"></span>
-                        {% else %}
-                            0
-                        {% endif %}
+                        {{ exp.total_archivos if exp.total_archivos is not none else '—' }}
                     {% else %}
                         —
                     {% endif %}
@@ -407,14 +403,14 @@
                     {% endif %}
                 </div>
                 <div style="text-align: right;">
-                    {% if exp.estado == 'completed' and exp.pdf_ruta_temporal %}
+                    {% if exp.pdf_disponible %}
                         <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}" class="hist-action-btn" title="Descargar PDF">
                             <i class="bi bi-download"></i>
                         </a>
                     {% elif exp.estado == 'failed' %}
-                        <button class="hist-action-btn" title="Reintentar descarga">
+                        <a href="{{ url_for('descargas.descargar_expediente_sync') }}?numero={{ exp.numero|urlencode }}" class="hist-action-btn" title="Descargar de nuevo">
                             <i class="bi bi-arrow-clockwise"></i>
-                        </button>
+                        </a>
                     {% else %}
                         <span>—</span>
                     {% endif %}

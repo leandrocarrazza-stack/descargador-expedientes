@@ -190,6 +190,18 @@ class ExpedienteDescargado(db.Model):
     def __repr__(self):
         return f'<ExpedienteDescargado {self.numero} - {self.estado}>'
 
+    @property
+    def pdf_disponible(self):
+        """
+        True si hay de dónde servir el PDF ahora mismo: en storage
+        persistente (R2 o local, sobrevive al TTL de output/) o todavía en
+        el caché local. Usado por las plantillas para no ofrecer un botón
+        "Descargar PDF" que termine en 404.
+        """
+        if self.storage_key:
+            return True
+        return bool(self.pdf_ruta_temporal and os.path.exists(self.pdf_ruta_temporal))
+
     def obtener_info(self):
         """Retorna dict con info del expediente (para JSON)."""
         return {

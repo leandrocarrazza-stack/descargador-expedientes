@@ -444,12 +444,18 @@ def descargar_expediente_sync():
         sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
         if not sesion_mv:
             return redirect(url_for('auth.mv_login') + '?next=' + url_for('descargas.descargar_expediente_sync'))
+
+        ultimas = ExpedienteDescargado.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ExpedienteDescargado.creado_en.desc()).limit(5).all()
+
         return render_template(
             'descargar_expediente.html',
             creditos=current_user.creditos_disponibles,
             tiene_sesion_mv=True,
             mv_usuario=sesion_mv.mv_usuario,
             notificar_email=bool(current_user.notificar_email),
+            ultimas=ultimas,
         )
 
     # POST → iniciar descarga asincrónica
