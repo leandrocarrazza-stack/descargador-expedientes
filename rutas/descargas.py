@@ -133,7 +133,7 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
         db.session.rollback()
 
 
-def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada):
+def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
@@ -142,9 +142,24 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
     `entrada` es la EntradaCola devuelta por gestor.encolar() en el POST: este
     thread espera su turno acá adentro (no bloquea el request que lo lanzó,
     que ya respondió 202 con el job_id).
+
+    `notificar_email`: si el usuario activó el aviso por email (Mi cuenta o
+    el checkbox del formulario), se manda un email al terminar el job, sea
+    éxito o error (menos en 'multiples_opciones', que no es un estado
+    terminal: el usuario todavía tiene que elegir una opción).
     """
     log = logging.getLogger(__name__)
     control = None
+
+    def _avisar_error(mensaje):
+        """Envía el email de error si corresponde. No rompe el job si falla."""
+        if not notificar_email:
+            return
+        from modulos.models import User
+        from modulos.emails import enviar_email_error
+        user = User.query.get(user_id)
+        if user:
+            enviar_email_error(user, numero_expediente, mensaje)
 
     with app.app_context():
         try:
@@ -181,6 +196,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'tipo_error': 'timeout_cola',
                     'mensaje': mensaje,
                 })
+                _avisar_error(mensaje)
                 return
 
             log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
@@ -266,6 +282,10 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'creditos_restantes': creditos_restantes,
                 })
 
+                if notificar_email and user:
+                    from modulos.emails import enviar_email_descarga
+                    enviar_email_descarga(user, expediente_db)
+
             elif resultado.tipo_error == 'multiples_opciones':
                 log.info(f"[JOB {job_id[:8]}] Múltiples opciones encontradas")
                 _actualizar_job(job_id, {
@@ -283,6 +303,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'mensaje': mensaje,
                     'login_url': '/auth/mv-login?next=/descargas/expediente',
                 })
+                _avisar_error(mensaje)
 
             else:
                 log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
@@ -293,6 +314,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'tipo_error': resultado.tipo_error or 'unknown',
                     'mensaje': mensaje,
                 })
+                _avisar_error(mensaje)
 
         except Exception as e:
             log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
@@ -303,6 +325,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 'tipo_error': 'exception',
                 'mensaje': mensaje,
             })
+            _avisar_error(mensaje)
 
         finally:
             # Liberar los permisos de concurrencia SIEMPRE, sea cual sea el
@@ -425,7 +448,8 @@ def descargar_expediente_sync():
             'descargar_expediente.html',
             creditos=current_user.creditos_disponibles,
             tiene_sesion_mv=True,
-            mv_usuario=sesion_mv.mv_usuario
+            mv_usuario=sesion_mv.mv_usuario,
+            notificar_email=bool(current_user.notificar_email),
         )
 
     # POST → iniciar descarga asincrónica
@@ -437,6 +461,7 @@ def descargar_expediente_sync():
         indice_expediente = data.get('indice_expediente')
         if indice_expediente is not None:
             indice_expediente = int(indice_expediente)
+        notificar_email = bool(data.get('notificar_email', current_user.notificar_email))
 
         if not numero_expediente:
             return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
@@ -491,6 +516,7 @@ def descargar_expediente_sync():
             t = threading.Thread(
                 target=_run_pipeline,
                 args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv, entrada),
+                kwargs={'notificar_email': notificar_email},
                 daemon=True
             )
             t.start()

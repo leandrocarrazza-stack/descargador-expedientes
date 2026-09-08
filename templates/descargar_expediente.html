@@ -210,7 +210,14 @@
                        placeholder="Ejemplo: 12881 o 21/24"
                        autofocus
                        style="font-size: 1.15rem; letter-spacing: .04em;">
-                <small class="text-muted-foja d-block mb-4">Ingresá el número del expediente que querés descargar</small>
+                <small class="text-muted-foja d-block mb-3">Ingresá el número del expediente que querés descargar</small>
+
+                <div class="form-check mb-4">
+                    <input type="checkbox" class="form-check-input" id="notificarEmail" {% if notificar_email %}checked{% endif %}>
+                    <label class="form-check-label" for="notificarEmail" style="font-size: .9rem;">
+                        Avisarme por email cuando esté listo (podés cerrar esta pestaña)
+                    </label>
+                </div>
 
                 <button class="btn-foja w-100" onclick="iniciarDescarga()">
                     <i class="bi bi-cloud-download-fill"></i> Descargar expediente
@@ -221,6 +228,9 @@
             <div id="panel-progreso" class="form-card mt-4" style="display: none;">
                 <h3 class="mb-3" style="font-size: 1.3rem;">Descargando expediente…</h3>
                 <p class="text-muted-foja small mb-4">Esto suele tardar entre 1 y 3 minutos. Expedientes con muchos movimientos pueden llegar a 5.</p>
+                <p class="text-muted-foja small mb-4" id="aviso-email-progreso" style="display: none;">
+                    <i class="bi bi-envelope-check"></i> Te avisaremos a <strong>{{ current_user.email }}</strong> cuando esté listo — podés cerrar esta pestaña.
+                </p>
 
                 <div class="etapas">
                     <div class="etapa" id="etapa-0">
@@ -666,7 +676,10 @@
     async function enviarDescarga(numero, indice) {
         iniciarAnimacion();
 
-        const body = { numero_expediente: numero };
+        const notificarEmail = document.getElementById('notificarEmail').checked;
+        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+
+        const body = { numero_expediente: numero, notificar_email: notificarEmail };
         if (indice !== null) body.indice_expediente = indice;
 
         try {
