@@ -134,14 +134,16 @@ def crear_app(config_obj=None):
     from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos, iniciar_limpieza_periodica_pdfs
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
+    from rutas.cuenta import cuenta_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(contacto_bp)
+    app.register_blueprint(cuenta_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta)")
 
     # Limpiar PDFs antiguos del disco al iniciar la app, y repetirlo cada
     # hora mientras el proceso siga vivo (ver iniciar_limpieza_periodica_pdfs):

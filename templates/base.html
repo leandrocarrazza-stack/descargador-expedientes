@@ -486,9 +486,7 @@
                     {% if current_user.is_admin %}
                         <li><a href="/admin/" style="color: var(--gold);"><i class="bi bi-shield-check"></i> Admin</a></li>
                     {% endif %}
-                    <li class="mono" style="color: rgba(245,241,232,0.5); font-size: .78rem;">
-                        <i class="bi bi-person-circle"></i> {{ current_user.email }}
-                    </li>
+                    <li><a href="{{ url_for('cuenta.mi_cuenta') }}"><i class="bi bi-person-circle"></i> Mi cuenta</a></li>
                     <li><a href="/auth/logout" class="btn-foja-nav"><i class="bi bi-box-arrow-right"></i> Salir</a></li>
                 {% else %}
                     <li><a href="/#como-funciona">Cómo funciona</a></li>
