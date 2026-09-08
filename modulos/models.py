@@ -74,6 +74,15 @@ class User(UserMixin, db.Model):
     # Fecha de reset de créditos mensuales
     fecha_reset_creditos = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Avisar por email cuando termine una descarga en curso (Mi cuenta).
+    # NULL en filas viejas = se trata como False (agregada por migración ligera,
+    # ver modulos/migraciones.py).
+    notificar_email = db.Column(db.Boolean, default=False)
+
+    # Mayor plan comprado alguna vez: individual, estudio, matricula (o NULL si
+    # nunca compró). Gatea la actualización incremental (rutas/descargas.py).
+    plan_max_comprado = db.Column(db.String(50), nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -140,6 +149,39 @@ class ExpedienteDescargado(db.Model):
 
     # Si falló
     error_msg = db.Column(db.Text, nullable=True)
+
+    # Key del PDF en el storage (R2 o local, ver modulos/storage.py). NULL si
+    # nunca se subió o si ya se purgó por retención (config.RETENCION_PDF_DIAS).
+    storage_key = db.Column(db.String(500), nullable=True)
+
+    # Metadatos para la actualización incremental (lote 5): total de filas de
+    # movimientos y de archivos descargados al momento de esta descarga, y
+    # huella de las primeras filas (JSON) para detectar si el expediente
+    # cambió de forma no incremental antes de la próxima actualización.
+    total_filas = db.Column(db.Integer, nullable=True)
+    total_archivos = db.Column(db.Integer, nullable=True)
+    huellas_json = db.Column(db.Text, nullable=True)
+
+    # href `/expedientes/<id>` de Mesa Virtual, si se pudo capturar: permite
+    # reubicar el mismo expediente cuando el número no es único.
+    mv_expediente_href = db.Column(db.String(300), nullable=True)
+
+    # True si este registro es el resultado de una actualización incremental
+    # (no una descarga completa).
+    es_actualizacion = db.Column(db.Boolean, default=False)
+
+    # True si la actualización no pudo incluir todos los movimientos nuevos
+    # (se detectaron movimientos intercalados por debajo del ancla de huellas).
+    parcial = db.Column(db.Boolean, default=False)
+
+    # id del ExpedienteDescargado completo/actualización anterior desde el que
+    # se generó este (para reconstruir la cadena de actualizaciones).
+    actualizado_desde_id = db.Column(db.Integer, nullable=True)
+
+    # Último momento en que se sirvió el PDF de este registro (descarga
+    # directa o como base de una actualización). Usado para la purga de
+    # storage por antigüedad (config.RETENCION_PDF_DIAS).
+    ultimo_acceso_en = db.Column(db.DateTime, nullable=True)
 
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)

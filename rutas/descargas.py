@@ -23,9 +23,11 @@ corren de verdad en simultáneo — pero ahora nadie es rechazado de entrada:
 espera su turno y ve su posición ("Hay 2 descargas adelante"). Recién si la
 cola misma se llena (MAX_COLA_DESCARGAS) se devuelve 409.
 
-LIMPIEZA: El PDF final se borra del servidor después de que el usuario
-lo descarga. Además, al iniciar la app se borran PDFs con más de
-PDF_TTL_HOURS horas de antigüedad.
+LIMPIEZA: El PDF final ya no se borra al descargarlo — queda en output/
+como caché (con TTL de PDF_TTL_HOURS) y persiste en el storage
+configurado (modulos/storage.py, R2 o local) hasta RETENCION_PDF_DIAS
+días desde el último acceso, para que el historial y el enlace del
+email de aviso sigan funcionando más allá de esa ventana.
 """
 
 import csv
@@ -35,6 +37,7 @@ import os
 import time
 import threading
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response, redirect, url_for
 from flask_login import login_required, current_user
@@ -45,6 +48,7 @@ from modulos.models import ExpedienteDescargado, SesionUsuarioMV
 from modulos.auth_mv import obtener_cookies_usuario
 from modulos.extensions import csrf
 from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout
+from modulos.storage import storage_pdf, key_pdf_usuario
 import config
 
 # ── Jobs en memoria ───────────────────────────────────────────────────────────
@@ -201,21 +205,55 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 from modulos.models import User
                 user = User.query.get(user_id)
 
+                tribunal = resultado.expediente.get('tribunal') if resultado.expediente else None
+
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
                     caratula=resultado.expediente.get('caratula') if resultado.expediente else None,
-                    tribunal=resultado.expediente.get('tribunal') if resultado.expediente else None,
+                    tribunal=tribunal,
                     pdf_ruta_temporal=str(resultado.pdf_final) if resultado.pdf_final else None,
                     estado='completed',
-                    error_msg=None
+                    error_msg=None,
+                    ultimo_acceso_en=datetime.utcnow(),
                 )
+
+                # Subir el PDF al storage persistente (R2 o local, ver
+                # modulos/storage.py) para que el historial y el enlace del
+                # email de aviso (lote 3) sigan funcionando después de que
+                # output/ lo borre por TTL. El archivo local en output/ se
+                # conserva igual como caché de la primera descarga.
+                if resultado.pdf_final:
+                    try:
+                        key_nueva = key_pdf_usuario(user_id, numero_expediente, job_id)
+                        storage_pdf().guardar(str(resultado.pdf_final), key_nueva)
+                        expediente_db.storage_key = key_nueva
+                    except Exception:
+                        log.error(f"[JOB {job_id[:8]}] No se pudo subir el PDF al storage", exc_info=True)
+
                 db.session.add(expediente_db)
 
                 if user and not user.is_admin:
                     user.creditos_disponibles -= 1
                     user.creditos_usados_mes += 1
                 db.session.commit()
+
+                # Un PDF por (usuario, expediente, tribunal): purgar del storage
+                # la key de la descarga completa anterior del mismo expediente,
+                # ahora que la nueva ya está commiteada y accesible.
+                if expediente_db.storage_key:
+                    anterior = ExpedienteDescargado.query.filter(
+                        ExpedienteDescargado.user_id == user_id,
+                        ExpedienteDescargado.numero == numero_expediente,
+                        ExpedienteDescargado.tribunal == tribunal,
+                        ExpedienteDescargado.estado == 'completed',
+                        ExpedienteDescargado.id != expediente_db.id,
+                        ExpedienteDescargado.storage_key.isnot(None),
+                    ).order_by(ExpedienteDescargado.creado_en.desc()).first()
+                    if anterior:
+                        storage_pdf().borrar(anterior.storage_key)
+                        anterior.storage_key = None
+                        db.session.commit()
 
                 creditos_restantes = user.creditos_disponibles if user else 0
                 log.info(
@@ -314,14 +352,42 @@ def limpiar_pdfs_antiguos():
         logger.warning(f"[CLEANUP] Error limpiando PDFs antiguos: {e}")
 
 
+def limpiar_storage_antiguo():
+    """
+    Purga del storage persistente (R2 o local) los PDFs cuyo último acceso
+    supera config.RETENCION_PDF_DIAS, y anula su storage_key en BD.
+
+    A diferencia de limpiar_pdfs_antiguos() (disco efímero de output/, TTL en
+    horas), esto libera el storage de larga duración que sostiene el botón
+    "Descargar PDF" del historial y el enlace del email de aviso.
+    """
+    try:
+        limite = datetime.utcnow() - timedelta(days=config.RETENCION_PDF_DIAS)
+        vencidos = ExpedienteDescargado.query.filter(
+            ExpedienteDescargado.storage_key.isnot(None),
+            ExpedienteDescargado.ultimo_acceso_en.isnot(None),
+            ExpedienteDescargado.ultimo_acceso_en < limite,
+        ).all()
+        for exp in vencidos:
+            storage_pdf().borrar(exp.storage_key)
+            exp.storage_key = None
+        if vencidos:
+            db.session.commit()
+            logger.info(f"[CLEANUP] {len(vencidos)} PDF(s) purgados del storage por retención")
+    except Exception as e:
+        logger.warning(f"[CLEANUP] Error limpiando storage antiguo: {e}")
+        db.session.rollback()
+
+
 # Cada cuánto se repite limpiar_pdfs_antiguos() una vez arrancada la app.
 INTERVALO_LIMPIEZA_PDFS_SEG = 3600  # 1 hora
 
 
 def iniciar_limpieza_periodica_pdfs():
     """
-    Repite limpiar_pdfs_antiguos() cada INTERVALO_LIMPIEZA_PDFS_SEG en un
-    hilo de fondo, en vez de una sola vez al arrancar.
+    Repite limpiar_pdfs_antiguos() y limpiar_storage_antiguo() cada
+    INTERVALO_LIMPIEZA_PDFS_SEG en un hilo de fondo, en vez de una sola vez
+    al arrancar.
 
     Por qué: esta app puede seguir viva varios días sin reiniciarse (el
     último redeploy fue hace más de 5 días cuando se detectó esto). Sin
@@ -333,26 +399,9 @@ def iniciar_limpieza_periodica_pdfs():
         while True:
             time.sleep(INTERVALO_LIMPIEZA_PDFS_SEG)
             limpiar_pdfs_antiguos()
+            limpiar_storage_antiguo()
 
     threading.Thread(target=_loop, daemon=True).start()
-
-
-def _borrar_diferido(ruta: str, delay: int = 10):
-    """
-    Borra un archivo después de N segundos en un hilo background.
-    Se usa para borrar el PDF después de que send_file() lo haya enviado.
-    El delay da tiempo a que Flask termine de transmitir el archivo.
-    """
-    def borrar():
-        time.sleep(delay)
-        try:
-            if os.path.exists(ruta):
-                os.unlink(ruta)
-                logger.info(f"[CLEANUP] PDF borrado tras descarga: {Path(ruta).name}")
-        except Exception:
-            pass  # No es crítico si no se borra ahora — el cleanup de startup lo atrapa
-    t = threading.Thread(target=borrar, daemon=True)
-    t.start()
 
 
 @descargas_bp.route('/expediente', methods=['GET', 'POST'])
@@ -596,20 +645,33 @@ def descargar_pdf(expediente_id):
             logger.warning(f"Usuario {current_user.id} intentó descargar expediente {expediente_id} de otro usuario")
             return render_template('error.html', mensaje='No tienes permiso para descargar este expediente'), 403
 
-        # Validar que archivo exista
-        if not expediente.pdf_ruta_temporal or not os.path.exists(expediente.pdf_ruta_temporal):
-            logger.error(f"PDF no encontrado: {expediente.pdf_ruta_temporal}")
-            return render_template('error.html', mensaje='Archivo PDF no encontrado'), 404
-
-        # Descargar y programar limpieza del archivo
-        logger.info(f"Descargando PDF: Usuario {current_user.id}, Expediente {expediente.numero}")
-
         pdf_path = expediente.pdf_ruta_temporal
 
-        # Programar borrado del PDF 10 segundos después de enviarlo.
-        # Esto libera disco en el servidor. El usuario ya tiene su copia.
-        _borrar_diferido(pdf_path, delay=10)
+        # El archivo local en output/ se borra por TTL (limpiar_pdfs_antiguos);
+        # si ya no está pero hay una copia en el storage persistente, se trae
+        # de vuelta a output/ antes de servirla. Se reusa la ruta determinística
+        # `recuperado_<id>.pdf` si ya se había recuperado antes (evita pegarle
+        # al storage de nuevo en cada descarga repetida del mismo expediente).
+        if not pdf_path or not os.path.exists(pdf_path):
+            pdf_path = None
+            if expediente.storage_key:
+                candidato = str(config.OUTPUT_DIR / f"recuperado_{expediente.id}.pdf")
+                if os.path.exists(candidato) or storage_pdf().descargar(expediente.storage_key, candidato):
+                    pdf_path = candidato
 
+        if not pdf_path or not os.path.exists(pdf_path):
+            logger.error(f"PDF no encontrado: expediente {expediente_id}")
+            return render_template('error.html', mensaje='Archivo PDF no encontrado'), 404
+
+        logger.info(f"Descargando PDF: Usuario {current_user.id}, Expediente {expediente.numero}")
+
+        expediente.pdf_ruta_temporal = pdf_path
+        expediente.ultimo_acceso_en = datetime.utcnow()
+        db.session.commit()
+
+        # El PDF YA NO se borra tras servirlo (antes: _borrar_diferido a los
+        # 10s). Queda en output/ como caché hasta su TTL normal, y en el
+        # storage persistente para futuras descargas/actualizaciones.
         return send_file(
             pdf_path,
             as_attachment=True,
@@ -627,7 +689,6 @@ def historial_descargas():
     """
     Muestra el historial de descargas del usuario.
     """
-    from datetime import datetime
     try:
         expedientes = ExpedienteDescargado.query.filter_by(
             user_id=current_user.id

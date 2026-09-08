@@ -117,6 +117,14 @@ def crear_app(config_obj=None):
             else:
                 raise
 
+        # db.create_all() no agrega columnas a tablas que ya existen: las
+        # columnas nuevas de modulos/models.py necesitan esta migración
+        # ligera (ver modulos/migraciones.py). Se deja propagar cualquier
+        # error (fail-fast): mejor no arrancar que arrancar con columnas
+        # faltantes y reventar en el primer INSERT que las use.
+        from modulos.migraciones import aplicar_migraciones_ligeras
+        aplicar_migraciones_ligeras(db)
+
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
     # ═════════════════════════════════════════════════════════════════════

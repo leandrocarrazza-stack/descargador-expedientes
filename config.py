@@ -89,6 +89,38 @@ OUTPUT_DIR = PROJECT_DIR / "output"
 LOGS_DIR = PROJECT_DIR / "logs"
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  STORAGE DE PDFS (Cloudflare R2 — S3-compatible)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Credenciales R2 (panel de Cloudflare → R2 → Manage API Tokens)
+R2_ACCOUNT_ID = os.getenv('R2_ACCOUNT_ID', '')
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
+R2_BUCKET = os.getenv('R2_BUCKET', '')
+
+# Storage habilitado solo si están las 4 variables. Si no, StoragePDF cae a
+# un backend local en disco (desarrollo, o producción sin R2 configurado).
+STORAGE_HABILITADO = all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET])
+
+# Backend local de storage (fallback cuando STORAGE_HABILITADO es False).
+_pdf_store_env = os.getenv('PDF_STORE_DIR')
+if _pdf_store_env:
+    PDF_STORE_DIR = Path(_pdf_store_env)
+elif str(os.getenv('MESA_VIRTUAL_SESSION_PATH', '')).startswith('/data'):
+    PDF_STORE_DIR = Path('/data/pdfs')
+else:
+    PDF_STORE_DIR = PROJECT_DIR / "pdf_store"
+PDF_STORE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Días desde el último acceso que se conserva un PDF en el storage antes de
+# purgarlo (no aplica al disco local de output/, que usa PDF_TTL_HOURS).
+RETENCION_PDF_DIAS = int(os.getenv('RETENCION_PDF_DIAS', '180'))
+
+# URL base pública de la app, para construir links absolutos (ej. en emails)
+# desde un thread en background sin request context.
+BASE_URL = os.getenv('BASE_URL', 'https://foja.com.ar')
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN DE MESA VIRTUAL (web scraping)
 # ═══════════════════════════════════════════════════════════════════════════
 
