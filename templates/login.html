@@ -118,7 +118,7 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
         const datos = await response.json();
 
         if (response.ok) {
-            window.location.href = '/dashboard';
+            window.location.href = '/descargas/expediente';
         } else {
             alerta.textContent = datos.error || 'No pudimos iniciar tu sesión.';
             alerta.classList.remove('d-none');

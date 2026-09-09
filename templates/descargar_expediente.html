@@ -148,6 +148,64 @@
         font-size: 1.1rem;
         flex-shrink: 0;
     }
+
+    /* Stats + últimas descargas */
+    .stats-row-descarga {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+    @media (max-width: 700px) { .stats-row-descarga { grid-template-columns: 1fr; } }
+    .stat-mini {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 1.1rem 1.25rem;
+        box-shadow: var(--shadow-sm);
+    }
+    .stat-mini .valor {
+        font-family: var(--font-serif);
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--navy);
+        line-height: 1.2;
+    }
+    .stat-mini .valor.gold { color: var(--gold-dark); }
+
+    .section-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+    }
+    .section-card-header {
+        padding: .85rem 1.25rem;
+        font-weight: 600;
+        font-size: .9rem;
+        color: var(--cream);
+        background: var(--navy);
+    }
+    .section-card-header i { color: var(--gold); margin-right: .4rem; }
+
+    .tabla-ultimas td { vertical-align: middle; padding: .75rem 1.25rem; }
+    .badge-estado {
+        display: inline-block;
+        font-size: .75rem;
+        font-family: var(--font-mono);
+        padding: 2px 8px;
+        border-radius: 20px;
+        background: var(--line);
+        color: var(--muted);
+    }
+    .badge-estado.ok { background: rgba(46, 125, 50, 0.12); color: #2e7d32; }
+    .badge-estado.error { background: rgba(179, 38, 30, 0.1); color: #b3261e; }
+    .btn-table-sm-link {
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--gold-dark);
+        white-space: nowrap;
+    }
 </style>
 {% endblock %}
 
@@ -155,8 +213,8 @@
 <div class="descargar-header">
     <div class="container">
         <span class="eyebrow" style="color: var(--gold);">Descargar</span>
-        <h1 class="mt-2">Nuevo expediente</h1>
-        <p class="subtitle mb-0">Ingresá el número y Foja descarga todo en un único PDF cronológico.</p>
+        <h1 class="mt-2">Descargá un expediente</h1>
+        <p class="subtitle mb-0">Ingresá el número y Foja lo baja completo en un único PDF cronológico.</p>
     </div>
 </div>
 
@@ -210,7 +268,14 @@
                        placeholder="Ejemplo: 12881 o 21/24"
                        autofocus
                        style="font-size: 1.15rem; letter-spacing: .04em;">
-                <small class="text-muted-foja d-block mb-4">Ingresá el número del expediente que querés descargar</small>
+                <small class="text-muted-foja d-block mb-3">Ingresá el número del expediente que querés descargar</small>
+
+                <div class="form-check mb-4">
+                    <input type="checkbox" class="form-check-input" id="notificarEmail" {% if notificar_email %}checked{% endif %}>
+                    <label class="form-check-label" for="notificarEmail" style="font-size: .9rem;">
+                        Avisarme por email cuando esté listo (podés cerrar esta pestaña)
+                    </label>
+                </div>
 
                 <button class="btn-foja w-100" onclick="iniciarDescarga()">
                     <i class="bi bi-cloud-download-fill"></i> Descargar expediente
@@ -221,6 +286,9 @@
             <div id="panel-progreso" class="form-card mt-4" style="display: none;">
                 <h3 class="mb-3" style="font-size: 1.3rem;">Descargando expediente…</h3>
                 <p class="text-muted-foja small mb-4">Esto suele tardar entre 1 y 3 minutos. Expedientes con muchos movimientos pueden llegar a 5.</p>
+                <p class="text-muted-foja small mb-4" id="aviso-email-progreso" style="display: none;">
+                    <i class="bi bi-envelope-check"></i> Te avisaremos a <strong>{{ current_user.email }}</strong> cuando esté listo — podés cerrar esta pestaña.
+                </p>
 
                 <div class="etapas">
                     <div class="etapa" id="etapa-0">
@@ -295,12 +363,82 @@
                     <button class="btn-foja" onclick="reiniciar()">
                         <i class="bi bi-arrow-clockwise"></i> Reintentar
                     </button>
-                    <a href="/dashboard" class="btn-foja-outline">
-                        <i class="bi bi-house"></i> Volver al panel
+                    <a href="{{ url_for('descargas.historial_descargas') }}" class="btn-foja-outline">
+                        <i class="bi bi-clock-history"></i> Ver historial
                     </a>
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Stats + últimas descargas -->
+    <div class="row mt-5">
+        <div class="col-lg-9 mx-auto">
+            <div class="stats-row-descarga mb-4">
+                <div class="stat-mini">
+                    <span class="eyebrow">Plan</span>
+                    <div class="valor">{{ current_user.plan|capitalize }}</div>
+                </div>
+                <div class="stat-mini">
+                    <span class="eyebrow">Créditos disponibles</span>
+                    <div class="valor gold">{{ creditos }}</div>
+                </div>
+                <div class="stat-mini">
+                    <span class="eyebrow">Descargas este mes</span>
+                    <div class="valor">{{ current_user.creditos_usados_mes }}</div>
+                </div>
+            </div>
+
+            {% if ultimas %}
+            <div class="section-card">
+                <div class="section-card-header">
+                    <i class="bi bi-clock-history"></i> Últimas descargas
+                </div>
+                <div class="section-card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table mb-0 tabla-ultimas">
+                            <tbody>
+                                {% for exp in ultimas %}
+                                <tr>
+                                    <td class="mono text-muted-foja" style="font-size: .85rem; white-space: nowrap;">
+                                        {{ exp.creado_en.strftime('%d/%m/%Y') }}
+                                    </td>
+                                    <td><strong>{{ exp.numero }}</strong></td>
+                                    <td class="text-muted-foja" style="font-size: .88rem;">{{ exp.caratula or '—' }}</td>
+                                    <td style="white-space: nowrap;">
+                                        {% if exp.estado == 'completed' %}
+                                            <span class="badge-estado ok">Completado</span>
+                                        {% elif exp.estado == 'failed' %}
+                                            <span class="badge-estado error">Falló</span>
+                                        {% else %}
+                                            <span class="badge-estado">{{ exp.estado }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end" style="white-space: nowrap;">
+                                        {% if exp.pdf_disponible %}
+                                        <a href="{{ url_for('descargas.descargar_pdf', expediente_id=exp.id) }}" class="btn-table-sm-link">
+                                            <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                                        </a>
+                                        {% endif %}
+                                        {% if exp.estado == 'completed' and exp.storage_key and exp.total_filas is not none %}
+                                        <button type="button" class="btn-table-sm-link" style="background:none;border:none;margin-left:.6rem;"
+                                                onclick="confirmarActualizar({{ exp.id }}, '{{ exp.creado_en.strftime('%d/%m/%Y') }}', {{ exp.total_archivos or 0 }})">
+                                            <i class="bi bi-arrow-repeat"></i> Actualizar
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-3">
+                <a href="{{ url_for('descargas.historial_descargas') }}" class="text-gold mono" style="font-size: .85rem;">Ver historial completo →</a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -663,10 +801,67 @@
         await enviarDescarga(numeroActual, indice);
     }
 
+    // ─── Actualización incremental ────────────────────────────────────────
+    function confirmarActualizar(expedienteId, fecha, archivos) {
+        const ok = confirm(
+            `Descargamos solo lo nuevo desde tu última descarga (${archivos} archivo(s), ${fecha}) ` +
+            `y lo unimos a tu PDF. Cuesta 1 crédito.`
+        );
+        if (ok) {
+            window.location.href = `${window.location.pathname}?actualizar=${expedienteId}`;
+        }
+    }
+
+    async function iniciarActualizacion(expedienteId) {
+        mostrarSolo('panel-progreso');
+        iniciarAnimacion();
+        await enviarActualizacion(expedienteId);
+    }
+
+    async function enviarActualizacion(expedienteId) {
+        const notificarEmail = document.getElementById('notificarEmail').checked;
+        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+
+        try {
+            const resp = await fetch(`/descargas/expediente/${expedienteId}/actualizar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notificar_email: notificarEmail })
+            });
+            const data = await resp.json();
+
+            if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
+                detenerAnimacion();
+                window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
+                return;
+            }
+            if (!resp.ok || !data.job_id) {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = data.mensaje || 'No se pudo iniciar la actualización';
+                    mostrarSolo('panel-error');
+                }, 800);
+                return;
+            }
+
+            iniciarPollProgreso(data.job_id);
+
+        } catch (err) {
+            animarError();
+            setTimeout(() => {
+                document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                mostrarSolo('panel-error');
+            }, 800);
+        }
+    }
+
     async function enviarDescarga(numero, indice) {
         iniciarAnimacion();
 
-        const body = { numero_expediente: numero };
+        const notificarEmail = document.getElementById('notificarEmail').checked;
+        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+
+        const body = { numero_expediente: numero, notificar_email: notificarEmail };
         if (indice !== null) body.indice_expediente = indice;
 
         try {
@@ -864,6 +1059,21 @@
                 localStorage.removeItem('expediente_pendiente');
             }
         } catch(e) {}
+
+        // Prefill desde ?numero=... (usado por el link "Descargar de nuevo"
+        // del historial, para expedientes fallidos o sin PDF disponible).
+        const numeroQS = new URLSearchParams(window.location.search).get('numero');
+        if (numeroQS) {
+            document.getElementById('numero_expediente').value = numeroQS;
+        }
+
+        // ?actualizar=<id> (botón "Actualizar" de últimas descargas/historial):
+        // arranca la actualización incremental apenas carga la página, mismo
+        // panel de progreso y long-poll que una descarga nueva.
+        const actualizarId = new URLSearchParams(window.location.search).get('actualizar');
+        if (actualizarId) {
+            iniciarActualizacion(actualizarId);
+        }
     });
 </script>
 {% endblock %}

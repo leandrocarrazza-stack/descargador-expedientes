@@ -23,18 +23,22 @@ corren de verdad en simultáneo — pero ahora nadie es rechazado de entrada:
 espera su turno y ve su posición ("Hay 2 descargas adelante"). Recién si la
 cola misma se llena (MAX_COLA_DESCARGAS) se devuelve 409.
 
-LIMPIEZA: El PDF final se borra del servidor después de que el usuario
-lo descarga. Además, al iniciar la app se borran PDFs con más de
-PDF_TTL_HOURS horas de antigüedad.
+LIMPIEZA: El PDF final ya no se borra al descargarlo — queda en output/
+como caché (con TTL de PDF_TTL_HOURS) y persiste en el storage
+configurado (modulos/storage.py, R2 o local) hasta RETENCION_PDF_DIAS
+días desde el último acceso, para que el historial y el enlace del
+email de aviso sigan funcionando más allá de esa ventana.
 """
 
 import csv
 import io
+import json
 import logging
 import os
 import time
 import threading
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response, redirect, url_for
 from flask_login import login_required, current_user
@@ -45,6 +49,7 @@ from modulos.models import ExpedienteDescargado, SesionUsuarioMV
 from modulos.auth_mv import obtener_cookies_usuario
 from modulos.extensions import csrf
 from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout
+from modulos.storage import storage_pdf, key_pdf_usuario
 import config
 
 # ── Jobs en memoria ───────────────────────────────────────────────────────────
@@ -103,6 +108,24 @@ def _actualizar_job(job_id, cambios):
         job.update(cambios)
 
 
+def _hay_job_en_curso(user_id, numero_expediente):
+    """
+    True si ya hay un job 'procesando' de este usuario para este expediente
+    (descarga completa o actualización incremental, no importa cuál).
+
+    Evita que una descarga completa y una actualización incremental del
+    MISMO expediente corran en simultáneo: además de duplicar contenido en
+    el merge, la lógica de "un solo storage_key por expediente" (purgar el
+    anterior tras subir el nuevo, ver _run_pipeline) asume que solo un job
+    a la vez puede estar creando/reemplazando el registro más reciente —
+    dos en simultáneo podrían purgarse el storage_key el uno al otro.
+    """
+    return any(
+        j.get('estado') == 'procesando' and j.get('user_id') == user_id and j.get('numero') == numero_expediente
+        for j in _jobs.values()
+    )
+
+
 def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
     """
     Registra en BD un intento de descarga que terminó en error.
@@ -129,7 +152,8 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
         db.session.rollback()
 
 
-def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada):
+def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False,
+                   modo_actualizacion=None, actualizado_desde_id=None):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
@@ -138,9 +162,32 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
     `entrada` es la EntradaCola devuelta por gestor.encolar() en el POST: este
     thread espera su turno acá adentro (no bloquea el request que lo lanzó,
     que ya respondió 202 con el job_id).
+
+    `notificar_email`: si el usuario activó el aviso por email (Mi cuenta o
+    el checkbox del formulario), se manda un email al terminar el job, sea
+    éxito o error (menos en 'multiples_opciones', que no es un estado
+    terminal: el usuario todavía tiene que elegir una opción; ni en
+    'sin_novedades', que no es realmente un error).
+
+    `modo_actualizacion`/`actualizado_desde_id`: presentes sólo cuando este
+    job viene de POST /descargas/expediente/<id>/actualizar (actualización
+    incremental, ver PipelineDescargador.ejecutar). `modo_actualizacion` se
+    pasa tal cual al pipeline; `actualizado_desde_id` es el id del
+    ExpedienteDescargado que se está actualizando, para dejar registrada la
+    cadena de actualizaciones en el nuevo registro.
     """
     log = logging.getLogger(__name__)
     control = None
+
+    def _avisar_error(mensaje):
+        """Envía el email de error si corresponde. No rompe el job si falla."""
+        if not notificar_email:
+            return
+        from modulos.models import User
+        from modulos.emails import enviar_email_error
+        user = User.query.get(user_id)
+        if user:
+            enviar_email_error(user, numero_expediente, mensaje)
 
     with app.app_context():
         try:
@@ -177,6 +224,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'tipo_error': 'timeout_cola',
                     'mensaje': mensaje,
                 })
+                _avisar_error(mensaje)
                 return
 
             log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
@@ -191,6 +239,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 cookies_mv=cookies_mv,
                 on_progreso=_publicar_progreso,
                 control=control,
+                modo_actualizacion=modo_actualizacion,
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -201,21 +250,71 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 from modulos.models import User
                 user = User.query.get(user_id)
 
+                tribunal = resultado.expediente.get('tribunal') if resultado.expediente else None
+
+                # total_archivos es acumulativo en una actualización incremental
+                # (archivos de la descarga anterior + los nuevos), no sólo lo
+                # bajado en ESTE job — así "Archivos" en el historial siempre
+                # refleja el total real del PDF combinado.
+                total_archivos = resultado.archivos_descargados
+                if actualizado_desde_id:
+                    previo = ExpedienteDescargado.query.get(actualizado_desde_id)
+                    if previo and previo.total_archivos:
+                        total_archivos += previo.total_archivos
+
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
                     caratula=resultado.expediente.get('caratula') if resultado.expediente else None,
-                    tribunal=resultado.expediente.get('tribunal') if resultado.expediente else None,
+                    tribunal=tribunal,
                     pdf_ruta_temporal=str(resultado.pdf_final) if resultado.pdf_final else None,
                     estado='completed',
-                    error_msg=None
+                    error_msg=None,
+                    ultimo_acceso_en=datetime.utcnow(),
+                    total_filas=resultado.total_filas,
+                    total_archivos=total_archivos,
+                    huellas_json=json.dumps(resultado.huellas) if resultado.huellas else None,
+                    mv_expediente_href=(resultado.expediente.get('url') or None) if resultado.expediente else None,
+                    es_actualizacion=bool(modo_actualizacion),
+                    parcial=resultado.parcial,
+                    actualizado_desde_id=actualizado_desde_id,
                 )
+
+                # Subir el PDF al storage persistente (R2 o local, ver
+                # modulos/storage.py) para que el historial y el enlace del
+                # email de aviso (lote 3) sigan funcionando después de que
+                # output/ lo borre por TTL. El archivo local en output/ se
+                # conserva igual como caché de la primera descarga.
+                if resultado.pdf_final:
+                    try:
+                        key_nueva = key_pdf_usuario(user_id, numero_expediente, job_id)
+                        storage_pdf().guardar(str(resultado.pdf_final), key_nueva)
+                        expediente_db.storage_key = key_nueva
+                    except Exception:
+                        log.error(f"[JOB {job_id[:8]}] No se pudo subir el PDF al storage", exc_info=True)
+
                 db.session.add(expediente_db)
 
                 if user and not user.is_admin:
-                    user.creditos_disponibles -= 1
-                    user.creditos_usados_mes += 1
+                    user.registrar_uso_credito(1)
                 db.session.commit()
+
+                # Un PDF por (usuario, expediente, tribunal): purgar del storage
+                # la key de la descarga completa anterior del mismo expediente,
+                # ahora que la nueva ya está commiteada y accesible.
+                if expediente_db.storage_key:
+                    anterior = ExpedienteDescargado.query.filter(
+                        ExpedienteDescargado.user_id == user_id,
+                        ExpedienteDescargado.numero == numero_expediente,
+                        ExpedienteDescargado.tribunal == tribunal,
+                        ExpedienteDescargado.estado == 'completed',
+                        ExpedienteDescargado.id != expediente_db.id,
+                        ExpedienteDescargado.storage_key.isnot(None),
+                    ).order_by(ExpedienteDescargado.creado_en.desc()).first()
+                    if anterior:
+                        storage_pdf().borrar(anterior.storage_key)
+                        anterior.storage_key = None
+                        db.session.commit()
 
                 creditos_restantes = user.creditos_disponibles if user else 0
                 log.info(
@@ -227,6 +326,10 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'pdf_url': f'/descargas/expediente/{expediente_db.id}/descargar',
                     'creditos_restantes': creditos_restantes,
                 })
+
+                if notificar_email and user:
+                    from modulos.emails import enviar_email_descarga
+                    enviar_email_descarga(user, expediente_db)
 
             elif resultado.tipo_error == 'multiples_opciones':
                 log.info(f"[JOB {job_id[:8]}] Múltiples opciones encontradas")
@@ -245,16 +348,26 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'mensaje': mensaje,
                     'login_url': '/auth/mv-login?next=/descargas/expediente',
                 })
+                _avisar_error(mensaje)
 
             else:
-                log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
+                # 'sin_novedades' (actualización incremental sin movimientos
+                # nuevos) no es realmente un error: no se cobra crédito, no
+                # deja rastro de "fallo" en el historial, y no amerita un
+                # email avisando que no pasó nada.
+                es_sin_novedades = resultado.tipo_error == 'sin_novedades'
+                nivel_log = log.info if es_sin_novedades else log.error
+                nivel_log(f"[JOB {job_id[:8]}] {'Sin novedades' if es_sin_novedades else 'Error en pipeline'}: {resultado.error}")
                 mensaje = resultado.error or 'Error desconocido en la descarga'
-                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
+                if not es_sin_novedades:
+                    _guardar_intento_fallido(user_id, numero_expediente, mensaje)
                 _actualizar_job(job_id, {
                     'estado': 'error',
                     'tipo_error': resultado.tipo_error or 'unknown',
                     'mensaje': mensaje,
                 })
+                if not es_sin_novedades:
+                    _avisar_error(mensaje)
 
         except Exception as e:
             log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
@@ -265,6 +378,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 'tipo_error': 'exception',
                 'mensaje': mensaje,
             })
+            _avisar_error(mensaje)
 
         finally:
             # Liberar los permisos de concurrencia SIEMPRE, sea cual sea el
@@ -274,6 +388,18 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             # cola por su cuenta en ese caso, ver su propio finally).
             if control is not None:
                 control.liberar_todo()
+
+            # El PDF de la descarga anterior se bajó del storage a un
+            # archivo suelto en config.TEMP_DIR ANTES de que el pipeline
+            # existiera (y por lo tanto antes de que tuviera su propia
+            # carpeta temporal, que sí se autolimpia) — hay que borrarlo acá.
+            if modo_actualizacion:
+                pdf_previo = modo_actualizacion.get('pdf_previo_local')
+                if pdf_previo:
+                    try:
+                        Path(pdf_previo).unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
             # Despertar cualquier request de long-polling que esté esperando este job
             if job_id in _job_events:
@@ -314,14 +440,42 @@ def limpiar_pdfs_antiguos():
         logger.warning(f"[CLEANUP] Error limpiando PDFs antiguos: {e}")
 
 
+def limpiar_storage_antiguo():
+    """
+    Purga del storage persistente (R2 o local) los PDFs cuyo último acceso
+    supera config.RETENCION_PDF_DIAS, y anula su storage_key en BD.
+
+    A diferencia de limpiar_pdfs_antiguos() (disco efímero de output/, TTL en
+    horas), esto libera el storage de larga duración que sostiene el botón
+    "Descargar PDF" del historial y el enlace del email de aviso.
+    """
+    try:
+        limite = datetime.utcnow() - timedelta(days=config.RETENCION_PDF_DIAS)
+        vencidos = ExpedienteDescargado.query.filter(
+            ExpedienteDescargado.storage_key.isnot(None),
+            ExpedienteDescargado.ultimo_acceso_en.isnot(None),
+            ExpedienteDescargado.ultimo_acceso_en < limite,
+        ).all()
+        for exp in vencidos:
+            storage_pdf().borrar(exp.storage_key)
+            exp.storage_key = None
+        if vencidos:
+            db.session.commit()
+            logger.info(f"[CLEANUP] {len(vencidos)} PDF(s) purgados del storage por retención")
+    except Exception as e:
+        logger.warning(f"[CLEANUP] Error limpiando storage antiguo: {e}")
+        db.session.rollback()
+
+
 # Cada cuánto se repite limpiar_pdfs_antiguos() una vez arrancada la app.
 INTERVALO_LIMPIEZA_PDFS_SEG = 3600  # 1 hora
 
 
 def iniciar_limpieza_periodica_pdfs():
     """
-    Repite limpiar_pdfs_antiguos() cada INTERVALO_LIMPIEZA_PDFS_SEG en un
-    hilo de fondo, en vez de una sola vez al arrancar.
+    Repite limpiar_pdfs_antiguos() y limpiar_storage_antiguo() cada
+    INTERVALO_LIMPIEZA_PDFS_SEG en un hilo de fondo, en vez de una sola vez
+    al arrancar.
 
     Por qué: esta app puede seguir viva varios días sin reiniciarse (el
     último redeploy fue hace más de 5 días cuando se detectó esto). Sin
@@ -333,26 +487,9 @@ def iniciar_limpieza_periodica_pdfs():
         while True:
             time.sleep(INTERVALO_LIMPIEZA_PDFS_SEG)
             limpiar_pdfs_antiguos()
+            limpiar_storage_antiguo()
 
     threading.Thread(target=_loop, daemon=True).start()
-
-
-def _borrar_diferido(ruta: str, delay: int = 10):
-    """
-    Borra un archivo después de N segundos en un hilo background.
-    Se usa para borrar el PDF después de que send_file() lo haya enviado.
-    El delay da tiempo a que Flask termine de transmitir el archivo.
-    """
-    def borrar():
-        time.sleep(delay)
-        try:
-            if os.path.exists(ruta):
-                os.unlink(ruta)
-                logger.info(f"[CLEANUP] PDF borrado tras descarga: {Path(ruta).name}")
-        except Exception:
-            pass  # No es crítico si no se borra ahora — el cleanup de startup lo atrapa
-    t = threading.Thread(target=borrar, daemon=True)
-    t.start()
 
 
 @descargas_bp.route('/expediente', methods=['GET', 'POST'])
@@ -372,11 +509,18 @@ def descargar_expediente_sync():
         sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
         if not sesion_mv:
             return redirect(url_for('auth.mv_login') + '?next=' + url_for('descargas.descargar_expediente_sync'))
+
+        ultimas = ExpedienteDescargado.query.filter_by(
+            user_id=current_user.id
+        ).order_by(ExpedienteDescargado.creado_en.desc()).limit(5).all()
+
         return render_template(
             'descargar_expediente.html',
             creditos=current_user.creditos_disponibles,
             tiene_sesion_mv=True,
-            mv_usuario=sesion_mv.mv_usuario
+            mv_usuario=sesion_mv.mv_usuario,
+            notificar_email=bool(current_user.notificar_email),
+            ultimas=ultimas,
         )
 
     # POST → iniciar descarga asincrónica
@@ -388,9 +532,17 @@ def descargar_expediente_sync():
         indice_expediente = data.get('indice_expediente')
         if indice_expediente is not None:
             indice_expediente = int(indice_expediente)
+        notificar_email = bool(data.get('notificar_email', current_user.notificar_email))
 
         if not numero_expediente:
             return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
+
+        if _hay_job_en_curso(current_user.id, numero_expediente):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'job_en_curso',
+                'mensaje': 'Ya hay una descarga en curso para este expediente.',
+            }), 409
 
         if not current_user.is_admin and current_user.creditos_disponibles < 1:
             return jsonify({
@@ -427,6 +579,7 @@ def descargar_expediente_sync():
         _jobs[job_id] = {
             'estado': 'procesando',
             'user_id': current_user.id,
+            'numero': numero_expediente,  # usado por el chequeo de job duplicado en /actualizar
             'timestamp': time.time(),
             # Se pre-siembra la clave (no es cosmético): estado_descarga() hace
             # jsonify(job), que ITERA este dict. Si el thread del pipeline
@@ -442,6 +595,7 @@ def descargar_expediente_sync():
             t = threading.Thread(
                 target=_run_pipeline,
                 args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv, entrada),
+                kwargs={'notificar_email': notificar_email},
                 daemon=True
             )
             t.start()
@@ -457,6 +611,141 @@ def descargar_expediente_sync():
 
     except Exception as e:
         logger.error(f"Error iniciando descarga: {e}", exc_info=True)
+        return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
+
+
+@descargas_bp.route('/expediente/<int:expediente_id>/actualizar', methods=['POST'])
+@login_required
+@csrf.exempt
+def actualizar_expediente(expediente_id):
+    """
+    Actualización incremental (planes Estudio/Matrícula): baja solo los
+    movimientos nuevos desde la última descarga de este expediente y los
+    une al PDF anterior. Mismo patrón de job asincrónico + long-poll que
+    POST /descargas/expediente.
+
+    LIMITACIÓN CONOCIDA: si el número de expediente no es único en Mesa
+    Virtual, esta ruta no tiene forma de reproducir cuál de las opciones
+    se eligió en la descarga original (no hay búsqueda por href todavía) —
+    usa la misma selección "inteligente" por defecto que una descarga
+    nueva. En la práctica el número de expediente casi siempre alcanza
+    para identificarlo sin ambigüedad.
+    """
+    try:
+        expediente = ExpedienteDescargado.query.get_or_404(expediente_id)
+
+        if expediente.user_id != current_user.id:
+            return jsonify({'exito': False, 'mensaje': 'No tenés permiso sobre este expediente'}), 403
+
+        if expediente.estado != 'completed':
+            return jsonify({'exito': False, 'mensaje': 'Esta descarga no está completa'}), 400
+
+        if not expediente.storage_key or expediente.total_filas is None:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'actualizacion_no_disponible',
+                'mensaje': 'Esta descarga es previa a la actualización incremental. Hacé una descarga completa para habilitarla.',
+            }), 400
+
+        if not current_user.is_admin and current_user.plan_max_comprado not in ('estudio', 'matricula'):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'plan_requerido',
+                'mensaje': 'La actualización incremental requiere el plan Estudio o Matrícula.',
+            }), 403
+
+        if not current_user.is_admin and current_user.creditos_disponibles < 1:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'creditos_insuficientes',
+                'mensaje': 'Créditos insuficientes. Comprá créditos para continuar.',
+            }), 402
+
+        # Evitar dos descargas/actualizaciones simultáneas del mismo expediente
+        # (duplicarían contenido en el merge, o se pisarían el storage_key
+        # entre sí — ver _hay_job_en_curso).
+        if _hay_job_en_curso(current_user.id, expediente.numero):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'job_en_curso',
+                'mensaje': 'Ya hay una descarga en curso para este expediente.',
+            }), 409
+
+        cookies_mv = obtener_cookies_usuario(current_user.id)
+        if not cookies_mv:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'sesion_mv_requerida',
+                'mensaje': 'Necesitás conectar tu cuenta de Mesa Virtual primero.',
+                'login_url': '/auth/mv-login?next=/descargas/expediente'
+            }), 401
+
+        job_id = str(uuid.uuid4())
+
+        # Bajar el PDF de la descarga anterior del storage a un archivo
+        # suelto (streaming): todavía no existe la carpeta temp del pipeline,
+        # que se crea recién dentro de PipelineDescargador.ejecutar(). Se
+        # borra en el finally de _run_pipeline.
+        pdf_previo_local = Path(config.TEMP_DIR) / f"previo_{job_id}.pdf"
+        if not storage_pdf().descargar(expediente.storage_key, str(pdf_previo_local)):
+            return jsonify({
+                'exito': False,
+                'mensaje': 'No se pudo recuperar el PDF de la descarga anterior. Hacé una descarga completa.',
+            }), 500
+
+        try:
+            huellas_previas = json.loads(expediente.huellas_json) if expediente.huellas_json else []
+        except (ValueError, TypeError):
+            huellas_previas = []
+
+        try:
+            entrada, puesto = gestor.encolar(job_id)
+        except ErrorColaLlena:
+            logger.warning(f"Cola llena: user {current_user.id}, actualización {expediente.numero}")
+            pdf_previo_local.unlink(missing_ok=True)
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'cola_llena',
+                'mensaje': 'Hay muchas descargas en este momento. Esperá unos minutos e intentá de nuevo.',
+            }), 409
+
+        notificar_email = bool((request.get_json(silent=True) or {}).get('notificar_email', current_user.notificar_email))
+
+        _jobs[job_id] = {
+            'estado': 'procesando',
+            'user_id': current_user.id,
+            'numero': expediente.numero,
+            'timestamp': time.time(),
+            'progreso': {'fase': 'en_cola', 'puesto': puesto, 'actual': 0, 'total': None, 'total_exacto': False},
+        }
+
+        app = current_app._get_current_object()
+        modo_actualizacion = {
+            'total_filas_previo': expediente.total_filas,
+            'huellas_previas': huellas_previas,
+            'pdf_previo_local': str(pdf_previo_local),
+        }
+        try:
+            t = threading.Thread(
+                target=_run_pipeline,
+                args=(app, job_id, current_user.id, expediente.numero, None, cookies_mv, entrada),
+                kwargs={
+                    'notificar_email': notificar_email,
+                    'modo_actualizacion': modo_actualizacion,
+                    'actualizado_desde_id': expediente.id,
+                },
+                daemon=True
+            )
+            t.start()
+        except Exception:
+            gestor.abandonar(entrada)
+            raise
+
+        logger.info(f"[JOB {job_id[:8]}] Actualización incremental lanzada para user {current_user.id}, expediente {expediente.numero}")
+        return jsonify({'job_id': job_id}), 202
+
+    except Exception as e:
+        logger.error(f"Error iniciando actualización: {e}", exc_info=True)
         return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
 
 
@@ -596,20 +885,33 @@ def descargar_pdf(expediente_id):
             logger.warning(f"Usuario {current_user.id} intentó descargar expediente {expediente_id} de otro usuario")
             return render_template('error.html', mensaje='No tienes permiso para descargar este expediente'), 403
 
-        # Validar que archivo exista
-        if not expediente.pdf_ruta_temporal or not os.path.exists(expediente.pdf_ruta_temporal):
-            logger.error(f"PDF no encontrado: {expediente.pdf_ruta_temporal}")
-            return render_template('error.html', mensaje='Archivo PDF no encontrado'), 404
-
-        # Descargar y programar limpieza del archivo
-        logger.info(f"Descargando PDF: Usuario {current_user.id}, Expediente {expediente.numero}")
-
         pdf_path = expediente.pdf_ruta_temporal
 
-        # Programar borrado del PDF 10 segundos después de enviarlo.
-        # Esto libera disco en el servidor. El usuario ya tiene su copia.
-        _borrar_diferido(pdf_path, delay=10)
+        # El archivo local en output/ se borra por TTL (limpiar_pdfs_antiguos);
+        # si ya no está pero hay una copia en el storage persistente, se trae
+        # de vuelta a output/ antes de servirla. Se reusa la ruta determinística
+        # `recuperado_<id>.pdf` si ya se había recuperado antes (evita pegarle
+        # al storage de nuevo en cada descarga repetida del mismo expediente).
+        if not pdf_path or not os.path.exists(pdf_path):
+            pdf_path = None
+            if expediente.storage_key:
+                candidato = str(config.OUTPUT_DIR / f"recuperado_{expediente.id}.pdf")
+                if os.path.exists(candidato) or storage_pdf().descargar(expediente.storage_key, candidato):
+                    pdf_path = candidato
 
+        if not pdf_path or not os.path.exists(pdf_path):
+            logger.error(f"PDF no encontrado: expediente {expediente_id}")
+            return render_template('error.html', mensaje='Archivo PDF no encontrado'), 404
+
+        logger.info(f"Descargando PDF: Usuario {current_user.id}, Expediente {expediente.numero}")
+
+        expediente.pdf_ruta_temporal = pdf_path
+        expediente.ultimo_acceso_en = datetime.utcnow()
+        db.session.commit()
+
+        # El PDF YA NO se borra tras servirlo (antes: _borrar_diferido a los
+        # 10s). Queda en output/ como caché hasta su TTL normal, y en el
+        # storage persistente para futuras descargas/actualizaciones.
         return send_file(
             pdf_path,
             as_attachment=True,
@@ -627,7 +929,6 @@ def historial_descargas():
     """
     Muestra el historial de descargas del usuario.
     """
-    from datetime import datetime
     try:
         expedientes = ExpedienteDescargado.query.filter_by(
             user_id=current_user.id

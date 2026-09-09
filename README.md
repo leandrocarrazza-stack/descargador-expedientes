@@ -16,6 +16,59 @@
 
 ---
 
+## 🌐 Variables de entorno (app web Flask)
+
+Además del uso como CLI (`main.py`), el proyecto corre como app web
+(`servidor.py`) con las variables de siempre (`SECRET_KEY`, `DATABASE_URL`,
+`MERCADO_PAGO_*`, `MAIL_*`, `ENCRYPTION_KEY`, ver `.env.example` para el
+detalle completo) más estas, agregadas junto con la actualización
+incremental y el aviso por email:
+
+| Variable | Para qué | Default si falta |
+|---|---|---|
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Storage persistente de PDFs en Cloudflare R2 (`modulos/storage.py`) | Cae a un backend local en disco (sin persistencia real entre deploys) |
+| `PDF_STORE_DIR` | Carpeta del backend local de storage, si R2 no está configurado | `PROJECT_DIR/pdf_store` |
+| `RETENCION_PDF_DIAS` | Días desde el último acceso que se conserva un PDF en el storage | `180` |
+| `BASE_URL` | Dominio público, para armar links absolutos en emails (el aviso de descarga corre en un thread sin request activo) | `https://foja.com.ar` |
+| `PDF_TTL_HOURS` | Horas que un PDF permanece en el caché local `output/` (ya no se borra al descargarlo — ver storage persistente arriba) | `24` |
+
+Sin las credenciales de R2, la app funciona igual (cae al backend local),
+pero en producción eso significa que los PDFs se acumulan en el disco
+persistente sin límite de tamaño — ver el warning que tira
+`modulos/storage.py` al arrancar en ese caso.
+
+---
+
+## 🧩 Actualización incremental y mejoras del servicio
+
+Este proyecto pasó por una ronda de mejoras organizadas en lotes (rama
+`claude/foja-service-improvements-em4pal`), cada uno con su propio commit:
+
+0. **Fundaciones** — migraciones ligeras (`modulos/migraciones.py`, agrega
+   columnas a tablas existentes sin Alembic) + storage R2/local + retención de PDFs.
+1. **Admin** — borrar mensajes de contacto leídos; el formulario de
+   otorgar créditos queda sólo en la tabla de usuarios.
+2. **Mi cuenta** — nombre, contraseña, preferencia de aviso por email (`/cuenta/`).
+3. **Aviso por email** — al terminar una descarga, con link al PDF.
+4. **Página principal unificada** — Descargar es la página de entrada (ya
+   no hay un "Mi panel" separado); nav reordenada.
+5. **Actualización incremental** — para un expediente ya descargado (planes
+   Estudio/Matrícula), baja solo los movimientos nuevos y los une al PDF
+   anterior (`POST /descargas/expediente/<id>/actualizar`). Ver el
+   docstring de `EstrategiaIncremental` en `modulos/descarga.py` para el
+   detalle de cómo ancla filas nuevas contra la descarga previa.
+6. **Correcciones colaterales** — historial de compras, reset mensual de
+   créditos usados, limpieza de scripts.
+
+Pasos manuales que no hace ningún script:
+- Crear el bucket en Cloudflare R2 y cargar sus credenciales en Render.
+- Correr `python scripts/backfill_plan_max.py` una vez, para que los
+  usuarios que ya habían comprado Estudio/Matrícula antes de este cambio
+  tengan la actualización incremental habilitada sin esperar su próxima compra.
+- Subir `PDF_TTL_HOURS` a 48 en el panel de Render (ya viene en `render.yaml`).
+
+---
+
 ## 🚀 Instalación Rápida
 
 ```bash

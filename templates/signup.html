@@ -156,7 +156,7 @@ document.getElementById('formSignup').addEventListener('submit', async (e) => {
         const datos = await response.json();
 
         if (response.ok) {
-            window.location.href = '/dashboard';
+            window.location.href = '/descargas/expediente';
         } else {
             alerta.textContent = datos.error || 'No pudimos crear tu cuenta.';
             alerta.classList.remove('d-none');

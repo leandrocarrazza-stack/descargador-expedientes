@@ -217,6 +217,27 @@ def webhook_mercado_pago():
         return jsonify({'status': 'error'}), 200
 
 
+# Orden de "mayor" plan comprado, para gatear la actualización incremental
+# (rutas/descargas.py): sólo estudio/matricula la habilitan. El índice en
+# esta lista es el rango — no hace falta que sea el precio ni los créditos.
+ORDEN_PLANES = ['individual', 'estudio', 'matricula']
+
+
+def _actualizar_plan_max_comprado(usuario: User, plan_comprado: str) -> None:
+    """
+    Sube usuario.plan_max_comprado si `plan_comprado` es superior al que ya
+    tenía registrado (o si todavía no tenía ninguno). Nunca lo baja: comprar
+    un paquete Individual después de uno Estudio no le quita a alguien la
+    actualización incremental que ya se ganó.
+    """
+    if plan_comprado not in ORDEN_PLANES:
+        return
+    rango_nuevo = ORDEN_PLANES.index(plan_comprado)
+    rango_actual = ORDEN_PLANES.index(usuario.plan_max_comprado) if usuario.plan_max_comprado in ORDEN_PLANES else -1
+    if rango_nuevo > rango_actual:
+        usuario.plan_max_comprado = plan_comprado
+
+
 def _confirmar_compra(compra: CompraCreditos) -> None:
     """
     Marca una compra como completada y acredita los créditos al usuario.
@@ -231,6 +252,7 @@ def _confirmar_compra(compra: CompraCreditos) -> None:
     usuario = User.query.get(compra.user_id)
     if usuario:
         usuario.creditos_disponibles += compra.creditos_comprados
+        _actualizar_plan_max_comprado(usuario, compra.plan)
         db.session.commit()
         logger.info(
             f"Créditos acreditados: {usuario.email} recibió "

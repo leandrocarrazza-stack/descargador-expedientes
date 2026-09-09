@@ -74,6 +74,15 @@ class User(UserMixin, db.Model):
     # Fecha de reset de créditos mensuales
     fecha_reset_creditos = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Avisar por email cuando termine una descarga en curso (Mi cuenta).
+    # NULL en filas viejas = se trata como False (agregada por migración ligera,
+    # ver modulos/migraciones.py).
+    notificar_email = db.Column(db.Boolean, default=False)
+
+    # Mayor plan comprado alguna vez: individual, estudio, matricula (o NULL si
+    # nunca compró). Gatea la actualización incremental (rutas/descargas.py).
+    plan_max_comprado = db.Column(db.String(50), nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -97,13 +106,25 @@ class User(UserMixin, db.Model):
         """Verifica si el usuario tiene suficientes créditos."""
         return self.creditos_disponibles >= cantidad
 
-    def usar_creditos(self, cantidad=1):
-        """Usa créditos (si tiene suficientes)."""
-        if self.tiene_creditos(cantidad):
-            self.creditos_disponibles -= cantidad
-            self.creditos_usados_mes += cantidad
-            return True
-        return False
+    def registrar_uso_credito(self, cantidad=1):
+        """
+        Descuenta créditos por una descarga (completa o actualización
+        incremental) y lleva la cuenta de uso mensual, reseteando
+        creditos_usados_mes la primera vez que se usa un crédito en un mes
+        distinto al de fecha_reset_creditos.
+
+        Reemplaza el patrón anterior (`creditos_disponibles -= 1` +
+        `creditos_usados_mes += 1` sin resetear nunca en rutas/descargas.py),
+        que dejaba creditos_usados_mes creciendo indefinidamente en vez de
+        reflejar sólo el mes en curso.
+        """
+        ahora = datetime.utcnow()
+        referencia = self.fecha_reset_creditos or self.creado_en or ahora
+        if (ahora.year, ahora.month) != (referencia.year, referencia.month):
+            self.creditos_usados_mes = 0
+            self.fecha_reset_creditos = ahora
+        self.creditos_disponibles -= cantidad
+        self.creditos_usados_mes += cantidad
 
     def obtener_info(self):
         """Retorna dict con info del usuario (para JSON)."""
@@ -141,12 +162,57 @@ class ExpedienteDescargado(db.Model):
     # Si falló
     error_msg = db.Column(db.Text, nullable=True)
 
+    # Key del PDF en el storage (R2 o local, ver modulos/storage.py). NULL si
+    # nunca se subió o si ya se purgó por retención (config.RETENCION_PDF_DIAS).
+    storage_key = db.Column(db.String(500), nullable=True)
+
+    # Metadatos para la actualización incremental (lote 5): total de filas de
+    # movimientos y de archivos descargados al momento de esta descarga, y
+    # huella de las primeras filas (JSON) para detectar si el expediente
+    # cambió de forma no incremental antes de la próxima actualización.
+    total_filas = db.Column(db.Integer, nullable=True)
+    total_archivos = db.Column(db.Integer, nullable=True)
+    huellas_json = db.Column(db.Text, nullable=True)
+
+    # href `/expedientes/<id>` de Mesa Virtual, si se pudo capturar: permite
+    # reubicar el mismo expediente cuando el número no es único.
+    mv_expediente_href = db.Column(db.String(300), nullable=True)
+
+    # True si este registro es el resultado de una actualización incremental
+    # (no una descarga completa).
+    es_actualizacion = db.Column(db.Boolean, default=False)
+
+    # True si la actualización no pudo incluir todos los movimientos nuevos
+    # (se detectaron movimientos intercalados por debajo del ancla de huellas).
+    parcial = db.Column(db.Boolean, default=False)
+
+    # id del ExpedienteDescargado completo/actualización anterior desde el que
+    # se generó este (para reconstruir la cadena de actualizaciones).
+    actualizado_desde_id = db.Column(db.Integer, nullable=True)
+
+    # Último momento en que se sirvió el PDF de este registro (descarga
+    # directa o como base de una actualización). Usado para la purga de
+    # storage por antigüedad (config.RETENCION_PDF_DIAS).
+    ultimo_acceso_en = db.Column(db.DateTime, nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     completado_en = db.Column(db.DateTime, nullable=True)
 
     def __repr__(self):
         return f'<ExpedienteDescargado {self.numero} - {self.estado}>'
+
+    @property
+    def pdf_disponible(self):
+        """
+        True si hay de dónde servir el PDF ahora mismo: en storage
+        persistente (R2 o local, sobrevive al TTL de output/) o todavía en
+        el caché local. Usado por las plantillas para no ofrecer un botón
+        "Descargar PDF" que termine en 404.
+        """
+        if self.storage_key:
+            return True
+        return bool(self.pdf_ruta_temporal and os.path.exists(self.pdf_ruta_temporal))
 
     def obtener_info(self):
         """Retorna dict con info del expediente (para JSON)."""

@@ -22,10 +22,11 @@ from typing import Optional, List, Dict, Any
 from modulos.login import ClienteSelenium, crear_cliente_sesion
 from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
-from modulos.descarga import DescargadorArchivos
+from modulos.descarga import DescargadorArchivos, EstrategiaCompleta, EstrategiaIncremental, _leer_filas_pagina, huella_fila
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb, parece_pdf, LOTE_CONVERSION
-from modulos.unificacion import UnificadorPDF
+from modulos.unificacion import UnificadorPDF, anexar_con_qpdf
+from modulos.excepciones import ErrorUnificacion
 from modulos.compresion import comprimir_pdf
 from modulos.concurrencia import ControlJob
 import config
@@ -64,6 +65,17 @@ class ResultadoPipeline:
     movimientos: Optional[List[Dict]] = None
     archivos_descargados: int = 0
     opciones: Optional[List[Dict[str, Any]]] = None  # Cuando hay múltiples expedientes
+
+    # Metadatos para la actualización incremental (modulos/descarga.py:
+    # EstrategiaCompleta/EstrategiaIncremental). Se completan en TODA
+    # descarga exitosa (no sólo en una actualización) para que la PRÓXIMA
+    # actualización incremental de este expediente tenga con qué anclar.
+    total_filas: Optional[int] = None
+    huellas: Optional[List[str]] = None
+    # True si esta fue una actualización incremental que no pudo incluir
+    # todos los movimientos nuevos (se detectaron intercalados por debajo
+    # del ancla de huellas — ver EstrategiaIncremental).
+    parcial: bool = False
 
 
 class PipelineDescargador:
@@ -110,7 +122,7 @@ class PipelineDescargador:
         logger.info("Sin cookies_mv, usando sesión local (modo desarrollo)")
         return crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -125,9 +137,22 @@ class PipelineDescargador:
                 Si se omite (llamadores viejos: CLI, MCP, Celery legacy), se
                 usa un control nulo que no bloquea ni limita nada — igual que
                 el comportamiento de antes de que existiera la cola.
+            modo_actualizacion: si se pasa, en vez de una descarga completa
+                se hace una actualización incremental (ver
+                modulos/descarga.py::EstrategiaIncremental). Dict con:
+                - total_filas_previo (int): total de filas de la última
+                  descarga/actualización de este expediente.
+                - huellas_previas (list[str]): huellas de las primeras filas
+                  de esa descarga (ver modulos/descarga.py::huella_fila).
+                - pdf_previo_local (str|Path): PDF de esa descarga, ya
+                  bajado del storage a un archivo local (rutas/descargas.py
+                  se encarga de traerlo antes de llamar acá).
 
         Returns:
-            ResultadoPipeline con resultado o error
+            ResultadoPipeline con resultado o error. tipo_error puede ser
+            'sin_novedades' (no hay movimientos nuevos, no se cobra crédito)
+            o 'expediente_cambio' (cambió de una forma que no se puede
+            actualizar de manera incremental) además de los ya existentes.
         """
         self._on_progreso = on_progreso
         control = control or ControlJob.nulo()
@@ -229,11 +254,62 @@ class PipelineDescargador:
             # Crear descargador con carpeta temp
             self.descargador = DescargadorArchivos(self.cliente, self.carpeta_temp, fn_reconectar=_reconectar)
 
+            # ── Actualización incremental: decidir delta ANTES de descargar ──
+            # (ver modulos/descarga.py::EstrategiaIncremental para el detalle
+            # de cómo se ancla en filas). Si no es una actualización, se
+            # descarga todo con la estrategia por defecto de siempre.
+            estrategia = EstrategiaCompleta()
+            if modo_actualizacion:
+                total_filas_previo = modo_actualizacion.get('total_filas_previo') or 0
+                huellas_previas = modo_actualizacion.get('huellas_previas') or []
+
+                rango_actual = self.descargador.leer_total_filas_confiable(self.cliente.driver)
+                if not rango_actual:
+                    return ResultadoPipeline(
+                        exito=False,
+                        tipo_error="expediente_cambio",
+                        error="No pudimos confirmar el estado actual del expediente. Hacé una descarga completa.",
+                        expediente=expediente,
+                    )
+
+                desde, hasta, total_filas_actual = rango_actual
+                tam_pagina = max(hasta - desde + 1, 1)
+                delta = total_filas_actual - total_filas_previo
+
+                if delta < 0:
+                    return ResultadoPipeline(
+                        exito=False,
+                        tipo_error="expediente_cambio",
+                        error="El expediente tiene menos movimientos que en tu última descarga. Hacé una descarga completa.",
+                        expediente=expediente,
+                    )
+
+                if delta == 0:
+                    filas_pagina1 = _leer_filas_pagina(self.cliente.driver)
+                    huellas_actuales = [huella_fila(f) for f in filas_pagina1[:len(huellas_previas)]]
+                    if huellas_previas and huellas_actuales == huellas_previas:
+                        return ResultadoPipeline(
+                            exito=False,
+                            tipo_error="sin_novedades",
+                            error="No hay movimientos nuevos desde tu última descarga.",
+                            expediente=expediente,
+                            total_filas=total_filas_actual,
+                        )
+                    return ResultadoPipeline(
+                        exito=False,
+                        tipo_error="expediente_cambio",
+                        error="El expediente cambió de una forma que no se puede actualizar de manera incremental. Hacé una descarga completa.",
+                        expediente=expediente,
+                    )
+
+                logger.info(f"[INCREMENTAL] delta={delta} fila(s) nueva(s) (tam_pagina={tam_pagina})")
+                estrategia = EstrategiaIncremental(delta, huellas_previas, tam_pagina)
+
             # Descargar por paginas: en cada pagina descargamos todos los archivos
             # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
             # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
             archivos_descargados = self.descargador.descargar_todo_por_paginas(
-                numero_expediente, on_progreso=self._on_progreso
+                numero_expediente, on_progreso=self._on_progreso, estrategia=estrategia
             )
             # Re-sincronizar: si hubo reciclaje de navegador (ver
             # _reciclar_navegador_en_pagina en modulos/descarga.py), el
@@ -246,7 +322,43 @@ class PipelineDescargador:
             logger.info(f"[OK] {len(archivos_descargados)} archivos descargados")
             _log_memoria("descarga (Chrome todavía abierto)")
 
+            if modo_actualizacion and estrategia.posicion_ancla is None:
+                # No debería pasar (descargar_todo_por_paginas ya levanta
+                # ErrorDescarga si se agota el margen de seguridad sin
+                # encontrar el ancla), pero si Mesa Virtual se quedó sin
+                # páginas antes de eso, es la misma situación: no hay
+                # certeza de dónde empieza lo ya descargado.
+                return ResultadoPipeline(
+                    exito=False,
+                    tipo_error="expediente_cambio",
+                    error="No se pudo confirmar la continuidad con tu descarga anterior. Hacé una descarga completa.",
+                    expediente=expediente,
+                )
+
+            es_parcial = bool(modo_actualizacion) and estrategia.posicion_ancla < estrategia.delta
+
             if not archivos_descargados:
+                if modo_actualizacion:
+                    # Hubo filas nuevas (delta > 0) pero ninguna traía un
+                    # adjunto: el PDF no cambia, pero sí hay que actualizar
+                    # los metadatos para la PRÓXIMA actualización.
+                    pdf_previo = modo_actualizacion.get('pdf_previo_local')
+                    if not pdf_previo or not Path(pdf_previo).exists():
+                        return ResultadoPipeline(
+                            exito=False,
+                            error="No se encontró el PDF de la descarga anterior",
+                            tipo_error="pdf_previo_faltante",
+                            expediente=expediente,
+                        )
+                    return ResultadoPipeline(
+                        exito=True,
+                        expediente=expediente,
+                        pdf_final=Path(pdf_previo),
+                        archivos_descargados=0,
+                        total_filas=total_filas_actual,
+                        huellas=estrategia.huellas_iniciales,
+                        parcial=es_parcial,
+                    )
                 return ResultadoPipeline(
                     exito=False,
                     error="No se pudieron descargar archivos",
@@ -369,7 +481,15 @@ class PipelineDescargador:
             # de lote (_lote_N.pdf) quedan scoped a este job, así dos
             # unificaciones concurrentes no pisan los archivos intermedios
             # de la otra.
-            self.unificador = UnificadorPDF(self.carpeta_temp, config.OUTPUT_DIR)
+            #
+            # En modo incremental, el resultado de este paso es sólo el
+            # delta (los archivos nuevos entre sí) — todavía falta combinarlo
+            # con el PDF anterior más abajo. Ese delta también se manda a
+            # carpeta_temp (no a OUTPUT_DIR): si quedara en OUTPUT_DIR nadie
+            # lo borraría nunca (sólo se usa el PDF combinado final, copiado
+            # aparte), acumulando un archivo huérfano por cada actualización.
+            carpeta_salida_unificacion = self.carpeta_temp if modo_actualizacion else config.OUTPUT_DIR
+            self.unificador = UnificadorPDF(self.carpeta_temp, carpeta_salida_unificacion)
 
             # Pasar archivos con metadata al unificador
             pdf_final = self.unificador.unificar(
@@ -389,6 +509,44 @@ class PipelineDescargador:
             logger.info(f"[OK] PDF final generado: {pdf_final}")
             _log_memoria("unificación")
 
+            if modo_actualizacion:
+                # `pdf_final` acá es sólo el delta (los archivos nuevos,
+                # unificados entre sí) — falta combinarlo con el PDF de la
+                # descarga anterior. Corre todavía dentro de la ventana del
+                # permiso de conversión (se libera recién en el finally),
+                # mismo criterio que la unificación de una descarga completa.
+                pdf_previo_str = modo_actualizacion.get('pdf_previo_local')
+                if not pdf_previo_str or not Path(pdf_previo_str).exists():
+                    # Ojo: Path('') resuelve a Path('.'), el directorio de
+                    # trabajo actual, que SIEMPRE existe — chequear la
+                    # cadena antes de construir el Path, no después.
+                    return ResultadoPipeline(
+                        exito=False,
+                        error="No se encontró el PDF de la descarga anterior para combinar",
+                        tipo_error="pdf_previo_faltante",
+                        expediente=expediente,
+                    )
+                pdf_previo = Path(pdf_previo_str)
+                ruta_combinada = self.carpeta_temp / f"combinado_{self._token}.pdf"
+                try:
+                    pdf_combinado = anexar_con_qpdf(pdf_previo, pdf_final, ruta_combinada)
+                except ErrorUnificacion as e:
+                    logger.error(f"[INCREMENTAL] No se pudo combinar con el PDF anterior: {e}")
+                    return ResultadoPipeline(
+                        exito=False,
+                        error=str(e),
+                        tipo_error="unification_failed",
+                        expediente=expediente,
+                    )
+                # carpeta_temp se borra entera en el finally: copiar el
+                # resultado a OUTPUT_DIR, mismo lugar donde unificar() deja
+                # el PDF de una descarga completa.
+                numero_sanitizado = numero_expediente.replace('/', '_').replace('\\', '_').replace(':', '_')
+                destino_final = Path(config.OUTPUT_DIR) / f"Expediente_{numero_sanitizado}_ACTUALIZADO_{self._token}.pdf"
+                shutil.copy2(pdf_combinado, destino_final)
+                pdf_final = destino_final
+                logger.info(f"[INCREMENTAL] PDF combinado: {pdf_final}")
+
             # PASO 6 (OPCIONAL): COMPRESIÓN
             # Solo comprime si COMPRIMIR_PDF=true en .env (desactivado por defecto)
             pdf_final = comprimir_pdf(pdf_final)
@@ -398,7 +556,10 @@ class PipelineDescargador:
                 exito=True,
                 expediente=expediente,
                 pdf_final=pdf_final,
-                archivos_descargados=len(archivos_descargados)
+                archivos_descargados=len(archivos_descargados),
+                total_filas=(total_filas_actual if modo_actualizacion else estrategia.total_filas_final),
+                huellas=estrategia.huellas_iniciales,
+                parcial=es_parcial,
             )
 
         except Exception as e:
@@ -408,6 +569,13 @@ class PipelineDescargador:
                     exito=False,
                     error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.",
                     tipo_error="auth_failed"
+                )
+            if modo_actualizacion and ("NO_SE_PUDO_ALINEAR" in str(e) or "NO_SE_PUDO_LEER_FILAS" in str(e)):
+                logger.warning(f"[INCREMENTAL] No se pudo alinear con la descarga anterior: {e}")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="El expediente cambió de una forma que no se puede actualizar de manera incremental. Hacé una descarga completa.",
+                    tipo_error="expediente_cambio",
                 )
             logger.error(f"[ERROR] Excepción en pipeline: {str(e)}", exc_info=True)
             return ResultadoPipeline(

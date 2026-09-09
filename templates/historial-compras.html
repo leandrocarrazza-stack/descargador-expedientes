@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block titulo %}Historial de compras · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .compras-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 3rem;
+        margin-bottom: 2.5rem;
+    }
+    .compras-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .compras-header .subtitle {
+        color: rgba(245, 241, 232, 0.75);
+        font-size: .95rem;
+        margin-top: .25rem;
+    }
+
+    .tabla-compras thead th {
+        background: var(--navy);
+        color: var(--cream);
+        border: none;
+        font-size: .85rem;
+        font-family: var(--font-mono);
+        letter-spacing: .05em;
+        font-weight: 500;
+    }
+    .tabla-compras tbody tr:hover { background: var(--cream-soft); }
+    .tabla-compras td { vertical-align: middle; }
+
+    .estado-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .3rem .75rem;
+        border-radius: 20px;
+        font-size: .8rem;
+        font-weight: 500;
+    }
+    .estado-pill.completed { background: rgba(46, 125, 50, 0.1); color: #2e7d32; }
+    .estado-pill.pending { background: rgba(212, 165, 74, 0.15); color: var(--gold-dark); }
+    .estado-pill.failed { background: rgba(179, 38, 30, 0.1); color: #b3261e; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="compras-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Mi cuenta</span>
+        <h1 class="mt-2">Historial de compras</h1>
+        <p class="subtitle mb-0">Todas tus compras de créditos.</p>
+    </div>
+</div>
+
+<div class="container foja-page">
+    {% if compras %}
+    <div class="table-responsive">
+        <table class="table tabla-compras">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Plan</th>
+                    <th>Créditos</th>
+                    <th>Monto</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for compra in compras %}
+                <tr>
+                    <td class="mono text-muted-foja" style="font-size: .85rem;">
+                        {{ compra.creado_en.strftime('%d/%m/%Y %H:%M') if compra.creado_en else '—' }}
+                    </td>
+                    <td><span class="badge bg-secondary">{{ compra.plan|capitalize }}</span></td>
+                    <td>+{{ compra.creditos_comprados }}</td>
+                    <td>${{ "{:,.0f}".format(compra.monto_pagado) }}</td>
+                    <td>
+                        {% if compra.estado == 'completed' %}
+                            <span class="estado-pill completed"><i class="bi bi-check-circle-fill"></i> Completada</span>
+                        {% elif compra.estado == 'pending' %}
+                            <span class="estado-pill pending"><i class="bi bi-hourglass-split"></i> Pendiente</span>
+                        {% else %}
+                            <span class="estado-pill failed"><i class="bi bi-x-circle-fill"></i> {{ compra.estado|capitalize }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="p-5 text-center text-muted-foja">
+        <i class="bi bi-receipt" style="font-size: 2rem; opacity: .4;"></i>
+        <p class="mt-2 mb-0">Todavía no compraste créditos.</p>
+        <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn-foja mt-3">Ver planes</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

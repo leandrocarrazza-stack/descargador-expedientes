@@ -7,8 +7,10 @@ Uso:
 
 Descripción:
     - Marca la cuenta como is_admin=True en la base de datos.
-    - Los admins pueden descargar sin gastar créditos.
-    - Los admins pueden otorgar créditos gratuitos a otros usuarios desde /admin/
+    - Los admins pueden descargar sin gastar créditos (incluida la
+      actualización incremental, sin necesidad de plan Estudio/Matrícula).
+    - Los admins pueden otorgar créditos gratuitos a otros usuarios desde
+      la tabla de usuarios en /admin/ (fila por fila).
     - Si la cuenta no existe, muestra un error.
 """
 

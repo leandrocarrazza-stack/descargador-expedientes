@@ -106,6 +106,31 @@
         border-color: var(--gold);
         color: var(--navy);
     }
+    .btn-table-sm.danger:hover {
+        background: #b3261e;
+        border-color: #b3261e;
+        color: #fff;
+    }
+    .input-creditos-rapido {
+        width: 4.5rem;
+        padding: .3rem .4rem;
+        font-size: .82rem;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        text-align: center;
+    }
+    .toggle-leidos {
+        background: none;
+        border: none;
+        color: rgba(245, 241, 232, 0.85);
+        font-size: .82rem;
+        text-decoration: underline;
+        cursor: pointer;
+    }
+    .fila-toast {
+        font-size: .78rem;
+        margin-top: .2rem;
+    }
 </style>
 {% endblock %}
 
@@ -120,97 +145,7 @@
 
 <div class="container foja-page">
 
-    <!-- OTORGAR CRÉDITOS -->
-    <div class="section-card">
-        <div class="section-card-header navy">
-            <i class="bi bi-coin icon-sm"></i>
-            Otorgar créditos gratuitos
-        </div>
-        <div class="section-card-body">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label">Email del usuario</label>
-                    <input type="email" id="emailUsuario" class="form-control" placeholder="usuario@ejemplo.com">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Cantidad</label>
-                    <input type="number" id="cantidadCreditos" class="form-control" value="5" min="1" max="100">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Motivo (opcional)</label>
-                    <input type="text" id="motivoCreditos" class="form-control" placeholder="compensación, prueba...">
-                </div>
-                <div class="col-md-2">
-                    <button class="btn-foja w-100" onclick="otorgarCreditos()">
-                        <i class="bi bi-plus-circle"></i> Otorgar
-                    </button>
-                </div>
-            </div>
-            <div id="mensajeOtorgar" class="mt-3 d-none"></div>
-        </div>
-    </div>
-
-    <!-- MENSAJES DE CONTACTO -->
-    <div class="section-card">
-        <div class="section-card-header amber" style="justify-content: space-between;">
-            <span>
-                <i class="bi bi-envelope-fill icon-sm"></i>
-                Mensajes de contacto
-                {% if no_leidos > 0 %}
-                    <span style="background: #b3261e; color: #fff; border-radius: 20px; padding: 1px 8px; font-size: .75rem; font-family: var(--font-mono); margin-left: .5rem;">{{ no_leidos }} sin leer</span>
-                {% endif %}
-            </span>
-        </div>
-        <div class="section-card-body p-0">
-            {% if mensajes %}
-            <div class="table-responsive">
-                <table class="table tabla-usuarios mb-0">
-                    <thead>
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Nombre</th>
-                            <th>Email</th>
-                            <th>Asunto</th>
-                            <th>Mensaje</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for m in mensajes %}
-                        <tr id="msg-{{ m.id }}" {% if not m.leido %}style="background: rgba(212,165,74,.07);"{% endif %}>
-                            <td class="text-muted-foja mono" style="font-size: .8rem; white-space: nowrap;">
-                                {{ m.creado_en.strftime('%d/%m/%Y %H:%M') }}
-                            </td>
-                            <td><strong>{{ m.nombre }}</strong></td>
-                            <td>
-                                <a href="mailto:{{ m.email }}" style="color: var(--gold-dark);">{{ m.email }}</a>
-                            </td>
-                            <td><span class="badge bg-secondary">{{ m.asunto }}</span></td>
-                            <td style="max-width: 300px; white-space: pre-wrap; font-size: .88rem; color: var(--ink);">{{ m.mensaje }}</td>
-                            <td>
-                                {% if m.leido %}
-                                    <span class="text-muted-foja" style="font-size: .82rem;">Leído</span>
-                                {% else %}
-                                    <button class="btn-table-sm" onclick="marcarLeido({{ m.id }})">
-                                        <i class="bi bi-check2"></i> Marcar leído
-                                    </button>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="p-5 text-center text-muted-foja">
-                <i class="bi bi-envelope-open" style="font-size: 2rem; opacity: .4;"></i>
-                <p class="mt-2 mb-0">No hay mensajes de contacto todavía.</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- TABLA DE USUARIOS -->
+    <!-- TABLA DE USUARIOS (función principal del admin) -->
     <div class="section-card">
         <div class="section-card-header navy" style="justify-content: space-between;">
             <span><i class="bi bi-people-fill icon-sm"></i> Usuarios registrados ({{ usuarios|length }})</span>
@@ -231,12 +166,12 @@
                             <th>Créditos</th>
                             <th>Rol</th>
                             <th>Registrado</th>
-                            <th>Acción rápida</th>
+                            <th>Otorgar créditos</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for u in usuarios %}
-                        <tr>
+                        <tr id="user-{{ u.id }}">
                             <td class="text-muted-foja mono" style="font-size: .82rem;">{{ u.id }}</td>
                             <td>
                                 <strong>{{ u.email }}</strong>
@@ -246,7 +181,7 @@
                                 <span class="badge bg-secondary">{{ u.plan }}</span>
                             </td>
                             <td>
-                                <span class="creditos-badge {% if u.creditos_disponibles == 0 %}sin-creditos{% endif %}">
+                                <span class="creditos-badge {% if u.creditos_disponibles == 0 %}sin-creditos{% endif %}" id="creditos-{{ u.id }}">
                                     {{ u.creditos_disponibles }}
                                 </span>
                             </td>
@@ -261,16 +196,28 @@
                                 {{ u.creado_en.strftime('%d/%m/%Y') }}
                             </td>
                             <td>
-                                <button class="btn-table-sm"
-                                        onclick="otorgarRapido('{{ u.email }}', 1)"
-                                        title="+1 crédito">
-                                    <i class="bi bi-plus"></i>1
-                                </button>
-                                <button class="btn-table-sm"
-                                        onclick="otorgarRapido('{{ u.email }}', 5)"
-                                        title="+5 créditos">
-                                    <i class="bi bi-plus"></i>5
-                                </button>
+                                <div class="d-flex align-items-center flex-wrap gap-1">
+                                    <button class="btn-table-sm"
+                                            onclick="otorgarRapido('{{ u.email }}', {{ u.id }}, 1)"
+                                            title="+1 crédito">
+                                        <i class="bi bi-plus"></i>1
+                                    </button>
+                                    <button class="btn-table-sm"
+                                            onclick="otorgarRapido('{{ u.email }}', {{ u.id }}, 5)"
+                                            title="+5 créditos">
+                                        <i class="bi bi-plus"></i>5
+                                    </button>
+                                    <input type="number" class="input-creditos-rapido" id="cantidad-{{ u.id }}"
+                                           value="10" min="1" max="100" title="Cantidad">
+                                    <input type="text" class="input-creditos-rapido" style="width: 7rem;"
+                                           id="motivo-{{ u.id }}" placeholder="motivo (opcional)">
+                                    <button class="btn-table-sm"
+                                            onclick="otorgarPersonalizado('{{ u.email }}', {{ u.id }})"
+                                            title="Otorgar cantidad personalizada">
+                                        <i class="bi bi-check2"></i> Otorgar
+                                    </button>
+                                </div>
+                                <div class="fila-toast" id="toast-{{ u.id }}"></div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -286,63 +233,160 @@
         </div>
     </div>
 
+    <!-- MENSAJES DE CONTACTO -->
+    <div class="section-card">
+        <div class="section-card-header amber" style="justify-content: space-between;">
+            <span>
+                <i class="bi bi-envelope-fill icon-sm"></i>
+                Mensajes de contacto
+                {% if no_leidos > 0 %}
+                    <span style="background: #b3261e; color: #fff; border-radius: 20px; padding: 1px 8px; font-size: .75rem; font-family: var(--font-mono); margin-left: .5rem;">{{ no_leidos }} sin leer</span>
+                {% endif %}
+            </span>
+            <span>
+                <button class="toggle-leidos" onclick="toggleLeidos()" id="btnToggleLeidos">Mostrar leídos</button>
+                <button class="btn-table-sm danger" style="margin-left: .75rem;" onclick="eliminarTodosLosLeidos()">
+                    <i class="bi bi-trash"></i> Eliminar leídos
+                </button>
+            </span>
+        </div>
+        <div class="section-card-body p-0">
+            {% if mensajes %}
+            <div class="table-responsive">
+                <table class="table tabla-usuarios mb-0">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Asunto</th>
+                            <th>Mensaje</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-mensajes">
+                        {% for m in mensajes %}
+                        <tr id="msg-{{ m.id }}"
+                            class="{% if m.leido %}fila-leida d-none{% endif %}"
+                            {% if not m.leido %}style="background: rgba(212,165,74,.07);"{% endif %}>
+                            <td class="text-muted-foja mono" style="font-size: .8rem; white-space: nowrap;">
+                                {{ m.creado_en.strftime('%d/%m/%Y %H:%M') }}
+                            </td>
+                            <td><strong>{{ m.nombre }}</strong></td>
+                            <td>
+                                <a href="mailto:{{ m.email }}" style="color: var(--gold-dark);">{{ m.email }}</a>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ m.asunto }}</span></td>
+                            <td style="max-width: 300px; white-space: pre-wrap; font-size: .88rem; color: var(--ink);">{{ m.mensaje }}</td>
+                            <td style="white-space: nowrap;">
+                                {% if m.leido %}
+                                    <span class="text-muted-foja" style="font-size: .82rem;">Leído</span>
+                                    <button class="btn-table-sm danger" onclick="eliminarMensaje({{ m.id }})" title="Eliminar">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                {% else %}
+                                    <button class="btn-table-sm" onclick="marcarLeido({{ m.id }})">
+                                        <i class="bi bi-check2"></i> Marcar leído
+                                    </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-5 text-center text-muted-foja">
+                <i class="bi bi-envelope-open" style="font-size: 2rem; opacity: .4;"></i>
+                <p class="mt-2 mb-0">No hay mensajes de contacto todavía.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block scripts_extra %}
 <script>
-    // Otorgar créditos desde el formulario principal
-    async function otorgarCreditos() {
-        const email = document.getElementById('emailUsuario').value.trim();
-        const creditos = parseInt(document.getElementById('cantidadCreditos').value);
-        const motivo = document.getElementById('motivoCreditos').value.trim() || 'otorgado por admin';
-        const msgDiv = document.getElementById('mensajeOtorgar');
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        if (!email || creditos < 1) {
-            mostrarMensaje(msgDiv, 'Completá el email y la cantidad.', 'warning');
-            return;
-        }
+    function mostrarToast(userId, texto, tipo) {
+        const div = document.getElementById(`toast-${userId}`);
+        if (!div) return;
+        div.textContent = texto;
+        div.style.color = tipo === 'danger' ? '#b3261e' : '#2e7d32';
+        setTimeout(() => { div.textContent = ''; }, 4000);
+    }
 
+    async function _otorgar(email, userId, creditos, motivo) {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const resp = await fetch('/admin/otorgar-creditos', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
+                    'X-CSRFToken': CSRF_TOKEN
                 },
                 body: JSON.stringify({ email, creditos, motivo })
             });
             const data = await resp.json();
-
             if (data.exito) {
-                mostrarMensaje(msgDiv, `Créditos otorgados. ${data.mensaje} (total: ${data.creditos_nuevos})`, 'success');
-                // Recargar la tabla después de 1 segundo
-                setTimeout(() => location.reload(), 1200);
+                document.getElementById(`creditos-${userId}`).textContent = data.creditos_nuevos;
+                mostrarToast(userId, `+${creditos} créditos otorgados`, 'success');
             } else {
-                mostrarMensaje(msgDiv, `Error: ${data.mensaje}`, 'danger');
+                mostrarToast(userId, `Error: ${data.mensaje}`, 'danger');
             }
         } catch (err) {
-            mostrarMensaje(msgDiv, 'Error de conexión.', 'danger');
+            mostrarToast(userId, 'Error de conexión.', 'danger');
         }
     }
 
-    // Botones rápidos en la tabla
-    async function otorgarRapido(email, creditos) {
+    // Botones rápidos +1 / +5 en la tabla
+    function otorgarRapido(email, userId, creditos) {
+        _otorgar(email, userId, creditos, 'otorgado rápido desde panel');
+    }
+
+    // Cantidad + motivo personalizados, misma fila
+    function otorgarPersonalizado(email, userId) {
+        const creditos = parseInt(document.getElementById(`cantidad-${userId}`).value);
+        const motivo = document.getElementById(`motivo-${userId}`).value.trim() || 'otorgado por admin';
+        if (!creditos || creditos < 1) {
+            mostrarToast(userId, 'Cantidad inválida.', 'danger');
+            return;
+        }
+        _otorgar(email, userId, creditos, motivo);
+    }
+
+    async function marcarLeido(id) {
         try {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            const resp = await fetch('/admin/otorgar-creditos', {
+            const resp = await fetch(`/admin/mensajes/${id}/leido`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ email, creditos, motivo: 'otorgado rápido desde panel' })
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN }
             });
             const data = await resp.json();
             if (data.exito) {
-                alert(data.mensaje);
-                location.reload();
+                const fila = document.getElementById(`msg-${id}`);
+                fila.style.background = '';
+                fila.querySelector('td:last-child').innerHTML =
+                    '<span class="text-muted-foja" style="font-size: .82rem;">Leído</span> ' +
+                    `<button class="btn-table-sm danger" onclick="eliminarMensaje(${id})" title="Eliminar">` +
+                    '<i class="bi bi-trash"></i></button>';
+            }
+        } catch (err) {
+            console.error('Error al marcar como leído', err);
+        }
+    }
+
+    async function eliminarMensaje(id) {
+        if (!confirm('¿Eliminar este mensaje?')) return;
+        try {
+            const resp = await fetch(`/admin/mensajes/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': CSRF_TOKEN }
+            });
+            const data = await resp.json();
+            if (data.exito) {
+                document.getElementById(`msg-${id}`).remove();
             } else {
                 alert(`Error: ${data.mensaje}`);
             }
@@ -351,27 +395,34 @@
         }
     }
 
-    // Mostrar mensaje con estilo Bootstrap
-    function mostrarMensaje(div, texto, tipo) {
-        div.className = `mt-3 alert alert-${tipo}`;
-        div.textContent = texto;
-        div.classList.remove('d-none');
-    }
-
-    async function marcarLeido(id) {
+    async function eliminarTodosLosLeidos() {
+        if (!confirm('¿Eliminar todos los mensajes ya leídos? Esta acción no se puede deshacer.')) return;
         try {
-            const resp = await fetch(`/admin/mensajes/${id}/leido`, {
+            const resp = await fetch('/admin/mensajes/eliminar-leidos', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' }
+                headers: { 'X-CSRFToken': CSRF_TOKEN }
             });
             const data = await resp.json();
             if (data.exito) {
-                const fila = document.getElementById(`msg-${id}`);
-                fila.style.background = '';
-                fila.querySelector('td:last-child').innerHTML = '<span class="text-muted-foja" style="font-size: .82rem;">Leído</span>';
+                document.querySelectorAll('.fila-leida').forEach(fila => fila.remove());
+                alert(`${data.cantidad} mensaje(s) eliminado(s).`);
+            } else {
+                alert(`Error: ${data.mensaje}`);
             }
         } catch (err) {
-            alert('Error al marcar como leído.');
+            alert('Error de conexión.');
+        }
+    }
+
+    function toggleLeidos() {
+        const btn = document.getElementById('btnToggleLeidos');
+        const ocultos = document.querySelectorAll('#tbody-mensajes .fila-leida.d-none');
+        if (ocultos.length > 0) {
+            document.querySelectorAll('#tbody-mensajes .fila-leida').forEach(f => f.classList.remove('d-none'));
+            btn.textContent = 'Ocultar leídos';
+        } else {
+            document.querySelectorAll('#tbody-mensajes .fila-leida').forEach(f => f.classList.add('d-none'));
+            btn.textContent = 'Mostrar leídos';
         }
     }
 </script>

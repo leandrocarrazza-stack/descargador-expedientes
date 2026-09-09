@@ -19,7 +19,9 @@
       "Bash(git commit -m \"Agregar archivos Celery copiados del worktree:*)",
       "Bash(git rebase:*)",
       "Bash(git commit -m \"Resolver conflictos de merge con origin/main:*)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "Bash(pip install *)",
+      "Bash(python3 -c \"import flask, flask_sqlalchemy, flask_mail, PyPDF2; print\\('deps ok'\\)\")"
     ]
   }
 }

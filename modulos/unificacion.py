@@ -16,6 +16,8 @@ from pathlib import Path
 from PyPDF2 import PdfMerger, PdfReader
 from typing import List, Optional
 import os
+import shutil
+import subprocess
 import gc  # Garbage collector para liberar memoria entre lotes
 from .conversion import crear_conversor
 from .logger import crear_logger
@@ -23,6 +25,77 @@ from .excepciones import ErrorUnificacion
 from .progreso import PROGRESO_CADA_N_ARCHIVOS
 
 logger = crear_logger(__name__)
+
+# Umbral de tamaño (bytes) para el fallback de anexar_con_qpdf() cuando qpdf
+# no está instalado: por encima de esto, PyPDF2 en memoria arriesga demasiada
+# RAM en un servidor de ~512 MB (ver anexar_con_qpdf).
+_LIMITE_FALLBACK_SIN_QPDF_BYTES = 15 * 1024 * 1024
+
+
+def anexar_con_qpdf(pdf_base: Path, pdf_delta: Path, salida: Path, timeout: int = 300) -> Path:
+    """
+    Concatena pdf_base + pdf_delta en `salida`, usando el binario `qpdf` en
+    vez de PyPDF2.PdfMerger.
+
+    Por qué no PyPDF2 acá: en la actualización incremental, pdf_base es el
+    PDF completo de una descarga anterior (puede pesar 50+ MB) y hay que
+    unirlo al delta recién descargado. PdfMerger.append() carga el PDF
+    entero en memoria — un solo append de 50 MB puede empujar el proceso a
+    150-250 MB en un servidor con ~208 MB libres en reposo (ver
+    modulos/concurrencia.py). qpdf trabaja por streaming en un subproceso
+    aparte y no tiene ese problema.
+
+    Si `qpdf` no está instalado (típicamente sólo en desarrollo local; el
+    Dockerfile de producción lo instala), cae a PyPDF2 SOLO si pdf_base pesa
+    menos que _LIMITE_FALLBACK_SIN_QPDF_BYTES; si no, levanta ErrorUnificacion
+    con un mensaje claro en vez de arriesgar un OOM silencioso.
+
+    Retorna la ruta de `salida`. Levanta ErrorUnificacion si falla.
+    """
+    if shutil.which('qpdf'):
+        try:
+            resultado = subprocess.run(
+                ['qpdf', '--empty', '--pages', str(pdf_base), str(pdf_delta), '--', str(salida)],
+                capture_output=True, text=True, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise ErrorUnificacion(f"qpdf superó el timeout de {timeout}s uniendo {pdf_base.name} + {pdf_delta.name}") from e
+
+        if resultado.returncode != 0:
+            raise ErrorUnificacion(
+                f"qpdf falló (código {resultado.returncode}) uniendo {pdf_base.name} + {pdf_delta.name}: "
+                f"{resultado.stderr[:300]}"
+            )
+        if not salida.exists():
+            raise ErrorUnificacion(f"qpdf no generó el archivo de salida esperado: {salida}")
+        return salida
+
+    tamaño_base = pdf_base.stat().st_size if pdf_base.exists() else 0
+    if tamaño_base >= _LIMITE_FALLBACK_SIN_QPDF_BYTES:
+        raise ErrorUnificacion(
+            f"qpdf no está instalado y el PDF base pesa {tamaño_base / (1024*1024):.1f} MB "
+            f"(> {_LIMITE_FALLBACK_SIN_QPDF_BYTES / (1024*1024):.0f} MB): unirlo con PyPDF2 en memoria "
+            "arriesga quedarse sin RAM. Instalá qpdf (ver Dockerfile) para actualizar este expediente."
+        )
+
+    logger.warning(
+        f"qpdf no está instalado; usando PyPDF2 en memoria como fallback "
+        f"(PDF base de sólo {tamaño_base / (1024*1024):.1f} MB, dentro del límite seguro)"
+    )
+    merger = PdfMerger()
+    try:
+        merger.append(str(pdf_base))
+        merger.append(str(pdf_delta))
+        with open(salida, 'wb') as f:
+            merger.write(f)
+    except Exception as e:
+        raise ErrorUnificacion(f"Fallback sin qpdf falló uniendo {pdf_base.name} + {pdf_delta.name}: {e}") from e
+    finally:
+        merger.close()
+
+    if not salida.exists():
+        raise ErrorUnificacion(f"El fallback sin qpdf no generó el archivo de salida esperado: {salida}")
+    return salida
 
 # Cantidad de PDFs a unir por lote. Más bajo = menos memoria, más lento.
 # 10 es un buen balance para servidores con 512 MB de RAM.

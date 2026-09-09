@@ -24,7 +24,7 @@ from pathlib import Path
 # Agregar proyecto a sys.path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from flask import Flask, render_template
+from flask import Flask, render_template, redirect, url_for
 from flask_login import LoginManager, UserMixin
 from flask_cors import CORS
 
@@ -117,6 +117,14 @@ def crear_app(config_obj=None):
             else:
                 raise
 
+        # db.create_all() no agrega columnas a tablas que ya existen: las
+        # columnas nuevas de modulos/models.py necesitan esta migración
+        # ligera (ver modulos/migraciones.py). Se deja propagar cualquier
+        # error (fail-fast): mejor no arrancar que arrancar con columnas
+        # faltantes y reventar en el primer INSERT que las use.
+        from modulos.migraciones import aplicar_migraciones_ligeras
+        aplicar_migraciones_ligeras(db)
+
     # ═════════════════════════════════════════════════════════════════════
     #  REGISTRAR BLUEPRINTS
     # ═════════════════════════════════════════════════════════════════════
@@ -126,14 +134,16 @@ def crear_app(config_obj=None):
     from rutas.descargas import descargas_bp, limpiar_pdfs_antiguos, iniciar_limpieza_periodica_pdfs
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
+    from rutas.cuenta import cuenta_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
     app.register_blueprint(descargas_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(contacto_bp)
+    app.register_blueprint(cuenta_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta)")
 
     # Limpiar PDFs antiguos del disco al iniciar la app, y repetirlo cada
     # hora mientras el proceso siga vivo (ver iniciar_limpieza_periodica_pdfs):
@@ -168,25 +178,18 @@ def crear_app(config_obj=None):
 
     @app.route('/')
     def index():
-        """Página de inicio."""
+        """Página de inicio: Descargar es la sección principal para un usuario logueado."""
         from flask_login import current_user
 
         if current_user.is_authenticated:
-            return render_template('dashboard.html')
+            return redirect(url_for('descargas.descargar_expediente_sync'))
         else:
             return render_template('inicio.html')
 
     @app.route('/dashboard')
     def dashboard():
-        """Dashboard del usuario (requiere login)."""
-        from flask_login import login_required
-
-        @login_required
-        def _dashboard():
-            from flask_login import current_user
-            return render_template('dashboard.html', usuario=current_user)
-
-        return _dashboard()
+        """Alias viejo del panel: redirige permanentemente a Descargar, ahora la página principal."""
+        return redirect(url_for('descargas.descargar_expediente_sync'), code=301)
 
     # ═════════════════════════════════════════════════════════════════════
     #  SECURITY HEADERS

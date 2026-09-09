@@ -54,6 +54,35 @@ def marcar_leido(mensaje_id):
     return jsonify({'exito': True})
 
 
+@admin_bp.route('/mensajes/<int:mensaje_id>', methods=['DELETE'])
+@login_required
+@requiere_admin
+def eliminar_mensaje(mensaje_id):
+    """
+    Borra un mensaje de contacto ya leído.
+
+    Por defecto rechaza borrar un mensaje sin leer (evita perder algo que
+    nadie vio todavía); ?forzar=1 lo permite igual.
+    """
+    mensaje = MensajeContacto.query.get_or_404(mensaje_id)
+    if not mensaje.leido and request.args.get('forzar') != '1':
+        return jsonify({'exito': False, 'mensaje': 'El mensaje no está leído todavía'}), 400
+
+    db.session.delete(mensaje)
+    db.session.commit()
+    return jsonify({'exito': True})
+
+
+@admin_bp.route('/mensajes/eliminar-leidos', methods=['POST'])
+@login_required
+@requiere_admin
+def eliminar_mensajes_leidos():
+    """Borra todos los mensajes de contacto ya leídos. Devuelve cuántos borró."""
+    cantidad = MensajeContacto.query.filter_by(leido=True).delete()
+    db.session.commit()
+    return jsonify({'exito': True, 'cantidad': cantidad})
+
+
 @admin_bp.route('/otorgar-creditos', methods=['POST'])
 @login_required
 @requiere_admin
