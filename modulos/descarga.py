@@ -1252,7 +1252,7 @@ class DescargadorArchivos:
         print(f"      [RECYCLE] OK, en pagina {pagina_lograda}: {antes} MB -> {despues} MB disponibles")
         return nuevo_driver, pagina_lograda
 
-    def descargar_todo_por_paginas(self, numero: str, on_progreso=None, estrategia=None) -> List[dict]:
+    def descargar_todo_por_paginas(self, numero: str, on_progreso=None, estrategia=None, debe_cancelar=None) -> List[dict]:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
 
@@ -1285,6 +1285,11 @@ class DescargadorArchivos:
                 EstrategiaCompleta (todos, sin cortar) — pasar una
                 EstrategiaIncremental para bajar solo los movimientos
                 nuevos desde una descarga anterior (ver ese módulo).
+            debe_cancelar: callable opcional, sin argumentos, que devuelve
+                True si el usuario pidió cancelar el job (ver
+                rutas/descargas.py). Se chequea en los mismos dos puntos
+                donde ya se detecta sesión expirada: al tope de cada
+                página y antes de cada archivo individual.
 
         Retorna:
             List[dict]: Lista de {path, tipo, movimiento} de archivos descargados
@@ -1355,10 +1360,19 @@ class DescargadorArchivos:
             while True:
                 print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
 
-                # Detectar si la sesión de Keycloak expiró (driver redirigido a login)
+                if debe_cancelar and debe_cancelar():
+                    raise ErrorDescarga("CANCELADO_POR_USUARIO")
+
+                # Detectar si la sesión de Keycloak expiró (driver redirigido a
+                # login). Igual que en navegacion.py: un segundo vistazo antes
+                # de abortar, para no confundir un rebote transitorio del SSO
+                # con una sesión realmente vencida.
                 url_actual = driver.current_url
                 if "ol-sso" in url_actual or "/login" in url_actual:
-                    raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
+                    time.sleep(2)
+                    url_actual = driver.current_url
+                    if "ol-sso" in url_actual or "/login" in url_actual:
+                        raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
 
                 # IMPORTANTE: Esperar a que cargue la tabla completamente
                 # Puede haber diferentes estructuras según Material-UI/React rendering
@@ -1429,6 +1443,9 @@ class DescargadorArchivos:
 
                 # 2. Descargar los archivos que indique la estrategia, ANTES de navegar
                 for indice_boton in indices_a_descargar:
+                    if debe_cancelar and debe_cancelar():
+                        raise ErrorDescarga("CANCELADO_POR_USUARIO")
+
                     mov_idx_global += 1
 
                     nombre_archivo = f"{mov_idx_global:04d}_pag{pagina_actual:02d}.pdf"
@@ -1520,6 +1537,10 @@ class DescargadorArchivos:
         except Exception as e:
             print(f"[ERROR] descargar_todo_por_paginas: {str(e)[:100]}")
             logger.error(f"Error en descargar_todo_por_paginas: {e}", exc_info=True)
+            if "CANCELADO_POR_USUARIO" in str(e):
+                # Ídem: pipeline.py lo detecta explícitamente para devolver
+                # tipo_error='cancelado' en vez de un error genérico.
+                raise
             if "SESION_MV_EXPIRADA" in str(e):
                 # No tragar este error: pipeline.py lo detecta explícitamente para
                 # devolver tipo_error='auth_failed' ("Reconectá tu cuenta") en vez

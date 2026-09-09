@@ -122,7 +122,7 @@ class PipelineDescargador:
         logger.info("Sin cookies_mv, usando sesión local (modo desarrollo)")
         return crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None, debe_cancelar=None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -147,6 +147,11 @@ class PipelineDescargador:
                 - pdf_previo_local (str|Path): PDF de esa descarga, ya
                   bajado del storage a un archivo local (rutas/descargas.py
                   se encarga de traerlo antes de llamar acá).
+            debe_cancelar: callable opcional, sin argumentos, que devuelve
+                True si el usuario pidió cancelar el job (ver
+                rutas/descargas.py). Se reenvía tal cual a
+                descargar_todo_por_paginas, que lo chequea periódicamente
+                dentro del loop de páginas/archivos.
 
         Returns:
             ResultadoPipeline con resultado o error. tipo_error puede ser
@@ -309,7 +314,8 @@ class PipelineDescargador:
             # ANTES de navegar a la siguiente. Esto evita que los JWT tokens expiren.
             # Problema critico: al navegar de pagina 1 a 2, los tokens de pagina 1 vencen -> HTTP 403
             archivos_descargados = self.descargador.descargar_todo_por_paginas(
-                numero_expediente, on_progreso=self._on_progreso, estrategia=estrategia
+                numero_expediente, on_progreso=self._on_progreso, estrategia=estrategia,
+                debe_cancelar=debe_cancelar,
             )
             # Re-sincronizar: si hubo reciclaje de navegador (ver
             # _reciclar_navegador_en_pagina en modulos/descarga.py), el
@@ -563,6 +569,13 @@ class PipelineDescargador:
             )
 
         except Exception as e:
+            if "CANCELADO_POR_USUARIO" in str(e):
+                logger.info("[CANCELADO] Job cancelado por el usuario")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="Descarga cancelada.",
+                    tipo_error="cancelado"
+                )
             if "SESION_MV_EXPIRADA" in str(e):
                 logger.warning(f"[AUTH] Sesión de Mesa Virtual expirada durante el proceso: {e}")
                 return ResultadoPipeline(
