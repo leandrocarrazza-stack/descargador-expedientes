@@ -324,6 +324,12 @@
                     <small id="contador-archivos" class="text-muted-foja mono d-block mt-2" style="display: none;"></small>
                     <small id="mensaje-extendido" class="text-muted-foja d-block mt-2" style="display: none !important;"></small>
                 </div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn-foja-outline" id="btn-cancelar" style="display: none;" onclick="cancelarDescarga()">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </button>
+                </div>
             </div>
 
             <!-- PANEL 3: Selección múltiple -->
@@ -352,7 +358,7 @@
             <!-- PANEL 5: Error -->
             <div id="panel-error" class="result-card error mt-4" style="display: none;">
                 <div class="result-icon error"><i class="bi bi-exclamation-triangle-fill"></i></div>
-                <h3>No se pudo completar</h3>
+                <h3 id="error-titulo">No se pudo completar</h3>
 
                 <div class="alert alert-danger mt-3 text-start">
                     <strong>Motivo:</strong>
@@ -492,6 +498,7 @@
     // inicial ni mientras se espera turno en la cola.
     let notificarEmailActual = false;
     let avisoEmailMostrado = false;
+    let jobIdActual = null;
 
     // Progreso real informado por el servidor
     let progresoInterval = null;
@@ -519,6 +526,11 @@
         porcentajeActual = 0;
         etapaActualIdx = 0;
         tiempoInicioAnimacion = Date.now();
+        jobIdActual = null;
+        const btnCancelar = document.getElementById('btn-cancelar');
+        btnCancelar.style.display = 'none';
+        btnCancelar.disabled = false;
+        document.getElementById('error-titulo').textContent = 'No se pudo completar';
         // Resetear acá (y no sólo en reiniciar()) es lo que deja limpio el
         // camino "varios expedientes encontrados" -> elegir uno: esa segunda
         // descarga es un job nuevo y no debe arrastrar los números del anterior.
@@ -779,6 +791,23 @@
         // Una sola línea cubre las cinco salidas (éxito, error, sesión vencida,
         // múltiples opciones y reiniciar): todas pasan por acá.
         detenerPollProgreso();
+        document.getElementById('btn-cancelar').style.display = 'none';
+    }
+
+    async function cancelarDescarga() {
+        if (!jobIdActual) return;
+        const btn = document.getElementById('btn-cancelar');
+        btn.disabled = true;
+        try {
+            await fetch(`/descargas/expediente/${jobIdActual}/cancelar`, { method: 'POST' });
+            // No se resuelve acá mismo: el long-poll en curso va a recibir
+            // estado 'cancelado' apenas el thread del pipeline note la
+            // marca (ver el chequeo periódico de debe_cancelar) y mostrar
+            // el panel correspondiente.
+        } catch (e) {
+            // Red intermitente: el botón vuelve a habilitarse para reintentar.
+            btn.disabled = false;
+        }
     }
 
     function animarExito() {
@@ -863,6 +892,8 @@
                 return;
             }
 
+            jobIdActual = data.job_id;
+            document.getElementById('btn-cancelar').style.display = '';
             iniciarPollProgreso(data.job_id);
 
         } catch (err) {
@@ -907,6 +938,9 @@
                 }, 800);
                 return;
             }
+
+            jobIdActual = data.job_id;
+            document.getElementById('btn-cancelar').style.display = '';
 
             // 2. Arrancar el polleo del contador. El long-poll de /estado ya
             // NO se dispara desde acá: mientras el job está "en_cola" no
@@ -970,6 +1004,15 @@
                     document.getElementById('error-detalle').textContent = data.mensaje || 'Error desconocido';
                     mostrarSolo('panel-error');
                 }, 800);
+                return;
+
+            } else if (data.estado === 'cancelado') {
+                detenerAnimacion();
+                setTimeout(() => {
+                    document.getElementById('error-titulo').textContent = 'Descarga cancelada';
+                    document.getElementById('error-detalle').textContent = data.mensaje || 'No se descontó ningún crédito.';
+                    mostrarSolo('panel-error');
+                }, 400);
                 return;
 
             } else if (data.estado === 'no_encontrado') {
@@ -1078,6 +1121,13 @@
             if (pendiente) {
                 document.getElementById('numero_expediente').value = pendiente;
                 localStorage.removeItem('expediente_pendiente');
+                // Sólo se guarda acá cuando el usuario ya había escrito el
+                // número y apretado "Descargar", y hubo que mandarlo a
+                // reconectar Mesa Virtual en el medio (ver enviarDescarga y
+                // longPolling): no hace falta que lo pida de nuevo, se
+                // reanuda sola en vez de sólo dejar el campo precargado.
+                iniciarDescarga();
+                return;
             }
         } catch(e) {}
 

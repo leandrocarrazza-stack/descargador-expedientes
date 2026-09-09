@@ -68,6 +68,10 @@ class ErrorColaTimeout(Exception):
     """El job esperó en cola más de lo permitido sin ser admitido."""
 
 
+class ErrorCancelado(Exception):
+    """El usuario canceló el job mientras esperaba turno en la cola."""
+
+
 def memoria_para_admision_mb() -> Optional[int]:
     """
     Como memoria_disponible_mb() (modulos/conversion.py) pero corrigiendo
@@ -315,7 +319,8 @@ class GestorConcurrencia:
 
     def esperar_turno(self, entrada: EntradaCola,
                        on_posicion: Optional[Callable[[int], None]] = None,
-                       timeout: float = MAX_ESPERA_COLA_SEG) -> ControlJob:
+                       timeout: float = MAX_ESPERA_COLA_SEG,
+                       debe_cancelar: Optional[Callable[[], bool]] = None) -> ControlJob:
         """
         Bloquea hasta que `entrada` sea cabeza de cola Y haya cupo de
         navegador Y haya RAM suficiente (o el bypass de "sin actividad" lo
@@ -326,10 +331,15 @@ class GestorConcurrencia:
         rápido y no debe lanzar de forma que rompa el loop (se atrapa
         cualquier excepción igual, por las dudas).
 
+        `debe_cancelar()` (sin argumentos) se chequea en cada despertar
+        junto al deadline: si devuelve True se levanta ErrorCancelado, para
+        que un job cancelado por el usuario mientras espera en cola no siga
+        ocupando su lugar (ver POST /descargas/expediente/<job_id>/cancelar).
+
         El try/finally SIEMPRE remueve la entrada de la cola al salir, sea
-        cual sea el motivo (admitido, timeout, o una excepción del propio
-        callback que se escapó): así un thread que muere a mitad de espera
-        nunca deja bloqueados a los que siguen.
+        cual sea el motivo (admitido, timeout, cancelado, o una excepción
+        del propio callback que se escapó): así un thread que muere a
+        mitad de espera nunca deja bloqueados a los que siguen.
         """
         deadline = self._fn_reloj() + timeout
         ultimo_puesto = None
@@ -341,6 +351,9 @@ class GestorConcurrencia:
                             f"Job {entrada.job_id[:8]}: entrada de cola ya no existe "
                             "(barrida por timeout externo o abandonada)"
                         )
+
+                    if debe_cancelar and debe_cancelar():
+                        raise ErrorCancelado(f"Job {entrada.job_id[:8]}: cancelado por el usuario en cola")
 
                     puesto = self._cola.index(entrada) + 1
                     if puesto != ultimo_puesto:

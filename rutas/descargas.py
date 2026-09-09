@@ -40,15 +40,16 @@ import threading
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response, redirect, url_for
 from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
 from modulos.database import db
 from modulos.models import ExpedienteDescargado, SesionUsuarioMV
-from modulos.auth_mv import obtener_cookies_usuario
+from modulos.auth_mv import obtener_cookies_usuario, invalidar_sesion_usuario
 from modulos.extensions import csrf
-from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout
+from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout, ErrorCancelado
 from modulos.storage import storage_pdf, key_pdf_usuario
 import config
 
@@ -214,6 +215,10 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 datos['actualizado'] = time.time()
                 _actualizar_job(job_id, {'progreso': datos})
 
+            def _debe_cancelar():
+                job = _jobs.get(job_id)
+                return bool(job and job.get('cancelado'))
+
             log.info(f"[JOB {job_id[:8]}] En cola para expediente {numero_expediente}")
             try:
                 control = gestor.esperar_turno(
@@ -222,6 +227,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                         'fase': 'en_cola', 'puesto': puesto,
                         'actual': 0, 'total': None, 'total_exacto': False,
                     }),
+                    debe_cancelar=_debe_cancelar,
                 )
             except ErrorColaTimeout:
                 log.warning(f"[JOB {job_id[:8]}] Timeout esperando turno en la cola")
@@ -233,6 +239,14 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'mensaje': mensaje,
                 })
                 _avisar_error(mensaje)
+                return
+            except ErrorCancelado:
+                log.info(f"[JOB {job_id[:8]}] Cancelado por el usuario en cola")
+                _actualizar_job(job_id, {
+                    'estado': 'cancelado',
+                    'tipo_error': 'cancelado',
+                    'mensaje': 'Descarga cancelada. No se descontó ningún crédito.',
+                })
                 return
 
             log.info(f"[JOB {job_id[:8]}] INICIANDO pipeline para expediente {numero_expediente}")
@@ -248,6 +262,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 on_progreso=_publicar_progreso,
                 control=control,
                 modo_actualizacion=modo_actualizacion,
+                debe_cancelar=_debe_cancelar,
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -350,6 +365,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 log.warning(f"[JOB {job_id[:8]}] Sesión MV expirada")
                 mensaje = 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.'
                 _guardar_intento_fallido(user_id, numero_expediente, mensaje)
+                invalidar_sesion_usuario(user_id)
                 _actualizar_job(job_id, {
                     'estado': 'error',
                     'tipo_error': 'sesion_mv_requerida',
@@ -357,6 +373,17 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'login_url': '/auth/mv-login?next=/descargas/expediente',
                 })
                 _avisar_error(mensaje)
+
+            elif resultado.tipo_error == 'cancelado':
+                # Cancelado por el usuario (POST .../cancelar): no es una
+                # falla, así que no deja intento fallido en el historial ni
+                # manda el email de error aunque esté activado.
+                log.info(f"[JOB {job_id[:8]}] Cancelado por el usuario")
+                _actualizar_job(job_id, {
+                    'estado': 'cancelado',
+                    'tipo_error': 'cancelado',
+                    'mensaje': 'Descarga cancelada. No se descontó ningún crédito.',
+                })
 
             else:
                 # 'sin_novedades' (actualización incremental sin movimientos
@@ -516,7 +543,14 @@ def descargar_expediente_sync():
     if request.method == 'GET':
         sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
         if not sesion_mv:
-            return redirect(url_for('auth.mv_login') + '?next=' + url_for('descargas.descargar_expediente_sync'))
+            # Reenviar el query string original (ej. ?numero=... del link
+            # "Descargar de nuevo" del historial, o ?actualizar=...): sin
+            # esto se pierde en este redirect server-side, que ocurre antes
+            # de que el JS de la página (localStorage) llegue a correr.
+            next_url = url_for('descargas.descargar_expediente_sync')
+            if request.query_string:
+                next_url += '?' + request.query_string.decode('utf-8')
+            return redirect(url_for('auth.mv_login') + '?' + urlencode({'next': next_url}))
 
         ultimas = ExpedienteDescargado.query.filter_by(
             user_id=current_user.id
@@ -626,6 +660,28 @@ def descargar_expediente_sync():
     except Exception as e:
         logger.error(f"Error iniciando descarga: {e}", exc_info=True)
         return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
+
+
+@descargas_bp.route('/expediente/<job_id>/cancelar', methods=['POST'])
+@login_required
+@csrf.exempt
+def cancelar_descarga(job_id):
+    """
+    Marca un job propio como cancelado. El thread del pipeline lo nota en
+    el próximo chequeo periódico (en cola, o dentro del loop de páginas/
+    archivos — ver debe_cancelar en _run_pipeline) y aborta ahí, sin
+    cobrar crédito ni mandar el email de error.
+    """
+    job = _jobs.get(job_id)
+    if not job or job.get('user_id') != current_user.id:
+        return jsonify({'exito': False, 'mensaje': 'Descarga no encontrada'}), 404
+
+    if job.get('estado') != 'procesando':
+        return jsonify({'exito': False, 'mensaje': 'Esta descarga ya terminó'}), 400
+
+    job['cancelado'] = True
+    logger.info(f"[JOB {job_id[:8]}] Cancelación solicitada por el usuario")
+    return jsonify({'exito': True}), 200
 
 
 @descargas_bp.route('/expediente/<int:expediente_id>/actualizar', methods=['POST'])

@@ -762,6 +762,29 @@ def obtener_cookies_usuario(user_id: int):
         return None
 
 
+def invalidar_sesion_usuario(user_id: int) -> None:
+    """
+    Borra la fila de SesionUsuarioMV de un usuario cuando el pipeline
+    confirma que sus cookies ya no sirven (auth_failed). Sin esto la fila
+    quedaba viva para siempre: la próxima visita a /descargas/expediente
+    seguía mostrando "Mesa Virtual conectada" (el chequeo ahí sólo mira si
+    existe la fila, no si las cookies siguen siendo válidas) hasta que el
+    usuario lo descubría recién después de escribir el número y mandar la
+    descarga. Borrarla acá deja ese chequeo barato al día.
+    """
+    try:
+        from modulos.models import SesionUsuarioMV
+        from modulos.database import db
+
+        sesion = SesionUsuarioMV.query.filter_by(user_id=user_id).first()
+        if sesion:
+            db.session.delete(sesion)
+            db.session.commit()
+            logger.info(f"[AUTH_MV] Sesión invalidada para user_id={user_id} (cookies vencidas)")
+    except Exception as e:
+        logger.error(f"[AUTH_MV] Error invalidando sesión: {e}")
+
+
 def verificar_sesion_usuario(user_id: int) -> bool:
     """
     Verifica si el usuario tiene una sesión válida de Mesa Virtual.
