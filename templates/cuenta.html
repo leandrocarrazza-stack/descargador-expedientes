@@ -157,6 +157,11 @@
                     <div style="font-weight: 600; color: var(--gold-dark);">{{ current_user.creditos_disponibles }}</div>
                 </div>
             </div>
+            <div class="mb-3">
+                <a href="{{ url_for('pagos.historial_compras') }}" style="color: var(--gold-dark); font-size: .85rem;">
+                    <i class="bi bi-receipt"></i> Ver historial de compras
+                </a>
+            </div>
             <div class="mv-status">
                 {% if sesion_mv %}
                     <i class="bi bi-check-circle-fill" style="color: #2e7d32;"></i>

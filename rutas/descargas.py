@@ -296,8 +296,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 db.session.add(expediente_db)
 
                 if user and not user.is_admin:
-                    user.creditos_disponibles -= 1
-                    user.creditos_usados_mes += 1
+                    user.registrar_uso_credito(1)
                 db.session.commit()
 
                 # Un PDF por (usuario, expediente, tribunal): purgar del storage

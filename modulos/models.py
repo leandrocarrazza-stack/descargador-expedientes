@@ -106,13 +106,25 @@ class User(UserMixin, db.Model):
         """Verifica si el usuario tiene suficientes créditos."""
         return self.creditos_disponibles >= cantidad
 
-    def usar_creditos(self, cantidad=1):
-        """Usa créditos (si tiene suficientes)."""
-        if self.tiene_creditos(cantidad):
-            self.creditos_disponibles -= cantidad
-            self.creditos_usados_mes += cantidad
-            return True
-        return False
+    def registrar_uso_credito(self, cantidad=1):
+        """
+        Descuenta créditos por una descarga (completa o actualización
+        incremental) y lleva la cuenta de uso mensual, reseteando
+        creditos_usados_mes la primera vez que se usa un crédito en un mes
+        distinto al de fecha_reset_creditos.
+
+        Reemplaza el patrón anterior (`creditos_disponibles -= 1` +
+        `creditos_usados_mes += 1` sin resetear nunca en rutas/descargas.py),
+        que dejaba creditos_usados_mes creciendo indefinidamente en vez de
+        reflejar sólo el mes en curso.
+        """
+        ahora = datetime.utcnow()
+        referencia = self.fecha_reset_creditos or self.creado_en or ahora
+        if (ahora.year, ahora.month) != (referencia.year, referencia.month):
+            self.creditos_usados_mes = 0
+            self.fecha_reset_creditos = ahora
+        self.creditos_disponibles -= cantidad
+        self.creditos_usados_mes += cantidad
 
     def obtener_info(self):
         """Retorna dict con info del usuario (para JSON)."""
