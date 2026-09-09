@@ -58,6 +58,14 @@ import config
 # Estructura: { job_id: { estado, user_id, timestamp, ... } }
 _jobs: dict = {}
 _job_events: dict = {}  # { job_id: threading.Event() } para long-polling
+# Protege únicamente la secuencia "chequear que no haya un job en curso para
+# este (usuario, expediente) + reservar la entrada en _jobs" en los dos POST
+# que lanzan jobs (descargar_expediente_sync, actualizar_expediente). Sin
+# esto esas dos operaciones no son atómicas — con gthread (6 threads, 1
+# worker) dos POST casi simultáneos del mismo (usuario, expediente) pueden
+# pasar ambos el chequeo antes de que cualquiera se registre, lanzando dos
+# pipelines independientes para el mismo expediente.
+_jobs_lock = threading.Lock()
 JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo que vive en memoria un job YA TERMINADO
 # Techo de seguridad para jobs que quedaron en 'procesando' (thread colgado/crasheado
 # sin pasar por su finally). Expedientes con cientos de movimientos pueden tardar
@@ -537,14 +545,32 @@ def descargar_expediente_sync():
         if not numero_expediente:
             return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
 
-        if _hay_job_en_curso(current_user.id, numero_expediente):
-            return jsonify({
-                'exito': False,
-                'tipo_error': 'job_en_curso',
-                'mensaje': 'Ya hay una descarga en curso para este expediente.',
-            }), 409
+        # Chequear-y-reservar en una sola operación atómica bajo _jobs_lock:
+        # ver el comentario junto a _jobs_lock. Se pre-siembra la clave
+        # 'progreso' completa (no es cosmético): estado_descarga() hace
+        # jsonify(job), que ITERA este dict. Si el thread del pipeline
+        # insertara 'progreso' por primera vez justo durante esa iteración,
+        # CPython tiraría "dictionary changed size during iteration" -> 500
+        # en HTML -> el "Unexpected token '<'" del frontend. Creándola acá,
+        # el conjunto de claves nunca cambia: sólo se reasigna su valor.
+        job_id = str(uuid.uuid4())
+        with _jobs_lock:
+            if _hay_job_en_curso(current_user.id, numero_expediente):
+                return jsonify({
+                    'exito': False,
+                    'tipo_error': 'job_en_curso',
+                    'mensaje': 'Ya hay una descarga en curso para este expediente.',
+                }), 409
+            _jobs[job_id] = {
+                'estado': 'procesando',
+                'user_id': current_user.id,
+                'numero': numero_expediente,  # usado por el chequeo de job duplicado en /actualizar
+                'timestamp': time.time(),
+                'progreso': {'fase': 'en_cola', 'puesto': None, 'actual': 0, 'total': None, 'total_exacto': False},
+            }
 
         if not current_user.is_admin and current_user.creditos_disponibles < 1:
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'tipo_error': 'creditos_insuficientes',
@@ -553,6 +579,7 @@ def descargar_expediente_sync():
 
         cookies_mv = obtener_cookies_usuario(current_user.id)
         if not cookies_mv:
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'tipo_error': 'sesion_mv_requerida',
@@ -564,31 +591,17 @@ def descargar_expediente_sync():
         # non-blocking + 409 inmediato). Ahora se hace lugar en la cola FIFO y
         # el job espera su turno DENTRO del thread — recién si la cola misma
         # está llena (MAX_COLA_DESCARGAS) corresponde un 409.
-        job_id = str(uuid.uuid4())
         try:
             entrada, puesto = gestor.encolar(job_id)
         except ErrorColaLlena:
             logger.warning(f"Cola llena: user {current_user.id}, expediente {numero_expediente}")
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'tipo_error': 'cola_llena',
                 'mensaje': 'Hay muchas descargas en este momento. Esperá unos minutos e intentá de nuevo.',
             }), 409
-
-        # Registrar job y lanzar thread
-        _jobs[job_id] = {
-            'estado': 'procesando',
-            'user_id': current_user.id,
-            'numero': numero_expediente,  # usado por el chequeo de job duplicado en /actualizar
-            'timestamp': time.time(),
-            # Se pre-siembra la clave (no es cosmético): estado_descarga() hace
-            # jsonify(job), que ITERA este dict. Si el thread del pipeline
-            # insertara 'progreso' por primera vez justo durante esa iteración,
-            # CPython tiraría "dictionary changed size during iteration" -> 500
-            # en HTML -> el "Unexpected token '<'" del frontend. Creándola acá,
-            # el conjunto de claves nunca cambia: sólo se reasigna su valor.
-            'progreso': {'fase': 'en_cola', 'puesto': puesto, 'actual': 0, 'total': None, 'total_exacto': False},
-        }
+        _jobs[job_id]['progreso']['puesto'] = puesto
 
         app = current_app._get_current_object()
         try:
@@ -604,6 +617,7 @@ def descargar_expediente_sync():
             # de la cola en su finally: hay que hacerlo acá para no dejar a
             # los que siguen esperando detrás de una entrada fantasma.
             gestor.abandonar(entrada)
+            _jobs.pop(job_id, None)
             raise
 
         logger.info(f"[JOB {job_id[:8]}] Lanzado para user {current_user.id}, expediente {numero_expediente}")
@@ -661,18 +675,30 @@ def actualizar_expediente(expediente_id):
                 'mensaje': 'Créditos insuficientes. Comprá créditos para continuar.',
             }), 402
 
-        # Evitar dos descargas/actualizaciones simultáneas del mismo expediente
-        # (duplicarían contenido en el merge, o se pisarían el storage_key
-        # entre sí — ver _hay_job_en_curso).
-        if _hay_job_en_curso(current_user.id, expediente.numero):
-            return jsonify({
-                'exito': False,
-                'tipo_error': 'job_en_curso',
-                'mensaje': 'Ya hay una descarga en curso para este expediente.',
-            }), 409
+        # Chequear-y-reservar en una sola operación atómica bajo _jobs_lock
+        # (ver el comentario junto a su declaración): evita dos
+        # descargas/actualizaciones simultáneas del mismo expediente, que
+        # duplicarían contenido en el merge o se pisarían el storage_key
+        # entre sí.
+        job_id = str(uuid.uuid4())
+        with _jobs_lock:
+            if _hay_job_en_curso(current_user.id, expediente.numero):
+                return jsonify({
+                    'exito': False,
+                    'tipo_error': 'job_en_curso',
+                    'mensaje': 'Ya hay una descarga en curso para este expediente.',
+                }), 409
+            _jobs[job_id] = {
+                'estado': 'procesando',
+                'user_id': current_user.id,
+                'numero': expediente.numero,
+                'timestamp': time.time(),
+                'progreso': {'fase': 'en_cola', 'puesto': None, 'actual': 0, 'total': None, 'total_exacto': False},
+            }
 
         cookies_mv = obtener_cookies_usuario(current_user.id)
         if not cookies_mv:
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'tipo_error': 'sesion_mv_requerida',
@@ -680,14 +706,13 @@ def actualizar_expediente(expediente_id):
                 'login_url': '/auth/mv-login?next=/descargas/expediente'
             }), 401
 
-        job_id = str(uuid.uuid4())
-
         # Bajar el PDF de la descarga anterior del storage a un archivo
         # suelto (streaming): todavía no existe la carpeta temp del pipeline,
         # que se crea recién dentro de PipelineDescargador.ejecutar(). Se
         # borra en el finally de _run_pipeline.
         pdf_previo_local = Path(config.TEMP_DIR) / f"previo_{job_id}.pdf"
         if not storage_pdf().descargar(expediente.storage_key, str(pdf_previo_local)):
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'mensaje': 'No se pudo recuperar el PDF de la descarga anterior. Hacé una descarga completa.',
@@ -703,21 +728,15 @@ def actualizar_expediente(expediente_id):
         except ErrorColaLlena:
             logger.warning(f"Cola llena: user {current_user.id}, actualización {expediente.numero}")
             pdf_previo_local.unlink(missing_ok=True)
+            _jobs.pop(job_id, None)
             return jsonify({
                 'exito': False,
                 'tipo_error': 'cola_llena',
                 'mensaje': 'Hay muchas descargas en este momento. Esperá unos minutos e intentá de nuevo.',
             }), 409
+        _jobs[job_id]['progreso']['puesto'] = puesto
 
         notificar_email = bool((request.get_json(silent=True) or {}).get('notificar_email', current_user.notificar_email))
-
-        _jobs[job_id] = {
-            'estado': 'procesando',
-            'user_id': current_user.id,
-            'numero': expediente.numero,
-            'timestamp': time.time(),
-            'progreso': {'fase': 'en_cola', 'puesto': puesto, 'actual': 0, 'total': None, 'total_exacto': False},
-        }
 
         app = current_app._get_current_object()
         modo_actualizacion = {
@@ -739,6 +758,7 @@ def actualizar_expediente(expediente_id):
             t.start()
         except Exception:
             gestor.abandonar(entrada)
+            _jobs.pop(job_id, None)
             raise
 
         logger.info(f"[JOB {job_id[:8]}] Actualización incremental lanzada para user {current_user.id}, expediente {expediente.numero}")

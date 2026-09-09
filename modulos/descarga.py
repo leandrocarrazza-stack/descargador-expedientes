@@ -1355,10 +1355,16 @@ class DescargadorArchivos:
             while True:
                 print(f"\n  [PAG {pagina_actual}] Esperando a que cargue la tabla...")
 
-                # Detectar si la sesión de Keycloak expiró (driver redirigido a login)
+                # Detectar si la sesión de Keycloak expiró (driver redirigido a
+                # login). Igual que en navegacion.py: un segundo vistazo antes
+                # de abortar, para no confundir un rebote transitorio del SSO
+                # con una sesión realmente vencida.
                 url_actual = driver.current_url
                 if "ol-sso" in url_actual or "/login" in url_actual:
-                    raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
+                    time.sleep(2)
+                    url_actual = driver.current_url
+                    if "ol-sso" in url_actual or "/login" in url_actual:
+                        raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
 
                 # IMPORTANTE: Esperar a que cargue la tabla completamente
                 # Puede haber diferentes estructuras según Material-UI/React rendering

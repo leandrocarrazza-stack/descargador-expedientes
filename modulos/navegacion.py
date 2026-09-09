@@ -67,10 +67,17 @@ class BuscadorExpedientes:
                 time.sleep(5)
             time.sleep(2)  # Tiempo adicional para que React renderice
 
-            # Detectar si el driver fue redirigido a la página de login de Keycloak
+            # Detectar si el driver fue redirigido a la página de login de Keycloak.
+            # Un solo vistazo puede ser un rebote transitorio del SSO en pleno
+            # render de React, no necesariamente una sesión realmente vencida:
+            # se confirma con un segundo vistazo antes de abortar el job (evita
+            # emails de error prematuros por falsos positivos).
             url_actual = driver.current_url
             if "ol-sso" in url_actual or "/login" in url_actual:
-                raise Exception(f"SESION_MV_EXPIRADA: redirigido a login durante búsqueda ({url_actual[:80]})")
+                time.sleep(2)
+                url_actual = driver.current_url
+                if "ol-sso" in url_actual or "/login" in url_actual:
+                    raise Exception(f"SESION_MV_EXPIRADA: redirigido a login durante búsqueda ({url_actual[:80]})")
 
             # IMPORTANTE: Cerrar cartel de notificaciones PRIMERO (puede bloquear otros clicks)
             print("   > Cerrando popup de notificaciones (si existe)...")
