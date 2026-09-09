@@ -486,6 +486,12 @@
     let tiempoInicioAnimacion = 0;
     let etapaActualIdx = 0;
     let porcentajeActual = 0;
+    // Preferencia de aviso por email del envío en curso, y si ya se mostró
+    // el aviso "podés cerrar esta pestaña" (ver aplicarProgresoReal): se
+    // muestra recién cuando el pipeline arranca de verdad, no en el clic
+    // inicial ni mientras se espera turno en la cola.
+    let notificarEmailActual = false;
+    let avisoEmailMostrado = false;
 
     // Progreso real informado por el servidor
     let progresoInterval = null;
@@ -621,6 +627,8 @@
             porcentajeActual = Math.max(porcentajeActual, 3);
             etiquetaActual = 'Esperando turno...';
             setBarra(Math.round(porcentajeActual), etiquetaActual);
+            const avisoEnCola = document.getElementById('aviso-email-progreso');
+            if (avisoEnCola) avisoEnCola.style.display = 'none';
             const el = document.getElementById('contador-archivos');
             if (el) {
                 const adelante = Math.max((p.puesto || 1) - 1, 0);
@@ -638,6 +646,15 @@
         modoReal = true;
         faseActual = p.fase;
         ultimoProgreso = p;
+
+        // Recién acá el pipeline arrancó de verdad contra Mesa Virtual: es
+        // el momento correcto para avisar "podés cerrar esta pestaña", no
+        // en el clic inicial ni mientras se esperaba turno en la cola.
+        if (!avisoEmailMostrado) {
+            avisoEmailMostrado = true;
+            const aviso = document.getElementById('aviso-email-progreso');
+            if (aviso) aviso.style.display = notificarEmailActual ? '' : 'none';
+        }
 
         sincronizarEtapas(f.etapa);
 
@@ -723,8 +740,11 @@
         faseActual = null;
         etiquetaActual = 'Iniciando...';
         longPollArrancado = false;
+        avisoEmailMostrado = false;
         const cont = document.getElementById('contador-archivos');
         if (cont) { cont.textContent = ''; cont.style.display = 'none'; }
+        const aviso = document.getElementById('aviso-email-progreso');
+        if (aviso) aviso.style.display = 'none';
     }
 
     function activarEtapa(idx) {
@@ -819,14 +839,13 @@
     }
 
     async function enviarActualizacion(expedienteId) {
-        const notificarEmail = document.getElementById('notificarEmail').checked;
-        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+        notificarEmailActual = document.getElementById('notificarEmail').checked;
 
         try {
             const resp = await fetch(`/descargas/expediente/${expedienteId}/actualizar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notificar_email: notificarEmail })
+                body: JSON.stringify({ notificar_email: notificarEmailActual })
             });
             const data = await resp.json();
 
@@ -858,10 +877,9 @@
     async function enviarDescarga(numero, indice) {
         iniciarAnimacion();
 
-        const notificarEmail = document.getElementById('notificarEmail').checked;
-        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+        notificarEmailActual = document.getElementById('notificarEmail').checked;
 
-        const body = { numero_expediente: numero, notificar_email: notificarEmail };
+        const body = { numero_expediente: numero, notificar_email: notificarEmailActual };
         if (indice !== null) body.indice_expediente = indice;
 
         try {
@@ -926,9 +944,12 @@
                 setTimeout(() => {
                     document.getElementById('exito-creditos').textContent =
                         `Créditos restantes: ${data.creditos_restantes}`;
+                    // El PDF ya NO se descarga solo: el aviso por email es el
+                    // único canal automático de entrega. Este botón queda
+                    // como la única forma de bajarlo desde acá (necesario
+                    // para quien no activó el aviso por email).
                     document.getElementById('btn-descargar-pdf').href = data.pdf_url;
                     mostrarSolo('panel-exito');
-                    window.location.href = data.pdf_url;
                 }, 800);
                 return;
 

@@ -132,8 +132,9 @@ def test_email_exito_incluye_link_al_pdf():
             msg = outbox[0]
             check("destinatario correcto", msg.recipients == ['avisos@foja.com'], msg.recipients)
             check("el asunto menciona el expediente", '1234/2024' in msg.subject, msg.subject)
-            check("el cuerpo tiene el link de descarga",
-                  '/descargas/expediente/' in msg.body and '/descargar' in msg.body, msg.body)
+            check("el cuerpo tiene el link a la página de confirmación (no al PDF directo)",
+                  '/descargas/expediente/' in msg.body and '/listo' in msg.body
+                  and '/descargar' not in msg.body, msg.body)
 
         # El expediente debe haber quedado guardado en BD con storage_key
         from modulos.models import ExpedienteDescargado

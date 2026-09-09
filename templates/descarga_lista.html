@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block titulo %}Expediente listo · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .descargar-header {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .descargar-header h1 {
+        color: var(--cream);
+        font-size: clamp(2rem, 4vw, 2.75rem);
+    }
+    .result-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-top: 3px solid #2e7d32;
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        text-align: center;
+        box-shadow: var(--shadow-md);
+    }
+    .result-icon { font-size: 3rem; color: #2e7d32; margin-bottom: .5rem; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="descargar-header">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Descargar</span>
+        <h1 class="mt-2">Tu expediente está listo</h1>
+    </div>
+</div>
+
+<div class="container foja-page">
+    <div class="row">
+        <div class="col-lg-7 mx-auto">
+            <div class="result-card mt-4">
+                <div class="result-icon"><i class="bi bi-check-circle-fill"></i></div>
+                <h3>Expediente {{ expediente.numero }}</h3>
+                <p class="text-muted-foja mb-1">
+                    {% if expediente.tribunal %}{{ expediente.tribunal }} · {% endif %}
+                    Descargado el {{ (expediente.completado_en or expediente.creado_en).strftime('%d/%m/%Y a las %H:%M') }}
+                </p>
+                {% if expediente.total_archivos %}
+                <p class="text-muted-foja">{{ expediente.total_archivos }} archivo{{ '' if expediente.total_archivos == 1 else 's' }}</p>
+                {% endif %}
+
+                <div class="d-flex gap-2 flex-wrap justify-content-center mt-3">
+                    <a class="btn-foja" href="{{ url_for('descargas.descargar_pdf', expediente_id=expediente.id) }}">
+                        <i class="bi bi-file-earmark-pdf-fill"></i> Descargar PDF
+                    </a>
+                    <a class="btn-foja-outline" href="{{ url_for('descargas.historial_descargas') }}">
+                        <i class="bi bi-clock-history"></i> Ver historial completo
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -40,22 +40,22 @@ def _url_absoluta(endpoint, **kwargs):
 
 
 def enviar_email_descarga(user, expediente_db):
-    """Avisa que la descarga terminó OK, con el link para bajar el PDF."""
+    """Avisa que la descarga terminó OK, con el link a la página de confirmación."""
     try:
-        pdf_url = _url_absoluta('descargas.descargar_pdf', expediente_id=expediente_db.id)
+        pagina_url = _url_absoluta('descargas.descarga_lista', expediente_id=expediente_db.id)
         msg = Message(
             subject=f'Tu expediente {expediente_db.numero} está listo · Foja',
             recipients=[user.email],
             html=f"""
             <p>Hola,</p>
             <p>Terminamos de descargar y unificar el expediente <strong>{expediente_db.numero}</strong>.</p>
-            <p><a href="{pdf_url}" style="background:#b8860b;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">
-               Descargar PDF
+            <p><a href="{pagina_url}" style="background:#b8860b;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;">
+               Ver y descargar PDF
             </a></p>
             <p>El enlace requiere que estés logueado en Foja, y va a seguir funcionando desde tu historial de descargas.</p>
             <p>El equipo de Foja</p>
             """,
-            body=f"Tu expediente {expediente_db.numero} está listo. Descargalo en: {pdf_url}"
+            body=f"Tu expediente {expediente_db.numero} está listo. Descargalo en: {pagina_url}"
         )
         mail.send(msg)
         logger.info(f"[EMAIL] Aviso de descarga OK enviado a user {user.id}")

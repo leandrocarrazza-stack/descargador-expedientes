@@ -943,6 +943,25 @@ def descargar_pdf(expediente_id):
         return render_template('error.html', mensaje='Error al descargar el archivo'), 500
 
 
+@descargas_bp.route('/expediente/<int:expediente_id>/listo', methods=['GET'])
+@login_required
+def descarga_lista(expediente_id):
+    """
+    Página de confirmación a la que apunta el link del email de aviso: da
+    contexto (qué expediente, cuándo) antes de bajar el PDF, en vez de
+    disparar la descarga directo (silenciosa y sin contexto).
+    """
+    expediente = ExpedienteDescargado.query.get(expediente_id)
+
+    if not expediente:
+        return render_template('error.html', mensaje='Expediente no encontrado'), 404
+
+    if expediente.user_id != current_user.id:
+        return render_template('error.html', mensaje='No tenés permiso para ver este expediente'), 403
+
+    return render_template('descarga_lista.html', expediente=expediente)
+
+
 @descargas_bp.route('/historial', methods=['GET'])
 @login_required
 def historial_descargas():
