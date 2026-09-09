@@ -32,6 +32,7 @@ email de aviso sigan funcionando más allá de esa ventana.
 
 import csv
 import io
+import json
 import logging
 import os
 import time
@@ -107,6 +108,24 @@ def _actualizar_job(job_id, cambios):
         job.update(cambios)
 
 
+def _hay_job_en_curso(user_id, numero_expediente):
+    """
+    True si ya hay un job 'procesando' de este usuario para este expediente
+    (descarga completa o actualización incremental, no importa cuál).
+
+    Evita que una descarga completa y una actualización incremental del
+    MISMO expediente corran en simultáneo: además de duplicar contenido en
+    el merge, la lógica de "un solo storage_key por expediente" (purgar el
+    anterior tras subir el nuevo, ver _run_pipeline) asume que solo un job
+    a la vez puede estar creando/reemplazando el registro más reciente —
+    dos en simultáneo podrían purgarse el storage_key el uno al otro.
+    """
+    return any(
+        j.get('estado') == 'procesando' and j.get('user_id') == user_id and j.get('numero') == numero_expediente
+        for j in _jobs.values()
+    )
+
+
 def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
     """
     Registra en BD un intento de descarga que terminó en error.
@@ -133,7 +152,8 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
         db.session.rollback()
 
 
-def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False):
+def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False,
+                   modo_actualizacion=None, actualizado_desde_id=None):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
@@ -146,7 +166,15 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
     `notificar_email`: si el usuario activó el aviso por email (Mi cuenta o
     el checkbox del formulario), se manda un email al terminar el job, sea
     éxito o error (menos en 'multiples_opciones', que no es un estado
-    terminal: el usuario todavía tiene que elegir una opción).
+    terminal: el usuario todavía tiene que elegir una opción; ni en
+    'sin_novedades', que no es realmente un error).
+
+    `modo_actualizacion`/`actualizado_desde_id`: presentes sólo cuando este
+    job viene de POST /descargas/expediente/<id>/actualizar (actualización
+    incremental, ver PipelineDescargador.ejecutar). `modo_actualizacion` se
+    pasa tal cual al pipeline; `actualizado_desde_id` es el id del
+    ExpedienteDescargado que se está actualizando, para dejar registrada la
+    cadena de actualizaciones en el nuevo registro.
     """
     log = logging.getLogger(__name__)
     control = None
@@ -211,6 +239,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 cookies_mv=cookies_mv,
                 on_progreso=_publicar_progreso,
                 control=control,
+                modo_actualizacion=modo_actualizacion,
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -223,6 +252,16 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
 
                 tribunal = resultado.expediente.get('tribunal') if resultado.expediente else None
 
+                # total_archivos es acumulativo en una actualización incremental
+                # (archivos de la descarga anterior + los nuevos), no sólo lo
+                # bajado en ESTE job — así "Archivos" en el historial siempre
+                # refleja el total real del PDF combinado.
+                total_archivos = resultado.archivos_descargados
+                if actualizado_desde_id:
+                    previo = ExpedienteDescargado.query.get(actualizado_desde_id)
+                    if previo and previo.total_archivos:
+                        total_archivos += previo.total_archivos
+
                 expediente_db = ExpedienteDescargado(
                     user_id=user_id,
                     numero=numero_expediente,
@@ -232,6 +271,13 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     estado='completed',
                     error_msg=None,
                     ultimo_acceso_en=datetime.utcnow(),
+                    total_filas=resultado.total_filas,
+                    total_archivos=total_archivos,
+                    huellas_json=json.dumps(resultado.huellas) if resultado.huellas else None,
+                    mv_expediente_href=(resultado.expediente.get('url') or None) if resultado.expediente else None,
+                    es_actualizacion=bool(modo_actualizacion),
+                    parcial=resultado.parcial,
+                    actualizado_desde_id=actualizado_desde_id,
                 )
 
                 # Subir el PDF al storage persistente (R2 o local, ver
@@ -306,15 +352,23 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 _avisar_error(mensaje)
 
             else:
-                log.error(f"[JOB {job_id[:8]}] Error en pipeline: {resultado.error}")
+                # 'sin_novedades' (actualización incremental sin movimientos
+                # nuevos) no es realmente un error: no se cobra crédito, no
+                # deja rastro de "fallo" en el historial, y no amerita un
+                # email avisando que no pasó nada.
+                es_sin_novedades = resultado.tipo_error == 'sin_novedades'
+                nivel_log = log.info if es_sin_novedades else log.error
+                nivel_log(f"[JOB {job_id[:8]}] {'Sin novedades' if es_sin_novedades else 'Error en pipeline'}: {resultado.error}")
                 mensaje = resultado.error or 'Error desconocido en la descarga'
-                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
+                if not es_sin_novedades:
+                    _guardar_intento_fallido(user_id, numero_expediente, mensaje)
                 _actualizar_job(job_id, {
                     'estado': 'error',
                     'tipo_error': resultado.tipo_error or 'unknown',
                     'mensaje': mensaje,
                 })
-                _avisar_error(mensaje)
+                if not es_sin_novedades:
+                    _avisar_error(mensaje)
 
         except Exception as e:
             log.error(f"[JOB {job_id[:8]}] EXCEPCIÓN en thread: {type(e).__name__}: {e}", exc_info=True)
@@ -335,6 +389,18 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             # cola por su cuenta en ese caso, ver su propio finally).
             if control is not None:
                 control.liberar_todo()
+
+            # El PDF de la descarga anterior se bajó del storage a un
+            # archivo suelto en config.TEMP_DIR ANTES de que el pipeline
+            # existiera (y por lo tanto antes de que tuviera su propia
+            # carpeta temporal, que sí se autolimpia) — hay que borrarlo acá.
+            if modo_actualizacion:
+                pdf_previo = modo_actualizacion.get('pdf_previo_local')
+                if pdf_previo:
+                    try:
+                        Path(pdf_previo).unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
             # Despertar cualquier request de long-polling que esté esperando este job
             if job_id in _job_events:
@@ -472,6 +538,13 @@ def descargar_expediente_sync():
         if not numero_expediente:
             return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
 
+        if _hay_job_en_curso(current_user.id, numero_expediente):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'job_en_curso',
+                'mensaje': 'Ya hay una descarga en curso para este expediente.',
+            }), 409
+
         if not current_user.is_admin and current_user.creditos_disponibles < 1:
             return jsonify({
                 'exito': False,
@@ -507,6 +580,7 @@ def descargar_expediente_sync():
         _jobs[job_id] = {
             'estado': 'procesando',
             'user_id': current_user.id,
+            'numero': numero_expediente,  # usado por el chequeo de job duplicado en /actualizar
             'timestamp': time.time(),
             # Se pre-siembra la clave (no es cosmético): estado_descarga() hace
             # jsonify(job), que ITERA este dict. Si el thread del pipeline
@@ -538,6 +612,141 @@ def descargar_expediente_sync():
 
     except Exception as e:
         logger.error(f"Error iniciando descarga: {e}", exc_info=True)
+        return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
+
+
+@descargas_bp.route('/expediente/<int:expediente_id>/actualizar', methods=['POST'])
+@login_required
+@csrf.exempt
+def actualizar_expediente(expediente_id):
+    """
+    Actualización incremental (planes Estudio/Matrícula): baja solo los
+    movimientos nuevos desde la última descarga de este expediente y los
+    une al PDF anterior. Mismo patrón de job asincrónico + long-poll que
+    POST /descargas/expediente.
+
+    LIMITACIÓN CONOCIDA: si el número de expediente no es único en Mesa
+    Virtual, esta ruta no tiene forma de reproducir cuál de las opciones
+    se eligió en la descarga original (no hay búsqueda por href todavía) —
+    usa la misma selección "inteligente" por defecto que una descarga
+    nueva. En la práctica el número de expediente casi siempre alcanza
+    para identificarlo sin ambigüedad.
+    """
+    try:
+        expediente = ExpedienteDescargado.query.get_or_404(expediente_id)
+
+        if expediente.user_id != current_user.id:
+            return jsonify({'exito': False, 'mensaje': 'No tenés permiso sobre este expediente'}), 403
+
+        if expediente.estado != 'completed':
+            return jsonify({'exito': False, 'mensaje': 'Esta descarga no está completa'}), 400
+
+        if not expediente.storage_key or expediente.total_filas is None:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'actualizacion_no_disponible',
+                'mensaje': 'Esta descarga es previa a la actualización incremental. Hacé una descarga completa para habilitarla.',
+            }), 400
+
+        if not current_user.is_admin and current_user.plan_max_comprado not in ('estudio', 'matricula'):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'plan_requerido',
+                'mensaje': 'La actualización incremental requiere el plan Estudio o Matrícula.',
+            }), 403
+
+        if not current_user.is_admin and current_user.creditos_disponibles < 1:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'creditos_insuficientes',
+                'mensaje': 'Créditos insuficientes. Comprá créditos para continuar.',
+            }), 402
+
+        # Evitar dos descargas/actualizaciones simultáneas del mismo expediente
+        # (duplicarían contenido en el merge, o se pisarían el storage_key
+        # entre sí — ver _hay_job_en_curso).
+        if _hay_job_en_curso(current_user.id, expediente.numero):
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'job_en_curso',
+                'mensaje': 'Ya hay una descarga en curso para este expediente.',
+            }), 409
+
+        cookies_mv = obtener_cookies_usuario(current_user.id)
+        if not cookies_mv:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'sesion_mv_requerida',
+                'mensaje': 'Necesitás conectar tu cuenta de Mesa Virtual primero.',
+                'login_url': '/auth/mv-login?next=/descargas/expediente'
+            }), 401
+
+        job_id = str(uuid.uuid4())
+
+        # Bajar el PDF de la descarga anterior del storage a un archivo
+        # suelto (streaming): todavía no existe la carpeta temp del pipeline,
+        # que se crea recién dentro de PipelineDescargador.ejecutar(). Se
+        # borra en el finally de _run_pipeline.
+        pdf_previo_local = Path(config.TEMP_DIR) / f"previo_{job_id}.pdf"
+        if not storage_pdf().descargar(expediente.storage_key, str(pdf_previo_local)):
+            return jsonify({
+                'exito': False,
+                'mensaje': 'No se pudo recuperar el PDF de la descarga anterior. Hacé una descarga completa.',
+            }), 500
+
+        try:
+            huellas_previas = json.loads(expediente.huellas_json) if expediente.huellas_json else []
+        except (ValueError, TypeError):
+            huellas_previas = []
+
+        try:
+            entrada, puesto = gestor.encolar(job_id)
+        except ErrorColaLlena:
+            logger.warning(f"Cola llena: user {current_user.id}, actualización {expediente.numero}")
+            pdf_previo_local.unlink(missing_ok=True)
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'cola_llena',
+                'mensaje': 'Hay muchas descargas en este momento. Esperá unos minutos e intentá de nuevo.',
+            }), 409
+
+        notificar_email = bool((request.get_json(silent=True) or {}).get('notificar_email', current_user.notificar_email))
+
+        _jobs[job_id] = {
+            'estado': 'procesando',
+            'user_id': current_user.id,
+            'numero': expediente.numero,
+            'timestamp': time.time(),
+            'progreso': {'fase': 'en_cola', 'puesto': puesto, 'actual': 0, 'total': None, 'total_exacto': False},
+        }
+
+        app = current_app._get_current_object()
+        modo_actualizacion = {
+            'total_filas_previo': expediente.total_filas,
+            'huellas_previas': huellas_previas,
+            'pdf_previo_local': str(pdf_previo_local),
+        }
+        try:
+            t = threading.Thread(
+                target=_run_pipeline,
+                args=(app, job_id, current_user.id, expediente.numero, None, cookies_mv, entrada),
+                kwargs={
+                    'notificar_email': notificar_email,
+                    'modo_actualizacion': modo_actualizacion,
+                    'actualizado_desde_id': expediente.id,
+                },
+                daemon=True
+            )
+            t.start()
+        except Exception:
+            gestor.abandonar(entrada)
+            raise
+
+        logger.info(f"[JOB {job_id[:8]}] Actualización incremental lanzada para user {current_user.id}, expediente {expediente.numero}")
+        return jsonify({'job_id': job_id}), 202
+
+    except Exception as e:
+        logger.error(f"Error iniciando actualización: {e}", exc_info=True)
         return jsonify({'exito': False, 'mensaje': 'Error interno del servidor'}), 500
 
 

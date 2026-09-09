@@ -421,6 +421,12 @@
                                             <i class="bi bi-file-earmark-pdf-fill"></i> PDF
                                         </a>
                                         {% endif %}
+                                        {% if exp.estado == 'completed' and exp.storage_key and exp.total_filas is not none %}
+                                        <button type="button" class="btn-table-sm-link" style="background:none;border:none;margin-left:.6rem;"
+                                                onclick="confirmarActualizar({{ exp.id }}, '{{ exp.creado_en.strftime('%d/%m/%Y') }}', {{ exp.total_archivos or 0 }})">
+                                            <i class="bi bi-arrow-repeat"></i> Actualizar
+                                        </button>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -795,6 +801,60 @@
         await enviarDescarga(numeroActual, indice);
     }
 
+    // ─── Actualización incremental ────────────────────────────────────────
+    function confirmarActualizar(expedienteId, fecha, archivos) {
+        const ok = confirm(
+            `Descargamos solo lo nuevo desde tu última descarga (${archivos} archivo(s), ${fecha}) ` +
+            `y lo unimos a tu PDF. Cuesta 1 crédito.`
+        );
+        if (ok) {
+            window.location.href = `${window.location.pathname}?actualizar=${expedienteId}`;
+        }
+    }
+
+    async function iniciarActualizacion(expedienteId) {
+        mostrarSolo('panel-progreso');
+        iniciarAnimacion();
+        await enviarActualizacion(expedienteId);
+    }
+
+    async function enviarActualizacion(expedienteId) {
+        const notificarEmail = document.getElementById('notificarEmail').checked;
+        document.getElementById('aviso-email-progreso').style.display = notificarEmail ? '' : 'none';
+
+        try {
+            const resp = await fetch(`/descargas/expediente/${expedienteId}/actualizar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notificar_email: notificarEmail })
+            });
+            const data = await resp.json();
+
+            if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
+                detenerAnimacion();
+                window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
+                return;
+            }
+            if (!resp.ok || !data.job_id) {
+                animarError();
+                setTimeout(() => {
+                    document.getElementById('error-detalle').textContent = data.mensaje || 'No se pudo iniciar la actualización';
+                    mostrarSolo('panel-error');
+                }, 800);
+                return;
+            }
+
+            iniciarPollProgreso(data.job_id);
+
+        } catch (err) {
+            animarError();
+            setTimeout(() => {
+                document.getElementById('error-detalle').textContent = `Error de conexión: ${err.message}`;
+                mostrarSolo('panel-error');
+            }, 800);
+        }
+    }
+
     async function enviarDescarga(numero, indice) {
         iniciarAnimacion();
 
@@ -1005,6 +1065,14 @@
         const numeroQS = new URLSearchParams(window.location.search).get('numero');
         if (numeroQS) {
             document.getElementById('numero_expediente').value = numeroQS;
+        }
+
+        // ?actualizar=<id> (botón "Actualizar" de últimas descargas/historial):
+        // arranca la actualización incremental apenas carga la página, mismo
+        // panel de progreso y long-poll que una descarga nueva.
+        const actualizarId = new URLSearchParams(window.location.search).get('actualizar');
+        if (actualizarId) {
+            iniciarActualizacion(actualizarId);
         }
     });
 </script>

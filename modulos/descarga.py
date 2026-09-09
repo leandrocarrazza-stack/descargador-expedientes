@@ -26,6 +26,207 @@ from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 logger = crear_logger(__name__)
 
 
+def _leer_filas_pagina(driver) -> list:
+    """
+    Lee, en un solo execute_script (un solo viaje de ida y vuelta a
+    Chrome), las filas de la tabla de movimientos de la página actual:
+    fecha/tipo/fojas/descripción (celdas 0-3, mismo orden que
+    modulos/navegacion.py: Fecha | Tipo | Fojas | Descripción | Opciones)
+    y cuántos botones de descarga (data-testid='GetAppIcon') tiene cada
+    fila — una fila puede tener más de uno.
+
+    El índice de botón de una fila, dentro de esta página, es la suma
+    acumulada de n_botones de las filas anteriores: coincide con el orden
+    que usa SELECTOR_BOTON_DESCARGA (busca en todo <table>, no por fila),
+    porque los íconos aparecen en el DOM en el mismo orden que sus filas.
+
+    Retorna list[dict] con {fecha, tipo, fojas, descripcion, n_botones},
+    o [] si no se pudo leer (nunca None: simplifica a quien llama).
+    """
+    script = """
+        var filas = document.querySelectorAll('table tbody tr');
+        var resultado = [];
+        for (var i = 0; i < filas.length; i++) {
+            var fila = filas[i];
+            var celdas = fila.querySelectorAll('td');
+            if (celdas.length < 4) { continue; }
+            resultado.push({
+                fecha: (celdas[0].textContent || '').trim(),
+                tipo: (celdas[1].textContent || '').trim(),
+                fojas: (celdas[2].textContent || '').trim(),
+                descripcion: (celdas[3].textContent || '').trim(),
+                n_botones: fila.querySelectorAll("[data-testid='GetAppIcon']").length,
+            });
+        }
+        return resultado;
+    """
+    try:
+        filas = driver.execute_script(script)
+        return filas or []
+    except Exception:
+        logger.debug("No se pudieron leer las filas de la página actual", exc_info=True)
+        return []
+
+
+def huella_fila(fila: dict) -> str:
+    """
+    Huella estable de una fila de movimiento, para detectar continuidad
+    entre una descarga completa y una actualización incremental posterior.
+
+    Deliberadamente NO incluye la celda de "Opciones" (sus tooltips varían
+    entre versiones de Material-UI) ni el conteo de botones (dos filas
+    con el mismo contenido pero con un adjunto que se agregó/quitó después
+    seguirían siendo "la misma fila" a efectos de anclar la secuencia).
+    """
+    partes = [fila.get('fecha', ''), fila.get('tipo', ''), fila.get('fojas', ''), fila.get('descripcion', '')]
+    texto = '|'.join(re.sub(r'\s+', ' ', (p or '')).strip() for p in partes)
+    return texto[:200]
+
+
+class EstrategiaCompleta:
+    """
+    Estrategia por defecto de descargar_todo_por_paginas(): baja todos los
+    botones de cada página, sin cortar nunca por cuenta propia (sólo
+    termina cuando Mesa Virtual no tiene más páginas).
+
+    De paso, en la página 1, guarda las huellas de las primeras filas y el
+    total de filas del expediente — la próxima actualización incremental
+    (EstrategiaIncremental) los necesita como punto de referencia, así que
+    TODA descarga completa deja esos datos disponibles para el futuro.
+    """
+
+    def __init__(self):
+        self.huellas_iniciales: list = []
+        self.total_filas_final = None
+        # A diferencia de EstrategiaIncremental, acá no se conoce el total
+        # de antemano: se sigue estimando como siempre (_detectar_total_movimientos).
+        self.total_esperado = None
+
+    def botones_para_pagina(self, descargador, driver, pagina_actual, cantidad_botones):
+        if pagina_actual == 1:
+            filas = _leer_filas_pagina(driver)
+            self.huellas_iniciales = [huella_fila(f) for f in filas[:5]]
+            # total_filas_final sólo se fija si también se pudieron capturar
+            # las huellas: guardar un total sin huellas dejaría el registro
+            # con total_filas != None pero huellas_json vacío, y la próxima
+            # actualización incremental jamás podría anclar (siempre
+            # terminaría en ErrorDescarga("NO_SE_PUDO_ALINEAR")) sin que el
+            # gate de la ruta (que sólo mira total_filas) lo detecte.
+            if self.huellas_iniciales:
+                rango = descargador._leer_rango_filas(driver)
+                if rango:
+                    self.total_filas_final = rango[2]
+        return list(range(cantidad_botones)), True
+
+
+class EstrategiaIncremental:
+    """
+    Descarga solo los movimientos nuevos desde la última descarga
+    completa/actualización de este expediente.
+
+    Ancla en FILAS, no en botones: usa el offset absoluto de fila
+    ``(pagina_actual - 1) * tam_pagina + i`` (no un contador corrido,
+    porque el reciclaje de Chrome puede devolver una página real menor a
+    la objetivo — ver _reciclar_navegador_en_pagina) y compara contra
+    ``delta`` = total_filas_actual - total_filas_previo.
+
+    Corta cuando:
+    - encuentra dónde arranca la secuencia de huellas de la descarga
+      anterior (``posicion_ancla``): a partir de ahí, lo que sigue ya se
+      descargó antes, más allá de cuánto diga ``delta``; o
+    - agotó ``delta`` filas más un margen de páginas de seguridad sin
+      encontrar esa secuencia (probablemente el expediente cambió de
+      forma no incremental) — en ese caso levanta ``ErrorDescarga``.
+
+    ``posicion_ancla == delta`` es el caso limpio (nada intercalado).
+    ``posicion_ancla < delta`` significa que se vieron movimientos por
+    debajo del ancla que no estaban antes (fecha de firma anterior a la
+    de carga, algo común en este fuero): se entrega igual lo descargado,
+    pero quien orquesta (PipelineDescargador.ejecutar) debe marcar el
+    resultado como parcial.
+    """
+
+    ANCHO_SEGURIDAD_PAGINAS = 2
+
+    def __init__(self, delta: int, huellas_previas: list, tam_pagina: int):
+        self.delta = delta
+        self.huellas_previas = list(huellas_previas or [])
+        self.tam_pagina = max(int(tam_pagina or 1), 1)
+        self.posicion_ancla = None
+        self.total_esperado = None
+        # Huellas de las primeras filas TAL COMO ESTÁN AHORA (no las previas):
+        # si esta actualización resulta exitosa, son el punto de referencia
+        # para la PRÓXIMA actualización incremental. Mismo nombre de atributo
+        # que EstrategiaCompleta para que el caller no tenga que distinguir.
+        self.huellas_iniciales: list = []
+        self._acumulado = 0
+        self._limite_filas = delta + self.tam_pagina * self.ANCHO_SEGURIDAD_PAGINAS
+
+    def _matchea_secuencia(self, filas_pagina, desde_indice) -> bool:
+        """
+        ¿Lo que sigue desde filas_pagina[desde_indice] coincide con el
+        principio de huellas_previas? Si la página se corta antes de que
+        alcance para comparar toda la secuencia previa, se compara solo
+        con lo que sí hay disponible en esta página (la próxima llamada,
+        ya en la siguiente página, seguiría verificando el resto si hiciera
+        falta — en la práctica, con ANCHO_SEGURIDAD_PAGINAS de margen, esto
+        no suele importar: la huella[0] sola ya es una coincidencia fuerte).
+        """
+        disponibles = filas_pagina[desde_indice:desde_indice + len(self.huellas_previas)]
+        if not disponibles:
+            return False
+        for fila, esperada in zip(disponibles, self.huellas_previas):
+            if huella_fila(fila) != esperada:
+                return False
+        return True
+
+    def botones_para_pagina(self, descargador, driver, pagina_actual, cantidad_botones):
+        filas = _leer_filas_pagina(driver)
+        if not filas:
+            raise ErrorDescarga("NO_SE_PUDO_LEER_FILAS")
+
+        if pagina_actual == 1:
+            self.huellas_iniciales = [huella_fila(f) for f in filas[:5]]
+
+        offset_base = (pagina_actual - 1) * self.tam_pagina
+        indices = []
+        indice_boton_actual = 0
+        filas_procesadas = 0
+        ancla_en_esta_pagina = False
+
+        for i, fila in enumerate(filas):
+            offset_absoluto = offset_base + i
+
+            if self.posicion_ancla is None and self.huellas_previas and self._matchea_secuencia(filas, i):
+                self.posicion_ancla = offset_absoluto
+                ancla_en_esta_pagina = True
+                break  # lo que sigue desde acá ya se descargó antes
+
+            n_botones = fila.get('n_botones', 0) or 0
+            if offset_absoluto < self.delta:
+                indices.extend(range(indice_boton_actual, indice_boton_actual + n_botones))
+            indice_boton_actual += n_botones
+            filas_procesadas += 1
+
+        self._acumulado += len(indices)
+
+        if ancla_en_esta_pagina:
+            self.total_esperado = self._acumulado
+            return indices, False
+
+        filas_vistas_total = offset_base + filas_procesadas
+        if filas_vistas_total >= self.delta:
+            # Ya se cubrieron todas las filas "nuevas" (offset < delta): se
+            # sigue paginando sin descargar nada más, solo para confirmar el
+            # ancla dentro del margen de seguridad.
+            if self.total_esperado is None:
+                self.total_esperado = self._acumulado
+            if filas_vistas_total >= self._limite_filas:
+                raise ErrorDescarga("NO_SE_PUDO_ALINEAR")
+
+        return indices, True
+
+
 class DescargadorArchivos:
     """Cliente para descargar archivos de un expediente (Web Scraping)."""
 
@@ -266,7 +467,7 @@ class DescargadorArchivos:
             return desde, hasta, total
         return None
 
-    def _leer_rango_filas(self, driver):
+    def _leer_rango_filas(self, driver, estricto=False):
         """
         Lee la etiqueta de paginación de Material-UI ("1–10 de 213") para saber
         cuántas FILAS tiene el expediente en total.
@@ -280,6 +481,14 @@ class DescargadorArchivos:
         round-trip a Chrome, y probarlos todos aunque el primero ya haya
         contestado es puro tiempo tirado — esto corre una vez por página,
         no una vez por archivo, pero en un expediente de varias páginas suma.
+
+        Args:
+            estricto: si es True, no cae al regex de respaldo sobre TODO
+                driver.page_source (puede matchear un "N de M" suelto dentro
+                de una descripción, y en modo incremental un total corrido
+                hace que se calcule mal el delta). Usado por la actualización
+                incremental (ver leer_total_filas_confiable); el resto de los
+                llamadores sigue con el fallback de siempre.
 
         Retorna:
             (desde, hasta, total_filas) o None si no se pudo leer.
@@ -296,12 +505,41 @@ class DescargadorArchivos:
                 if resultado:
                     return resultado
 
+        if estricto:
+            return None
+
         # Último recurso: el HTML completo. El regex exige la forma de rango
         # con guión, que es mucho más específica que un "N de M" pelado.
         try:
             return self._parsear_rango_total(driver.page_source)
         except Exception:
             return None
+
+    def leer_total_filas_confiable(self, driver):
+        """
+        Lee el total de filas dos veces (con ~1s de por medio) y exige que
+        ambas coincidan, antes de confiar en el resultado para calcular un
+        delta de actualización incremental.
+
+        Por qué: justo después de navegar o de reciclar el navegador, React
+        puede mostrar por un instante un estado viejo o vacío ("0–0 de 0")
+        antes de terminar de renderizar la tabla real. Una lectura única en
+        ese momento fijaría un delta completamente errado (o negativo,
+        abortando una actualización legítima). Este método es la única vía
+        para obtener el total en modo incremental (usa estricto=True).
+
+        Retorna (desde, hasta, total_filas) o None si no se pudo confirmar.
+        """
+        self._esperar_tabla_cargada(driver)
+        primera = self._leer_rango_filas(driver, estricto=True)
+        if not primera:
+            return None
+        time.sleep(1)
+        segunda = self._leer_rango_filas(driver, estricto=True)
+        if segunda == primera:
+            return primera
+        logger.warning(f"Lectura de total de filas inconsistente: {primera} vs {segunda}")
+        return None
 
     def _detectar_total_movimientos(self, driver, botones_pagina, pagina_actual, ya_intentados,
                                      paginacion_cacheada=_SIN_CACHE):
@@ -1014,7 +1252,7 @@ class DescargadorArchivos:
         print(f"      [RECYCLE] OK, en pagina {pagina_lograda}: {antes} MB -> {despues} MB disponibles")
         return nuevo_driver, pagina_lograda
 
-    def descargar_todo_por_paginas(self, numero: str, on_progreso=None) -> List[dict]:
+    def descargar_todo_por_paginas(self, numero: str, on_progreso=None, estrategia=None) -> List[dict]:
         """
         Descarga archivos de TODAS las páginas, procesando cada página antes de navegar.
 
@@ -1043,6 +1281,10 @@ class DescargadorArchivos:
             on_progreso: callable opcional que recibe un dict con el avance
                 (fase, actual, total, ...) para mostrarlo en el frontend.
                 Ver el emisor local `emitir()` más abajo.
+            estrategia: qué botones descargar de cada página. Por defecto
+                EstrategiaCompleta (todos, sin cortar) — pasar una
+                EstrategiaIncremental para bajar solo los movimientos
+                nuevos desde una descarga anterior (ver ese módulo).
 
         Retorna:
             List[dict]: Lista de {path, tipo, movimiento} de archivos descargados
@@ -1050,6 +1292,7 @@ class DescargadorArchivos:
         print(f"\n[DESCARGA POR PAGINAS] Expediente: {numero}")
         print(f"  [INFO] Estrategia: descargar cada pagina antes de navegar (evita WebElements obsoletos)")
 
+        estrategia = estrategia or EstrategiaCompleta()
         archivos_descargados = []
         pagina_actual = 1
         mov_idx_global = 0
@@ -1147,8 +1390,16 @@ class DescargadorArchivos:
                 cantidad_botones = self._contar_botones_descarga(driver)
                 print(f"  [PAG {pagina_actual}] {cantidad_botones} boton(es) de descarga encontrado(s)")
 
-                if cantidad_botones == 0:
-                    print(f"  [PAG {pagina_actual}] Sin archivos, terminando")
+                # La estrategia decide CUÁLES de esos botones bajar en esta
+                # página (todos, en la estrategia por defecto; solo los
+                # anteriores al delta, en una actualización incremental) y si
+                # hay que seguir paginando después.
+                indices_a_descargar, seguir_paginando = estrategia.botones_para_pagina(
+                    self, driver, pagina_actual, cantidad_botones
+                )
+
+                if not indices_a_descargar and not seguir_paginando:
+                    print(f"  [PAG {pagina_actual}] Nada para descargar en esta estrategia, terminando")
                     break
 
                 # Se lee la paginación UNA sola vez por página (no cambia por
@@ -1160,11 +1411,15 @@ class DescargadorArchivos:
 
                 # Estimar el total ahora que ya sabemos cuántos botones trae esta
                 # página. Se recalcula en cada página para que la estimación se
-                # corrija sola a medida que llegan datos reales.
+                # corrija sola a medida que llegan datos reales. Si la estrategia
+                # ya conoce el total exacto (actualización incremental que ya
+                # cubrió todo el delta), se usa ese en vez de la estimación.
                 total_est, exacto, total_pag = self._detectar_total_movimientos(
                     driver, cantidad_botones, pagina_actual, mov_idx_global,
                     paginacion_cacheada=paginacion_pagina,
                 )
+                if estrategia.total_esperado is not None:
+                    total_est, exacto = estrategia.total_esperado, True
                 emitir(
                     pagina=pagina_actual,
                     total_paginas=total_pag,
@@ -1172,8 +1427,8 @@ class DescargadorArchivos:
                     total_exacto=exacto,
                 )
 
-                # 2. Descargar TODOS los archivos de esta pagina ANTES de navegar
-                for indice_boton in range(cantidad_botones):
+                # 2. Descargar los archivos que indique la estrategia, ANTES de navegar
+                for indice_boton in indices_a_descargar:
                     mov_idx_global += 1
 
                     nombre_archivo = f"{mov_idx_global:04d}_pag{pagina_actual:02d}.pdf"
@@ -1249,6 +1504,10 @@ class DescargadorArchivos:
                     total=max(estado_prog['total'] or 0, mov_idx_global) or None,
                 )
 
+                if not seguir_paginando:
+                    print(f"\n  [PAG {pagina_actual}] Estrategia indica frenar, terminando")
+                    break
+
                 # 3. RECIEN AHORA navegar a la siguiente pagina (tokens ya usados)
                 hay_siguiente = self._navegar_siguiente_pagina(
                     driver, paginacion_cacheada=paginacion_pagina
@@ -1265,6 +1524,12 @@ class DescargadorArchivos:
                 # No tragar este error: pipeline.py lo detecta explícitamente para
                 # devolver tipo_error='auth_failed' ("Reconectá tu cuenta") en vez
                 # de un genérico "no se pudieron descargar archivos".
+                raise
+            if "NO_SE_PUDO_ALINEAR" in str(e) or "NO_SE_PUDO_LEER_FILAS" in str(e):
+                # Ídem: PipelineDescargador.ejecutar necesita distinguir esto
+                # (expediente cambió de forma no incremental) de un fallo de
+                # descarga genérico, para no reportarlo como "descarga
+                # parcial exitosa" ni cobrar un crédito por ella.
                 raise
 
         # Reconciliación final: ya no hay estimación que valga, sabemos el número

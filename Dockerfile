@@ -19,6 +19,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Chrome: navegador headless para scraping de Mesa Virtual
 # LibreOffice: convierte RTF a PDF
 # Ghostscript: compresión de PDFs (opcional, desactivado por defecto)
+# qpdf: une el PDF viejo + el delta en la actualización incremental sin
+# cargar el PDF completo en memoria (ver modulos/unificacion.py::anexar_con_qpdf)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Herramientas base necesarias para agregar repos externos
     wget \
@@ -29,6 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
     # Ghostscript (para compresión de PDFs, desactivado por defecto)
     ghostscript \
+    # qpdf (merge de PDFs por streaming, actualización incremental)
+    qpdf \
     # PostgreSQL client (para psycopg2)
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
