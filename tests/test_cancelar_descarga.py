@@ -154,6 +154,91 @@ def test_sin_debe_cancelar_no_cambia_nada():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  1c. debe_cancelar corta el pipeline durante auth/búsqueda (no sólo descarga)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def test_debe_cancelar_corta_durante_auth_y_busqueda():
+    """
+    Regresión: auth (login contra Mesa Virtual) y búsqueda pueden tardar
+    varios segundos reales y antes no tenían NINGÚN chequeo de debe_cancelar
+    en el medio -sólo lo veía descargar_todo_por_paginas y esperar_turno-,
+    así que apretar "Cancelar" durante esos dos pasos no hacía nada hasta que
+    el pipeline llegaba al loop de descarga (o nunca, en expedientes chicos
+    que terminan antes de llegar ahí).
+    """
+    print("\n[1c] debe_cancelar también corta el pipeline apenas terminan auth y búsqueda")
+    from modulos.pipeline import PipelineDescargador
+    import modulos.pipeline as _pipeline_mod
+
+    # --- Caso A: cancela apenas termina la autenticación ---
+    p = PipelineDescargador()
+    p._autenticar = lambda cookies_mv: object()
+
+    def _buscar_no_deberia_llamarse(self, *a, **k):
+        check("no llega a instanciar el buscador si ya canceló en auth", False)
+        return {}
+
+    original_buscador = _pipeline_mod.BuscadorExpedientes
+    _pipeline_mod.BuscadorExpedientes = type('B', (), {'buscar': _buscar_no_deberia_llamarse})
+    try:
+        resultado = p.ejecutar("1/24", cookies_mv=['x'], debe_cancelar=lambda: True)
+    finally:
+        _pipeline_mod.BuscadorExpedientes = original_buscador
+
+    check("cancelado justo tras auth -> tipo_error='cancelado'",
+          not resultado.exito and resultado.tipo_error == 'cancelado', resultado.tipo_error)
+
+    # --- Caso B: auth pasa, cancela apenas termina la búsqueda ---
+    p2 = PipelineDescargador()
+    p2._autenticar = lambda cookies_mv: object()
+
+    class _BuscadorFalso:
+        def __init__(self, cliente):
+            pass
+
+        def buscar(self, numero, indice_expediente=None):
+            return {'numero': numero, 'tribunal': 'Test'}
+
+    def _descargar_no_deberia_llamarse(self, *a, **k):
+        check("no llega a descargar_todo_por_paginas si ya canceló tras la búsqueda", False)
+        return []
+
+    original_buscador = _pipeline_mod.BuscadorExpedientes
+    original_descargar = _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas
+    _pipeline_mod.BuscadorExpedientes = _BuscadorFalso
+    _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas = _descargar_no_deberia_llamarse
+    try:
+        resultado2 = p2.ejecutar("1/24", cookies_mv=['x'], debe_cancelar=lambda: True)
+    finally:
+        _pipeline_mod.BuscadorExpedientes = original_buscador
+        _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas = original_descargar
+
+    check("cancelado justo tras la búsqueda -> tipo_error='cancelado'",
+          not resultado2.exito and resultado2.tipo_error == 'cancelado', resultado2.tipo_error)
+
+    # --- Caso C: sin cancelar, el flujo llega normalmente hasta la descarga ---
+    p3 = PipelineDescargador()
+    p3._autenticar = lambda cookies_mv: object()
+    llamado = {'descarga': False}
+
+    def _descargar_normal(self, *a, **k):
+        llamado['descarga'] = True
+        return []
+
+    original_buscador = _pipeline_mod.BuscadorExpedientes
+    original_descargar = _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas
+    _pipeline_mod.BuscadorExpedientes = _BuscadorFalso
+    _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas = _descargar_normal
+    try:
+        p3.ejecutar("1/24", cookies_mv=['x'], debe_cancelar=lambda: False)
+    finally:
+        _pipeline_mod.BuscadorExpedientes = original_buscador
+        _pipeline_mod.DescargadorArchivos.descargar_todo_por_paginas = original_descargar
+
+    check("sin cancelar, sigue llegando normalmente al paso de descarga", llamado['descarga'])
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  2. ErrorCancelado en esperar_turno (cola)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -297,6 +382,7 @@ if __name__ == '__main__':
 
     test_debe_cancelar_corta_el_loop_de_paginas()
     test_sin_debe_cancelar_no_cambia_nada()
+    test_debe_cancelar_corta_durante_auth_y_busqueda()
     test_cancelar_mientras_espera_en_cola()
     test_ruta_cancelar_404_400_200()
     test_cancelado_no_cobra_ni_avisa_error()

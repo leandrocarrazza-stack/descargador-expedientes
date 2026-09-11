@@ -149,7 +149,9 @@ class PipelineDescargador:
                   se encarga de traerlo antes de llamar acá).
             debe_cancelar: callable opcional, sin argumentos, que devuelve
                 True si el usuario pidió cancelar el job (ver
-                rutas/descargas.py). Se reenvía tal cual a
+                rutas/descargas.py). Se chequea acá mismo apenas terminan
+                autenticación y búsqueda (los dos pasos que no tienen otro
+                punto de corte), y se reenvía además a
                 descargar_todo_por_paginas, que lo chequea periódicamente
                 dentro del loop de páginas/archivos.
 
@@ -196,6 +198,16 @@ class PipelineDescargador:
 
             _log_memoria("autenticación (Chrome recién arrancado)")
 
+            # El botón de cancelar sólo lo chequea descargar_todo_por_paginas
+            # (PASO 3) y esperar_turno (cola). Auth y búsqueda pueden tardar
+            # varios segundos reales contra Mesa Virtual sin ningún chequeo
+            # en el medio: sin esto, cancelar durante esos pasos no hacía
+            # nada hasta que el pipeline llegaba al loop de descarga (o nunca,
+            # en expedientes chicos que terminan antes de llegar ahí).
+            if debe_cancelar and debe_cancelar():
+                logger.info("[CANCELADO] Usuario canceló durante autenticación")
+                return ResultadoPipeline(exito=False, tipo_error="cancelado", error="Descarga cancelada.")
+
             # PASO 2: BÚSQUEDA
             logger.info("[PASO 2/5] Búsqueda de expediente")
             self._emitir(fase='busqueda', actual=0, total=None, total_exacto=False)
@@ -229,6 +241,10 @@ class PipelineDescargador:
             logger.info(f"[OK] Expediente encontrado: {expediente.get('numero', numero_expediente)}")
 
             _log_memoria("búsqueda")
+
+            if debe_cancelar and debe_cancelar():
+                logger.info("[CANCELADO] Usuario canceló durante la búsqueda")
+                return ResultadoPipeline(exito=False, tipo_error="cancelado", error="Descarga cancelada.")
 
             # PASO 3: DESCARGA DE ARCHIVOS
             logger.info("[PASO 3/5] Descarga de archivos")
