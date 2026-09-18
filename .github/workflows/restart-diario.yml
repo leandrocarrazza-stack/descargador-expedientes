@@ -1,0 +1,18 @@
+name: Reinicio diario del servicio (Render)
+
+on:
+  schedule:
+    # 07:00 UTC = 4:00 AM hora Argentina, franja de mínima actividad verificada
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reiniciar servicio en Render
+        run: |
+          curl --fail -s -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/restart" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Accept: application/json"
