@@ -12,6 +12,7 @@ import logging
 from functools import wraps
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from modulos.database import db
 from modulos.models import User, MensajeContacto
@@ -103,7 +104,9 @@ def otorgar_creditos():
     if not email or creditos <= 0:
         return jsonify({'exito': False, 'mensaje': 'Email y cantidad de créditos requeridos'}), 400
 
-    usuario = User.query.filter_by(email=email).first()
+    # email ya viene en minúsculas; se compara sin distinguir mayúsculas para
+    # encontrar también cuentas viejas guardadas con mayúsculas.
+    usuario = User.query.filter(func.lower(User.email) == email).first()
     if not usuario:
         return jsonify({'exito': False, 'mensaje': f'Usuario {email} no encontrado'}), 404
 

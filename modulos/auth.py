@@ -26,6 +26,7 @@ import secrets
 import logging
 from datetime import datetime, timedelta
 from email_validator import validate_email, EmailNotValidError
+from sqlalchemy import func
 from modulos.database import db
 from modulos.models import User, TokenResetPassword
 
@@ -54,7 +55,10 @@ def validar_email(email):
     try:
         # Validar formato
         email_valido = validate_email(email)
-        email_normalizado = email_valido.email
+        # email_validator solo pasa a minúsculas el dominio; la parte local
+        # (Leo@... vs leo@...) queda como la escribió el usuario. Se unifica
+        # para que registro, login y reseteo vean siempre el mismo email.
+        email_normalizado = email_valido.email.lower()
         return True, email_normalizado, None
     except EmailNotValidError as e:
         return False, None, str(e)
@@ -124,7 +128,7 @@ def crear_usuario(email, nombre, password, plan='free'):
         return None, error_password
 
     # Verificar que email no exista
-    usuario_existente = User.query.filter_by(email=email_normalizado).first()
+    usuario_existente = obtener_usuario(email_normalizado)
     if usuario_existente:
         logger.warning(f"Intento de registrar email duplicado: {_redact_email(email_normalizado)}")
         return None, "El email ya está registrado"
@@ -166,7 +170,7 @@ def generar_token_reset(email):
     if not email_valido:
         return None, "Email inválido"
 
-    usuario = User.query.filter_by(email=email_normalizado).first()
+    usuario = obtener_usuario(email_normalizado)
     if not usuario:
         return None, None  # No revelar que el email no existe
 
@@ -230,7 +234,9 @@ def obtener_usuario(email):
     Returns:
         User o None
     """
-    return User.query.filter_by(email=email).first()
+    # Sin distinguir mayúsculas: hay usuarios viejos guardados con mayúsculas
+    # (ej. "Leo@gmail.com") y no se migran, así que se compara en minúsculas.
+    return User.query.filter(func.lower(User.email) == email.strip().lower()).first()
 
 
 def verificar_credenciales(email, password):

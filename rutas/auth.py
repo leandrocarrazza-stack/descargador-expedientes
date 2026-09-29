@@ -29,6 +29,7 @@ from flask import Blueprint, request, jsonify, session, render_template, redirec
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email, generar_token_reset, resetear_password
+from modulos.auth import obtener_usuario as buscar_usuario_por_email
 from modulos.models import User, TokenResetPassword
 from modulos.database import db
 from modulos.extensions import limiter, csrf, mail
@@ -225,12 +226,12 @@ def verificar_email_disponible():
             return jsonify({'error': 'Email requerido'}), 400
 
         # Validar formato de email
-        valido, _, error = validar_email(email)
+        valido, email_normalizado, error = validar_email(email)
         if not valido:
             return jsonify({'error': f'Email inválido: {error}'}), 400
 
-        # Verificar si existe
-        usuario = User.query.filter_by(email=email).first()
+        # Verificar si existe (sin distinguir mayúsculas)
+        usuario = buscar_usuario_por_email(email_normalizado)
 
         if usuario:
             return jsonify({'disponible': False, 'error': 'Email ya registrado'}), 409
