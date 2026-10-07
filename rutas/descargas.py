@@ -74,6 +74,10 @@ JOB_TTL_SEGUNDOS = 600  # 10 minutos: tiempo máximo que vive en memoria un job 
 # por antigüedad mientras siguen corriendo, el long-poll que los está esperando
 # revienta con KeyError -> 500 HTML -> "Unexpected token '<'" en el frontend.
 JOB_TTL_PROCESANDO_SEGUNDOS = 3600  # 1 hora
+# Cuánto esperar antes de mandar el email de "sesión vencida": tiene que cubrir
+# reconectar con 2FA (~1 min) y quedar por debajo de JOB_TTL_SEGUNDOS, porque
+# el chequeo mira los jobs en memoria.
+EMAIL_SESION_VENCIDA_DEMORA_SEGUNDOS = 300
 
 # La cola FIFO y los permisos de navegador/conversión viven en
 # modulos/concurrencia.py (singleton `gestor`, compartido por ser gunicorn
@@ -197,6 +201,35 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
         user = User.query.get(user_id)
         if user:
             enviar_email_error(user, numero_expediente, mensaje)
+
+    def _avisar_error_diferido(mensaje):
+        """
+        Para la sesión de MV vencida: no es un fallo definitivo, el frontend
+        manda a reconectar y relanza solo el mismo expediente. Mandar el mail
+        ya mismo contradice la descarga que sigue (o terminó) un minuto
+        después. Se espera EMAIL_SESION_VENCIDA_DEMORA_SEGUNDOS y se manda
+        sólo si el usuario NO retomó (ninguna descarga nueva del mismo
+        expediente) — p. ej. cerró la pestaña y nadie va a reconectar.
+        """
+        if not notificar_email:
+            return
+        inicio = time.time()
+
+        def _chequear():
+            retomado = any(
+                jid != job_id and j.get('user_id') == user_id
+                and j.get('numero') == numero_expediente and j.get('timestamp', 0) >= inicio
+                for jid, j in list(_jobs.items())
+            )
+            if retomado:
+                log.info(f"[JOB {job_id[:8]}] Sesión vencida pero el usuario retomó: no se manda email de error")
+                return
+            with app.app_context():
+                _avisar_error(mensaje)
+
+        timer = threading.Timer(EMAIL_SESION_VENCIDA_DEMORA_SEGUNDOS, _chequear)
+        timer.daemon = True
+        timer.start()
 
     with app.app_context():
         try:
@@ -365,7 +398,10 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
             elif resultado.tipo_error == 'auth_failed':
                 log.warning(f"[JOB {job_id[:8]}] Sesión MV expirada")
                 mensaje = 'Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.'
-                _guardar_intento_fallido(user_id, numero_expediente, mensaje)
+                # Sin _guardar_intento_fallido: no es un fallo de la descarga sino
+                # "falta reconectar". El frontend redirige a reconectar y relanza
+                # el mismo expediente; si se anotara acá, el historial mostraría
+                # "Falló" junto a la descarga que sigue en curso (o ya completada).
                 invalidar_sesion_usuario(user_id)
                 _actualizar_job(job_id, {
                     'estado': 'error',
@@ -373,7 +409,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     'mensaje': mensaje,
                     'login_url': '/auth/mv-login?next=/descargas/expediente',
                 })
-                _avisar_error(mensaje)
+                _avisar_error_diferido(mensaje)
 
             elif resultado.tipo_error == 'cancelado':
                 # Cancelado por el usuario (POST .../cancelar): no es una
