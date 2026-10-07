@@ -122,7 +122,7 @@ class PipelineDescargador:
         logger.info("Sin cookies_mv, usando sesión local (modo desarrollo)")
         return crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None, debe_cancelar=None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None, debe_cancelar=None, identidad_expediente: Optional[dict] = None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
@@ -212,7 +212,10 @@ class PipelineDescargador:
             logger.info("[PASO 2/5] Búsqueda de expediente")
             self._emitir(fase='busqueda', actual=0, total=None, total_exacto=False)
             self.buscador = BuscadorExpedientes(self.cliente)
-            resultado_busqueda = self.buscador.buscar(numero_expediente, indice_expediente=indice_expediente)
+            # `identidad` solo se pasa si existe: verifica que el expediente sea
+            # el que el usuario eligió (no solo "el N-ésimo de la lista").
+            kwargs_busqueda = {'identidad': identidad_expediente} if identidad_expediente else {}
+            resultado_busqueda = self.buscador.buscar(numero_expediente, indice_expediente=indice_expediente, **kwargs_busqueda)
 
             if not resultado_busqueda:
                 # Verificar si hay múltiples opciones pendientes de selección
@@ -227,6 +230,7 @@ class PipelineDescargador:
                             'numero': op.get('numero', ''),
                             'caratula': op.get('caratula', 'Sin descripción'),
                             'tribunal': op.get('tribunal', 'No especificado'),
+                            'url': op.get('url', ''),
                         } for i, op in enumerate(opciones)]
                     )
 
@@ -268,7 +272,7 @@ class PipelineDescargador:
                 if not nuevo_cliente:
                     return None
                 nuevo_buscador = BuscadorExpedientes(nuevo_cliente)
-                if not nuevo_buscador.buscar(numero_expediente, indice_expediente=indice_expediente):
+                if not nuevo_buscador.buscar(numero_expediente, indice_expediente=indice_expediente, **kwargs_busqueda):
                     return None
                 return nuevo_cliente
 
@@ -598,6 +602,20 @@ class PipelineDescargador:
                     exito=False,
                     error="Tu sesión de Mesa Virtual expiró. Reconectá tu cuenta.",
                     tipo_error="auth_failed"
+                )
+            if "EXPEDIENTE_NO_COINCIDE" in str(e):
+                logger.warning(f"[BUSQUEDA] El expediente elegido ya no está entre los resultados: {e}")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="No encontramos el expediente que elegiste entre los resultados actuales (la lista pudo haber cambiado). Volvé a buscarlo y elegilo de nuevo. No se descontó ningún crédito.",
+                    tipo_error="expediente_no_coincide",
+                )
+            if "NO_SE_PUDO_ENTRAR_AL_EXPEDIENTE" in str(e):
+                logger.error(f"[BUSQUEDA] No se pudo abrir el expediente: {e}")
+                return ResultadoPipeline(
+                    exito=False,
+                    error="No pudimos abrir el expediente en Mesa Virtual. Intentá de nuevo en unos minutos. No se descontó ningún crédito.",
+                    tipo_error="no_se_pudo_abrir",
                 )
             if modo_actualizacion and ("NO_SE_PUDO_ALINEAR" in str(e) or "NO_SE_PUDO_LEER_FILAS" in str(e)):
                 logger.warning(f"[INCREMENTAL] No se pudo alinear con la descarga anterior: {e}")

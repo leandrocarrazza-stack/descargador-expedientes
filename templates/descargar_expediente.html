@@ -847,7 +847,11 @@
         // Llamado desde el panel de selección múltiple
         mostrarSolo('panel-progreso');
         iniciarAnimacion();
-        await enviarDescarga(numeroActual, indice);
+        const elegida = opcionesActuales.find(op => op.indice === indice);
+        const identidad = elegida
+            ? { url: elegida.url || '', caratula: elegida.caratula || '', tribunal: elegida.tribunal || '' }
+            : null;
+        await enviarDescarga(numeroActual, indice, identidad);
     }
 
     // ─── Actualización incremental ────────────────────────────────────────
@@ -905,13 +909,14 @@
         }
     }
 
-    async function enviarDescarga(numero, indice) {
+    async function enviarDescarga(numero, indice, identidad = null) {
         iniciarAnimacion();
 
         notificarEmailActual = document.getElementById('notificarEmail').checked;
 
         const body = { numero_expediente: numero, notificar_email: notificarEmailActual };
         if (indice !== null) body.indice_expediente = indice;
+        if (identidad) body.identidad_expediente = identidad;
 
         try {
             // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
@@ -1066,7 +1071,10 @@
     }
 
     // ─── PANEL DE SELECCIÓN MÚLTIPLE ──────────────────────────────────────
+    let opcionesActuales = [];
+
     function mostrarOpciones(opciones) {
+        opcionesActuales = opciones;
         const lista = document.getElementById('lista-opciones');
         lista.innerHTML = '';
 
