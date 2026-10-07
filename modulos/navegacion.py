@@ -28,7 +28,33 @@ class BuscadorExpedientes:
         self.timeout = timeout
         self._opciones_multiples = []  # Lista de opciones cuando hay múltiples resultados
 
-    def buscar(self, numero, indice_expediente=None):
+    @staticmethod
+    def _normalizar(texto):
+        return ' '.join((texto or '').lower().split())
+
+    @classmethod
+    def _coincide_identidad(cls, exp, identidad):
+        """True si `exp` (fila de resultados) es el expediente descrito por `identidad`.
+
+        Compara por URL si ambos la tienen; si no, por carátula (y tribunal,
+        cuando ambos lo informan).
+        """
+        url_esperada = (identidad.get('url') or '').strip()
+        url_exp = (exp.get('url') or '').strip()
+        if url_esperada and url_exp:
+            return url_esperada == url_exp
+
+        caratula_esperada = cls._normalizar(identidad.get('caratula'))
+        if not caratula_esperada or caratula_esperada != cls._normalizar(exp.get('caratula')):
+            return False
+
+        tribunal_esperado = cls._normalizar(identidad.get('tribunal'))
+        tribunal_exp = cls._normalizar(exp.get('tribunal'))
+        if tribunal_esperado and tribunal_exp and 'no especificado' not in tribunal_exp:
+            return tribunal_esperado == tribunal_exp
+        return True
+
+    def buscar(self, numero, indice_expediente=None, identidad=None):
         """
         Busca un expediente navegando en Mesa Virtual y extrayendo del HTML.
 
@@ -38,6 +64,10 @@ class BuscadorExpedientes:
             numero: Número del expediente (ej: "22066/14" o "5289")
             indice_expediente: (Opcional) Si hay múltiples resultados, cuál elegir (1-indexed)
                               Si es None, intenta inteligentemente (segundo si hay múltiples)
+            identidad: (Opcional) dict con 'url', 'caratula' y 'tribunal' del expediente
+                       que el usuario eligió. Si se pasa, se entra SOLO al resultado
+                       que coincida (ignora indice_expediente); si ninguno coincide
+                       se lanza EXPEDIENTE_NO_COINCIDE en vez de adivinar.
 
         Retorna:
             dict o None: El expediente encontrado, o None si no existe
@@ -227,6 +257,16 @@ class BuscadorExpedientes:
                 print(f"   [NO] No se encontró ningún expediente con el número '{numero}'")
                 self._mostrar_debug_info(driver)
                 return None
+
+            if identidad:
+                coincidentes = [e for e in expedientes if self._coincide_identidad(e, identidad)]
+                if not coincidentes:
+                    print(f"   [NO] Ninguno de los {len(expedientes)} resultados coincide con el expediente elegido")
+                    raise Exception("EXPEDIENTE_NO_COINCIDE")
+                exp = coincidentes[0]
+                print(f"   [OK] Expediente verificado por identidad: {exp.get('caratula', '')[:60]}")
+                self._clickear_expediente(driver, exp.get('_resultado_index', 0), exp)
+                return exp
 
             if len(expedientes) == 1:
                 exp = expedientes[0]
@@ -780,12 +820,10 @@ class BuscadorExpedientes:
             enlaces = driver.find_elements(By.XPATH, "//a[contains(@href, '/expedientes/') and string-length(@href) > 20]")
 
             if not enlaces:
-                print(f"      [ERROR] No se encontraron links de expedientes")
-                return
+                raise Exception("no se encontraron links de expedientes en la página")
 
             if resultado_index >= len(enlaces):
-                print(f"      [WARN] Indice {resultado_index} > {len(enlaces) - 1}, usando ultimo")
-                resultado_index = len(enlaces) - 1
+                raise Exception(f"el resultado #{resultado_index + 1} no existe entre los {len(enlaces)} links de la página")
 
             # Hacer click en el link correcto
             enlace_objetivo = enlaces[resultado_index]
@@ -810,7 +848,10 @@ class BuscadorExpedientes:
             print(f"      [OK] Página de detalles cargada")
 
         except Exception as e:
+            # No seguir con la página de resultados como si fuera el expediente:
+            # el pipeline descargaría lo que no es y podría cobrar el crédito.
             print(f"      [ERROR] Click falló: {e}")
+            raise Exception(f"NO_SE_PUDO_ENTRAR_AL_EXPEDIENTE: {e}")
 
     def _extraer_movimientos_detalle(self, driver):
         """

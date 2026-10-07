@@ -162,7 +162,7 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
 
 
 def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False,
-                   modo_actualizacion=None, actualizado_desde_id=None):
+                   modo_actualizacion=None, actualizado_desde_id=None, identidad_expediente=None):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
@@ -263,6 +263,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 control=control,
                 modo_actualizacion=modo_actualizacion,
                 debe_cancelar=_debe_cancelar,
+                **({'identidad_expediente': identidad_expediente} if identidad_expediente else {}),
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -573,7 +574,21 @@ def descargar_expediente_sync():
         numero_expediente = data.get('numero_expediente', '').strip()
         indice_expediente = data.get('indice_expediente')
         if indice_expediente is not None:
-            indice_expediente = int(indice_expediente)
+            try:
+                indice_expediente = int(indice_expediente)
+            except (ValueError, TypeError):
+                return jsonify({'exito': False, 'mensaje': 'Índice de expediente inválido'}), 400
+
+        # Qué expediente eligió el usuario (no solo su posición en la lista):
+        # el backend verifica que coincida antes de entrar a descargarlo.
+        identidad_expediente = None
+        identidad_raw = data.get('identidad_expediente')
+        if isinstance(identidad_raw, dict):
+            identidad_expediente = {
+                k: str(identidad_raw.get(k) or '')[:500] for k in ('url', 'caratula', 'tribunal')
+            }
+            if not any(identidad_expediente.values()):
+                identidad_expediente = None
         notificar_email = bool(data.get('notificar_email', current_user.notificar_email))
 
         if not numero_expediente:
@@ -642,7 +657,7 @@ def descargar_expediente_sync():
             t = threading.Thread(
                 target=_run_pipeline,
                 args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv, entrada),
-                kwargs={'notificar_email': notificar_email},
+                kwargs={'notificar_email': notificar_email, 'identidad_expediente': identidad_expediente},
                 daemon=True
             )
             t.start()
@@ -808,6 +823,13 @@ def actualizar_expediente(expediente_id):
                     'notificar_email': notificar_email,
                     'modo_actualizacion': modo_actualizacion,
                     'actualizado_desde_id': expediente.id,
+                    # Volver al MISMO expediente de la descarga anterior, aunque
+                    # el número devuelva varios resultados.
+                    'identidad_expediente': {
+                        'url': expediente.mv_expediente_href or '',
+                        'caratula': expediente.caratula or '',
+                        'tribunal': expediente.tribunal or '',
+                    } if (expediente.mv_expediente_href or expediente.caratula) else None,
                 },
                 daemon=True
             )
