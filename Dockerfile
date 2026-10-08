@@ -13,7 +13,14 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    FLASK_ENV=production
+    FLASK_ENV=production \
+    MALLOC_ARENA_MAX=2 \
+    MALLOC_MMAP_THRESHOLD_=131072 \
+    MALLOC_TRIM_THRESHOLD_=131072
+# MALLOC_*: con 6 threads glibc crea varias arenas y retiene la memoria libre
+# (el proceso queda en ~300 MB tras la primera descarga y a Chrome no le
+# alcanza). 2 arenas + mmap para bloques grandes (PDFs) + trim temprano hacen
+# que free() devuelva la memoria al sistema en vez de acumularla.
 
 # ── Instalar dependencias del sistema ──
 # Chrome: navegador headless para scraping de Mesa Virtual

@@ -28,6 +28,22 @@ logger = crear_logger(__name__)
 LOTE_CONVERSION = int(os.environ.get('LOTE_CONVERSION', '8'))
 
 
+def liberar_heap():
+    """
+    Devuelve al sistema operativo la memoria que Python/glibc retienen tras un
+    job (heap fragmentado de PyPDF2/pikepdf/lecturas de PDFs). Sin esto el
+    proceso queda en ~300 MB aun sin trabajo y a Chrome no le alcanza.
+    No hace nada fuera de Linux/glibc.
+    """
+    import gc
+    gc.collect()
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+
 def memoria_disponible_mb():
     """
     Memoria disponible para ESTE contenedor, en MB. None si no se pudo leer.
