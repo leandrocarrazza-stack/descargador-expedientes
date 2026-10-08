@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block titulo %}Plazos · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .plazos-hero {
+        background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%);
+        color: var(--cream);
+        padding: 3.5rem 0 5rem;
+        margin-bottom: -3rem;
+    }
+    .plazos-hero h1 { color: var(--cream); font-size: clamp(2rem, 4vw, 2.75rem); }
+    .plazos-hero .subtitle { color: rgba(245, 241, 232, 0.75); font-size: 1.05rem; margin-top: .3rem; }
+
+    .section-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-sm);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .section-card-header {
+        padding: 1rem 1.5rem;
+        display: flex; align-items: center; gap: .75rem;
+        font-weight: 600; font-size: .95rem;
+        color: var(--cream); background: var(--navy);
+    }
+    .section-card-header .icon-sm { font-size: 1.1rem; color: var(--gold); }
+    .section-card-body { padding: 1.5rem; }
+
+    .form-label { font-weight: 600; color: var(--navy); font-size: .88rem; }
+    .form-text { font-size: .8rem; }
+
+    .vencimiento {
+        border-left: 4px solid var(--gold);
+        background: var(--cream-soft);
+        padding: 1.1rem 1.4rem;
+        border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .vencimiento .etiqueta { font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .vencimiento .fecha { font-family: var(--font-serif); font-size: clamp(1.7rem, 4vw, 2.4rem); color: var(--navy); line-height: 1.15; }
+    .vencimiento .gracia { margin-top: .6rem; font-size: .92rem; color: var(--ink); }
+
+    .hitos { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .75rem; margin-top: 1rem; }
+    .hito { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: .75rem 1rem; }
+    .hito .k { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .hito .v { font-weight: 600; color: var(--navy); font-size: .95rem; }
+
+    .nota { font-size: .88rem; padding: .6rem .9rem; border-radius: 8px; margin-top: .6rem; }
+    .nota.info { background: #eef3fb; color: var(--navy-700); }
+    .nota.warn { background: #fff6e0; color: #7a5a00; border: 1px solid #f0dca0; }
+
+    .tabla-detalle { font-size: .86rem; margin-bottom: 0; }
+    .tabla-detalle th { background: var(--cream-soft); color: var(--navy); font-weight: 600; white-space: nowrap; }
+    .tabla-detalle tr.habil td { background: #f3faf4; }
+    .tabla-detalle tr.inhabil td { background: #fbf1f0; color: #6b3a36; }
+    .tabla-detalle tr.final td { font-weight: 700; border-top: 2px solid var(--gold); }
+    .badge-estado { font-size: .7rem; padding: .25em .55em; border-radius: 6px; font-weight: 700; }
+    .badge-estado.h { background: #cfe9d4; color: #1f5b2c; }
+    .badge-estado.i { background: #f3cfcb; color: #7d2a22; }
+
+    .legal { font-size: .8rem; color: var(--muted); }
+    .legal li { margin-bottom: .25rem; }
+
+    @media print {
+        .foja-nav, .foja-footer, .no-print, .plazos-hero .subtitle { display: none !important; }
+        .plazos-hero { padding: 1rem 0; margin: 0; background: none; color: #000; }
+        .plazos-hero h1 { color: #000; font-size: 1.4rem; }
+        .section-card { box-shadow: none; }
+    }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="plazos-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Plazos procesales</span>
+        <h1 class="mt-2">Contador de plazos</h1>
+        <p class="subtitle mb-0">Poder Judicial de Entre Ríos · feriados, inhábiles y ferias actualizados desde el sitio oficial del STJER.</p>
+    </div>
+</div>
+
+<div class="container foja-page" style="max-width: 920px;">
+
+{% if not acceso %}
+    <div class="section-card">
+        <div class="section-card-header"><i class="bi bi-lock icon-sm"></i> Función para usuarios con plan</div>
+        <div class="section-card-body">
+            <p class="mb-3">El contador de plazos está incluido para quienes tienen un plan de Foja (Individual, Estudio o Matrícula).</p>
+            <a href="{{ url_for('pagos.mostrar_planes') }}" class="btn-foja">Ver planes</a>
+        </div>
+    </div>
+{% else %}
+
+    <!-- FORMULARIO -->
+    <div class="section-card no-print">
+        <div class="section-card-header"><i class="bi bi-calendar2-check icon-sm"></i> Calcular vencimiento</div>
+        <div class="section-card-body">
+            <form id="form-plazo" novalidate>
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label" for="nombre">Nombre del plazo <span class="text-muted fw-normal">(opcional, aparece al imprimir)</span></label>
+                        <input type="text" class="form-control" id="nombre" maxlength="120" placeholder="Ej.: Contestación de demanda · Exp. 12345">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label" for="tipo_notificacion">Tipo de notificación</label>
+                        <select class="form-select" id="tipo_notificacion">
+                            {% for clave, texto in tipos_notificacion.items() %}
+                                <option value="{{ clave }}">{{ texto }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text" id="ayuda-tipo"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="fecha" id="label-fecha">Fecha de notificación</label>
+                        <input type="date" class="form-control" id="fecha" required>
+                        <div class="form-text" id="ayuda-fecha"></div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label" for="modo">Tipo de plazo</label>
+                        <select class="form-select" id="modo">
+                            {% for clave, texto in modos.items() %}
+                                <option value="{{ clave }}">{{ texto }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" for="dias">Días</label>
+                        <input type="number" class="form-control" id="dias" min="1" max="1000" placeholder="10" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="localidad">Localidad</label>
+                        <select class="form-select" id="localidad">
+                            <option value="">Sin localidad (solo calendario provincial)</option>
+                            {% for depto, locs in departamentos.items() %}
+                                <optgroup label="Dpto. {{ depto }}">
+                                    {% for loc in locs|sort %}<option value="{{ loc }}">{{ loc }}</option>{% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="fuero">Fuero</label>
+                        <select class="form-select" id="fuero">
+                            <option value="">Sin especificar</option>
+                            {% for clave, texto in fueros.items() %}<option value="{{ clave }}">{{ texto }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn-foja" id="btn-calcular"><i class="bi bi-calculator"></i> Calcular vencimiento</button>
+                    <button type="button" class="btn-foja-outline" id="btn-limpiar">Limpiar</button>
+                </div>
+                <div id="error" class="alert alert-danger mt-3 d-none" role="alert"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- RESULTADO -->
+    <div id="resultado" class="d-none">
+        <div class="section-card">
+            <div class="section-card-header"><i class="bi bi-check2-circle icon-sm"></i> <span id="res-titulo">Resultado</span></div>
+            <div class="section-card-body">
+                <div class="vencimiento">
+                    <div class="etiqueta">El plazo vence el</div>
+                    <div class="fecha" id="res-vencimiento"></div>
+                    <div class="gracia" id="res-gracia"></div>
+                </div>
+                <div class="hitos" id="res-hitos"></div>
+                <div id="res-mensajes"></div>
+                <div class="mt-3 d-flex flex-wrap gap-2 no-print">
+                    <a id="btn-gcal" class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener noreferrer"><i class="bi bi-google"></i> Agregar a Google Calendar</a>
+                    <button type="button" id="btn-ics" class="btn btn-sm btn-outline-secondary"><i class="bi bi-calendar-plus"></i> Descargar .ics (Outlook, Apple, otros)</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir / guardar PDF</button>
+                </div>
+                <div class="form-text no-print">El evento es de día completo en la fecha del vencimiento. El archivo .ics incluye recordatorios (3 días antes, el día anterior y la mañana del vencimiento).</div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header"><i class="bi bi-list-check icon-sm"></i> Detalle del cómputo, día por día</div>
+            <div class="table-responsive">
+                <table class="table tabla-detalle align-middle">
+                    <thead><tr><th>Fecha</th><th>Día</th><th>Estado</th><th>Detalle</th><th class="text-center">N.º</th></tr></thead>
+                    <tbody id="res-detalle"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-card-body">
+            <ul class="legal mb-2">
+                <li><strong>Herramienta orientativa.</strong> Verificá siempre el vencimiento en el expediente y en las normas aplicables; la responsabilidad por el cómputo es del profesional.</li>
+                <li>Los feriados, inhábiles y ferias se leen automáticamente de <a href="https://www.jusentrerios.gov.ar/inhabiles-y-feriados/" target="_blank" rel="noopener">jusentrerios.gov.ar</a> y de sus noticias oficiales.
+                    {% if sync_fecha and sync_ok %}Última lectura de la página oficial: <strong>{{ sync_fecha.strftime('%d/%m/%Y %H:%M') }}</strong>.
+                    {% elif sync_fecha %}<strong>Atención:</strong> la última lectura de la página oficial falló ({{ sync_fecha.strftime('%d/%m/%Y') }}); puede faltar algún día no laborable o feriado local reciente. Verificá en jusentrerios.gov.ar.
+                    {% else %}Todavía no se leyó la página oficial: puede faltar algún día no laborable o feriado local. Verificá en jusentrerios.gov.ar.{% endif %}</li>
+                <li>No se aplican ampliaciones por distancia ni reglas especiales de un fuero o de un juez (art. 4 del Reglamento de Notificación Electrónica: "salvo disposición en contrario del juez u ordenamiento procesal especial").</li>
+                <li>Los inhábiles de un organismo puntual (un juzgado u oficina) no se descuentan: aparecen como aviso si caen dentro del plazo.</li>
+                <li>Notificación electrónica: Reglamento del Ac. Gral. 15/18 (Anexo I, arts. 3 a 5). Hora de gracia: dos primeras horas hábiles del día siguiente al vencimiento (art. 121, último párrafo, del CPCC de Entre Ríos).</li>
+            </ul>
+        </div>
+    </div>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+{% if acceso %}
+<script>
+(function () {
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const $ = (id) => document.getElementById(id);
+
+    const AYUDA_TIPO = {
+        cedula: 'El plazo corre desde el día siguiente a la notificación.',
+        sne: 'Se perfecciona el martes o viernes inmediato posterior a la fecha "Para Notif. Desde" (o el siguiente día hábil). El plazo corre desde el día siguiente.',
+        sne_urgente: 'Art. 5 del Reglamento: el juez dispuso que se perfeccione al quedar disponible (cautelares, amparos, etc.).'
+    };
+
+    function actualizarAyuda() {
+        const tipo = $('tipo_notificacion').value;
+        $('ayuda-tipo').textContent = AYUDA_TIPO[tipo] || '';
+        const electronica = tipo !== 'cedula';
+        $('label-fecha').textContent = electronica ? 'Fecha "Para Notif. Desde"' : 'Fecha de notificación';
+        $('ayuda-fecha').textContent = electronica
+            ? 'La que figura en el expediente / Mesa Virtual (cuándo quedó disponible la resolución).'
+            : 'Día en que quedaste notificado (cédula o personal).';
+    }
+
+    // Texto siempre con textContent: lo que viene del calendario es externo y no se interpreta como HTML.
+    function el(tag, clase, texto) {
+        const e = document.createElement(tag);
+        if (clase) e.className = clase;
+        if (texto !== undefined) e.textContent = texto;
+        return e;
+    }
+    function enlaceSeguro(url, texto) {
+        if (!url || !/^https:\/\//i.test(url)) return null;
+        const a = el('a', null, texto);
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        return a;
+    }
+    function fechaCorta(iso) { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; }
+
+    function mostrarError(msg) {
+        const e = $('error');
+        e.textContent = msg; e.classList.toggle('d-none', !msg);
+    }
+
+    let eventoActual = null;   // datos del evento de calendario del último cálculo
+
+    function prepararCalendario(cal) {
+        eventoActual = cal || null;
+        const g = $('btn-gcal');
+        // Solo se enlaza a Google si la URL viene del propio servidor y apunta a calendar.google.com
+        const ok = cal && typeof cal.google_url === 'string' && cal.google_url.startsWith('https://calendar.google.com/calendar/render?');
+        g.classList.toggle('d-none', !ok);
+        if (ok) g.href = cal.google_url;
+        $('btn-ics').classList.toggle('d-none', !(cal && cal.ics));
+    }
+
+    function descargarIcs() {
+        if (!eventoActual || !eventoActual.ics) return;
+        const blob = new Blob([eventoActual.ics], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = eventoActual.archivo || 'plazo.ics';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function pintar(r, nombre) {
+        $('res-titulo').textContent = nombre ? `Resultado · ${nombre}` : 'Resultado';
+        $('res-vencimiento').textContent = r.vencimiento_texto;
+
+        const g = $('res-gracia'); g.textContent = '';
+        if (r.gracia && r.gracia.hora) {
+            g.append(el('i', 'bi bi-clock me-1'),
+                document.createTextNode(`Con la hora de gracia, el escrito puede presentarse hasta las ${r.gracia.hora} hs del ${r.gracia.fecha_texto}.`));
+        }
+
+        const hitos = $('res-hitos'); hitos.textContent = '';
+        const lista = [
+            ['Fecha ingresada', r.fecha_ingresada_texto],
+            ['Notificación perfeccionada', r.fecha_perfeccion_texto],
+            [r.modo === 'habiles' ? 'Primer día hábil del plazo' : 'Primer día del plazo', r.inicio_computo_texto],
+            ['Plazo', `${r.dias} días ${r.modo === 'habiles' ? 'hábiles' : 'corridos'}`],
+        ];
+        for (const [k, v] of lista) { const h = el('div', 'hito'); h.append(el('div', 'k', k), el('div', 'v', v)); hitos.append(h); }
+
+        const msgs = $('res-mensajes'); msgs.textContent = '';
+        for (const n of r.notas) msgs.append(el('div', 'nota info', n));
+        for (const a of r.advertencias) msgs.append(el('div', 'nota warn', a));
+        for (const av of r.avisos) {
+            const caja = el('div', 'nota warn');
+            const rango = av.desde === av.hasta ? fechaCorta(av.desde) : `${fechaCorta(av.desde)} al ${fechaCorta(av.hasta)}`;
+            caja.append(el('strong', null, `Inhábil parcial (${rango}): `), document.createTextNode(`${av.motivo}. No se descontó. `));
+            const a = enlaceSeguro(av.fuente_url, 'Ver noticia oficial');
+            if (a) caja.append(a);
+            msgs.append(caja);
+        }
+
+        const tbody = $('res-detalle'); tbody.textContent = '';
+        r.detalle.forEach((d) => {
+            const tr = el('tr', d.habil ? 'habil' : 'inhabil');
+            if (d.fecha === r.vencimiento) tr.classList.add('final');
+            const estado = el('td'); estado.append(el('span', 'badge-estado ' + (d.habil ? 'h' : 'i'), d.habil ? 'HÁBIL' : 'INHÁBIL'));
+            const detalle = el('td', null, d.motivo + (d.fecha === r.vencimiento ? ' · VENCIMIENTO' : ''));
+            const a = enlaceSeguro(d.fuente_url, ' ↗');
+            if (a) detalle.append(a);
+            const n = el('td', 'text-center', d.contador ? String(d.contador) : '');
+            tr.append(el('td', null, d.fecha_texto), el('td', null, d.dia), estado, detalle, n);
+            tbody.append(tr);
+        });
+
+        $('resultado').classList.remove('d-none');
+        $('resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    $('form-plazo').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        mostrarError('');
+        const dias = parseInt($('dias').value, 10);
+        if (!$('fecha').value) return mostrarError('Ingresá la fecha.');
+        if (!dias || dias < 1) return mostrarError('Ingresá la cantidad de días del plazo.');
+
+        const btn = $('btn-calcular'); btn.disabled = true;
+        try {
+            const resp = await fetch('{{ url_for("plazos.api_calcular") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+                body: JSON.stringify({
+                    tipo_notificacion: $('tipo_notificacion').value,
+                    fecha: $('fecha').value, dias: dias, modo: $('modo').value,
+                    localidad: $('localidad').value, fuero: $('fuero').value,
+                    nombre: $('nombre').value.trim(),
+                })
+            });
+            const data = await resp.json().catch(() => null);
+            if (data === null) {
+                // Respuesta que no es JSON: típicamente la página quedó abierta más de una hora y venció el token CSRF
+                return mostrarError('La página venció o la sesión se cerró. Recargala (F5) y probá de nuevo.');
+            }
+            if (!resp.ok || !data.exito) return mostrarError(data.mensaje || 'No se pudo calcular el plazo.');
+            prepararCalendario(data.calendario);
+            pintar(data.resultado, $('nombre').value.trim());
+        } catch (e) {
+            mostrarError('Error de conexión. Intentá de nuevo.');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    $('btn-limpiar').addEventListener('click', () => {
+        $('form-plazo').reset(); mostrarError(''); actualizarAyuda();
+        $('resultado').classList.add('d-none');
+    });
+    $('btn-ics').addEventListener('click', descargarIcs);
+    $('tipo_notificacion').addEventListener('change', actualizarAyuda);
+    actualizarAyuda();
+})();
+</script>
+{% endif %}
+{% endblock %}

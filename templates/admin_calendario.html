@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block titulo %}Calendario judicial · Admin · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .cal-hero { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%); color: var(--cream); padding: 3rem 0 4.5rem; margin-bottom: -3rem; }
+    .cal-hero h1 { color: var(--cream); font-size: clamp(1.8rem, 4vw, 2.4rem); }
+    .cal-hero .subtitle { color: rgba(245, 241, 232, 0.75); }
+    .section-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 1.5rem; }
+    .section-card-header { padding: 1rem 1.5rem; font-weight: 600; font-size: .95rem; color: var(--cream); background: var(--navy); display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .section-card-body { padding: 1.25rem 1.5rem; }
+    .tabla-cal { font-size: .84rem; margin: 0; }
+    .tabla-cal th { background: var(--cream-soft); color: var(--navy); white-space: nowrap; }
+    .tabla-cal tr.inactivo td { opacity: .5; }
+    .chip { display: inline-block; font-size: .7rem; padding: .15em .55em; border-radius: 6px; background: #e8eef7; color: var(--navy-700); font-weight: 600; }
+    .chip.manual { background: #fdecc8; color: #7a5a00; }
+    .chip.aviso { background: #f6dede; color: #7d2a22; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+<div class="cal-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Administración</span>
+        <h1 class="mt-2">Calendario judicial</h1>
+        <p class="subtitle mb-0">Se actualiza solo desde jusentrerios.gov.ar. Acá podés ver lo que cargó, anular un registro o sumar un día a mano. <a href="{{ url_for('admin.panel') }}" style="color: var(--gold);">← Panel</a></p>
+    </div>
+</div>
+
+<div class="container foja-page">
+
+    <div class="section-card">
+        <div class="section-card-header">
+            <span>Días del {{ anio }}</span>
+            <span class="d-flex gap-2 align-items-center">
+                <a class="btn-foja-outline-light" href="{{ url_for('admin.calendario', anio=anio - 1) }}">‹ {{ anio - 1 }}</a>
+                <a class="btn-foja-outline-light" href="{{ url_for('admin.calendario', anio=anio + 1) }}">{{ anio + 1 }} ›</a>
+                <form method="post" action="{{ url_for('admin.calendario_sincronizar') }}" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn-foja" type="submit">Sincronizar ahora</button>
+                </form>
+            </span>
+        </div>
+        <div class="table-responsive">
+            <table class="table tabla-cal align-middle">
+                <thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Alcance</th><th>Origen</th><th></th></tr></thead>
+                <tbody>
+                {% for d in dias %}
+                    <tr class="{{ '' if d.activo else 'inactivo' }}">
+                        <td>{{ d.fecha_desde.strftime('%d/%m/%Y') }}{% if d.fecha_hasta != d.fecha_desde %} al {{ d.fecha_hasta.strftime('%d/%m/%Y') }}{% endif %}</td>
+                        <td>{{ tipos.get(d.tipo, d.tipo) }}</td>
+                        <td>{{ d.motivo }}{% if d.fuente_url and d.fuente_url.startswith('https://') %} <a href="{{ d.fuente_url }}" target="_blank" rel="noopener noreferrer">↗</a>{% endif %}</td>
+                        <td>
+                            {% if d.alcance == 'provincia' %}Provincia{% elif d.alcance == 'departamento' %}Dpto. {{ d.departamento }}{% else %}{{ d.localidad or '—' }}{% endif %}
+                            {% if d.fuero %}<span class="chip">{{ fueros.get(d.fuero, d.fuero) }}</span>{% endif %}
+                            {% if not d.descuenta %}<span class="chip aviso">solo aviso</span>{% endif %}
+                        </td>
+                        <td><span class="chip {{ 'manual' if d.fuente == 'manual' else '' }}">{{ 'manual' if d.fuente == 'manual' else 'automático' }}</span></td>
+                        <td class="text-end">
+                            <form method="post" action="{{ url_for('admin.calendario_activar', dia_id=d.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">{{ 'Desactivar' if d.activo else 'Activar' }}</button>
+                            </form>
+                            {% if d.fuente == 'manual' %}
+                            <form method="post" action="{{ url_for('admin.calendario_eliminar', dia_id=d.id) }}" class="d-inline" onsubmit="return confirm('¿Borrar este día?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Borrar</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">Todavía no hay días cargados para {{ anio }}. Los feriados fijos, Pascua, Carnaval y feria de enero se calculan solos y no aparecen acá.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-card-header">Cargar un día a mano</div>
+        <div class="section-card-body">
+            <form method="post" action="{{ url_for('admin.calendario_nuevo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-3">
+                    <div class="col-md-3"><label class="form-label">Desde</label><input type="date" name="desde" class="form-control" required></div>
+                    <div class="col-md-3"><label class="form-label">Hasta <span class="text-muted">(opcional)</span></label><input type="date" name="hasta" class="form-control"></div>
+                    <div class="col-md-6"><label class="form-label">Tipo</label>
+                        <select name="tipo" class="form-select">{% for k, v in tipos.items() %}<option value="{{ k }}" {{ 'selected' if k == 'inhabil_judicial' }}>{{ v }}</option>{% endfor %}</select></div>
+                    <div class="col-12"><label class="form-label">Motivo</label><input type="text" name="motivo" class="form-control" maxlength="500" required placeholder="Ej.: Inhábil judicial por Acuerdo General N° 30/26"></div>
+                    <div class="col-md-3"><label class="form-label">Alcance</label>
+                        <select name="alcance" class="form-select"><option value="provincia">Toda la provincia</option><option value="departamento">Un departamento</option><option value="localidad">Una localidad</option></select></div>
+                    <div class="col-md-3"><label class="form-label">Departamento</label>
+                        <select name="departamento" class="form-select"><option value="">—</option>{% for d in departamentos %}<option>{{ d }}</option>{% endfor %}</select></div>
+                    <div class="col-md-3"><label class="form-label">Localidad</label>
+                        <select name="localidad" class="form-select"><option value="">—</option>{% for d, ls in departamentos.items() %}{% for l in ls|sort %}<option>{{ l }}</option>{% endfor %}{% endfor %}</select></div>
+                    <div class="col-md-3"><label class="form-label">Fuero <span class="text-muted">(si es de uno solo)</span></label>
+                        <select name="fuero" class="form-select"><option value="">Todos</option>{% for k, v in fueros.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
+                    <div class="col-12"><label class="form-label">Link a la fuente oficial <span class="text-muted">(opcional)</span></label><input type="url" name="fuente_url" class="form-control" placeholder="https://www.jusentrerios.gov.ar/..."></div>
+                </div>
+                <button class="btn-foja mt-3" type="submit">Guardar día</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-card-header">Últimas sincronizaciones</div>
+        <div class="table-responsive">
+            <table class="table tabla-cal align-middle">
+                <thead><tr><th>Fecha (UTC)</th><th>Fuente</th><th>Resultado</th><th>Filas</th><th>+</th><th>−</th><th>Detalle</th></tr></thead>
+                <tbody>
+                {% for l in logs %}
+                    <tr>
+                        <td>{{ l.fecha.strftime('%d/%m/%Y %H:%M') }}</td><td>{{ l.fuente }}</td>
+                        <td>{{ l.resultado }}</td><td>{{ l.filas }}</td><td>{{ l.agregados }}</td><td>{{ l.quitados }}</td>
+                        <td style="max-width: 420px; white-space: pre-wrap;">{{ (l.detalle or '')[:300] }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7" class="text-center text-muted py-3">Todavía no hubo sincronizaciones.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

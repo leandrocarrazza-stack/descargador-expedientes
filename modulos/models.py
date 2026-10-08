@@ -538,3 +538,66 @@ class FalloTexto(db.Model):
     def set_voces_tesauro(self, voces: list):
         """Almacena lista de voces como JSON."""
         self.voces_tesauro_json = json.dumps(voces, ensure_ascii=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  CALENDARIO JUDICIAL (contador de plazos)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class DiaInhabil(db.Model):
+    """
+    Un día (o rango) que afecta el cómputo de plazos y no se puede calcular
+    por regla: puentes ("día no laborable"), feria de julio, inhábiles
+    declarados por acuerdo, santos patronos de cada localidad, etc.
+    Los feriados "de regla" (Pascua, fijos, rotación) viven en
+    modulos/plazos/reglas.py y no se guardan acá.
+
+    fuente: 'scraper' (lo cargó solo el sincronizador desde jusentrerios.gov.ar),
+            'manual' (lo cargó/corrigió el admin; el sincronizador no lo pisa).
+    descuenta=False: solo se muestra como aviso (inhábil de un organismo puntual).
+    """
+
+    __tablename__ = 'dias_inhabiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fecha_desde = db.Column(db.Date, nullable=False, index=True)
+    fecha_hasta = db.Column(db.Date, nullable=False)
+    tipo = db.Column(db.String(30), nullable=False)
+    motivo = db.Column(db.String(500), nullable=False)
+    alcance = db.Column(db.String(20), nullable=False, default='provincia')
+    departamento = db.Column(db.String(60), nullable=True)
+    localidad = db.Column(db.String(80), nullable=True)
+    fuero = db.Column(db.String(20), nullable=True)
+    descuenta = db.Column(db.Boolean, nullable=False, default=True)
+    fuente = db.Column(db.String(20), nullable=False, default='scraper')
+    # Identifica de dónde salió (ej. 'pagina:2026', 'rss:<url>'): permite que
+    # el sincronizador reemplace lo suyo sin tocar lo manual.
+    origen = db.Column(db.String(300), nullable=True, index=True)
+    fuente_url = db.Column(db.String(500), nullable=True)
+    activo = db.Column(db.Boolean, nullable=False, default=True)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def a_entrada(self):
+        from modulos.plazos.reglas import Entrada
+        return Entrada(
+            desde=self.fecha_desde, hasta=self.fecha_hasta, tipo=self.tipo,
+            motivo=self.motivo, alcance=self.alcance or 'provincia',
+            departamento=self.departamento, localidad=self.localidad,
+            fuero=self.fuero, descuenta=bool(self.descuenta),
+            fuente=self.fuente, fuente_url=self.fuente_url,
+        )
+
+
+class CalendarioSyncLog(db.Model):
+    """Registro de cada sincronización con el sitio del STJER (visible para el admin)."""
+
+    __tablename__ = 'calendario_sync_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    fecha = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    fuente = db.Column(db.String(20), nullable=False)       # 'pagina' | 'rss'
+    resultado = db.Column(db.String(20), nullable=False)    # 'ok' | 'sin_cambios' | 'error' | 'rechazado'
+    filas = db.Column(db.Integer, default=0)
+    agregados = db.Column(db.Integer, default=0)
+    quitados = db.Column(db.Integer, default=0)
+    detalle = db.Column(db.Text, nullable=True)

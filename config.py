@@ -207,6 +207,23 @@ CONTACT_EMAIL = os.getenv('CONTACT_EMAIL', '')
 CONTACT_WHATSAPP = os.getenv('CONTACT_WHATSAPP', '')
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  CONTADOR DE PLAZOS (modulos/plazos)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Hora en que abren los tribunales (el sitio del STJER informa "horario de 7 a 13").
+# Sirve para mostrar hasta qué hora rige la gracia de 2 horas del art. 124 CPCCN.
+PLAZOS_HORA_APERTURA = os.getenv('PLAZOS_HORA_APERTURA', '07:00').strip()
+if not __import__('re').fullmatch(r'([01]?\d|2[0-2]):[0-5]\d', PLAZOS_HORA_APERTURA):
+    PLAZOS_HORA_APERTURA = '07:00'   # valor mal escrito en el entorno: se vuelve al horario habitual
+
+# Sincronización automática del calendario con jusentrerios.gov.ar (hilo de fondo).
+# Por defecto solo en producción: en desarrollo y tests no sale a internet solo.
+PLAZOS_SYNC_AUTO = os.getenv('PLAZOS_SYNC_AUTO', 'true' if FLASK_ENV == 'production' else 'false').lower() == 'true'
+# Cada cuántos días corre. Alcanza con 15: la página de feriados casi no cambia y
+# el admin puede forzarla con "Sincronizar ahora" en /admin/calendario.
+PLAZOS_SYNC_DIAS = float(os.getenv('PLAZOS_SYNC_DIAS', '15'))
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  EMAIL (Flask-Mail / SMTP)
 # ═══════════════════════════════════════════════════════════════════════════
 

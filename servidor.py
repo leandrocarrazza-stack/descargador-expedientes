@@ -135,6 +135,7 @@ def crear_app(config_obj=None):
     from rutas.admin import admin_bp
     from rutas.contacto import contacto_bp
     from rutas.cuenta import cuenta_bp
+    from rutas.plazos import plazos_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
@@ -142,8 +143,17 @@ def crear_app(config_obj=None):
     app.register_blueprint(admin_bp)
     app.register_blueprint(contacto_bp)
     app.register_blueprint(cuenta_bp)
+    app.register_blueprint(plazos_bp)
 
-    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta)")
+    logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta, plazos)")
+
+    # Calendario del contador de plazos: se mantiene al día solo, leyendo el
+    # sitio oficial del STJER cada tanto (ver modulos/plazos/sync_stjer.py).
+    # Apagado por defecto fuera de producción (config.PLAZOS_SYNC_AUTO).
+    if config.PLAZOS_SYNC_AUTO:
+        from modulos.plazos.sync_stjer import iniciar_sincronizacion_periodica
+        iniciar_sincronizacion_periodica(app, cada_dias=config.PLAZOS_SYNC_DIAS)
+        logger.info("[OK] Sincronización automática del calendario judicial activada")
 
     # Limpiar PDFs antiguos del disco al iniciar la app, y repetirlo cada
     # hora mientras el proceso siga vivo (ver iniciar_limpieza_periodica_pdfs):
