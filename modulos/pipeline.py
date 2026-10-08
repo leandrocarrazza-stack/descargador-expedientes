@@ -24,7 +24,7 @@ from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
 from modulos.descarga import DescargadorArchivos, EstrategiaCompleta, EstrategiaIncremental, _leer_filas_pagina, huella_fila
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
-from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb, parece_pdf, LOTE_CONVERSION
+from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb, parece_pdf, liberar_heap, LOTE_CONVERSION
 from modulos.unificacion import UnificadorPDF, anexar_con_qpdf
 from modulos.excepciones import ErrorUnificacion
 from modulos.compresion import comprimir_pdf
@@ -666,3 +666,13 @@ class PipelineDescargador:
                     logger.info(f"[CLEANUP] Carpeta temporal eliminada: {self.carpeta_temp}")
                 except Exception as e:
                     logger.warning(f"[CLEANUP] No se pudo eliminar temp: {e}")
+
+            # 3. Devolver al SO la memoria que el proceso retiene tras el job.
+            #    Sin esto el servidor queda en ~300 MB sin hacer nada y el
+            #    próximo Chrome arranca con 0 MB libres (ver _log_memoria).
+            _log_memoria("fin del job (antes de liberar heap)")
+            try:
+                liberar_heap()
+            except Exception as e:
+                logger.warning(f"[CLEANUP] No se pudo liberar el heap: {e}")
+            _log_memoria("fin del job (después de liberar heap)")
