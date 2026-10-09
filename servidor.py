@@ -261,6 +261,20 @@ def crear_app(config_obj=None):
             contact_whatsapp=config.CONTACT_WHATSAPP,
         )
 
+    @app.context_processor
+    def inyectar_popup_plazos():
+        """Datos del popup del contador de plazos (templates/_popup_contador_plazos.html).
+
+        popup_plazos_activo: el popup solo se genera hasta config.POPUP_PLAZOS_HASTA (inclusive).
+        plazos_tiene_acceso: la misma regla que usa /plazos/, para no copiarla en la plantilla.
+        """
+        from datetime import date
+        from rutas.plazos import tiene_acceso
+        return dict(
+            popup_plazos_activo=date.today() <= config.POPUP_PLAZOS_HASTA,
+            plazos_tiene_acceso=tiene_acceso,
+        )
+
     # ═════════════════════════════════════════════════════════════════════
     #  LOGGING
     # ═════════════════════════════════════════════════════════════════════
