@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block titulo %}Promociones · Foja{% endblock %}
+
+{% block contenido %}
+<div class="container foja-page" style="max-width: 560px; padding-top: 4rem; padding-bottom: 4rem;">
+    <div style="background:#fff; border:1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 2rem;">
+    {% if estado == 'invalido' %}
+        <h1 style="font-size:1.6rem;">El enlace no es válido</h1>
+        <p class="text-muted">El enlace de baja está incompleto o fue modificado. Escribinos a <a href="mailto:asistenciafoja@gmail.com">asistenciafoja@gmail.com</a> y te damos de baja a mano.</p>
+    {% elif estado == 'listo' %}
+        <h1 style="font-size:1.6rem;">Listo, ya no vas a recibir promociones</h1>
+        <p class="text-muted">Seguirás recibiendo los avisos de tu cuenta (por ejemplo, cuando termina una descarga o si pedís restablecer tu contraseña).</p>
+        <a href="/" class="btn-foja">Ir a Foja</a>
+    {% else %}
+        <h1 style="font-size:1.6rem;">Darte de baja de las promociones</h1>
+        {% if ya_de_baja %}
+            <p class="text-muted">Ya estás dado de baja: no recibís promociones de Foja.</p>
+        {% else %}
+            <p class="text-muted">Dejarás de recibir novedades y ofertas de Foja. Los avisos de tu cuenta no se ven afectados.</p>
+            <form method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-foja">Confirmar baja</button>
+            </form>
+        {% endif %}
+    {% endif %}
+    </div>
+</div>
+{% endblock %}

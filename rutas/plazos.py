@@ -7,7 +7,7 @@ Contador de plazos judiciales (Poder Judicial de Entre Ríos).
                                que el calendario (feriados, inhábiles, ferias)
                                viva en un solo lugar.
 
-Acceso: usuarios con algún plan pago (plan_max_comprado) y admins.
+Acceso: usuarios con crédito disponible y admins.
 """
 
 import logging
@@ -29,15 +29,15 @@ plazos_bp = Blueprint('plazos', __name__, url_prefix='/plazos')
 
 
 def tiene_acceso(usuario):
-    """Admins y cualquier usuario que haya comprado alguno de los planes."""
-    return bool(usuario.is_admin or usuario.plan_max_comprado)
+    """Admins y cualquier usuario con crédito disponible."""
+    return bool(usuario.is_admin or (usuario.creditos_disponibles or 0) > 0)
 
 
 def _sin_acceso():
     return jsonify({
         'exito': False,
         'tipo_error': 'plan_requerido',
-        'mensaje': 'El contador de plazos está disponible para quienes tienen un plan de Foja.',
+        'mensaje': 'El contador de plazos está disponible mientras tengas crédito en Foja.',
     }), 403
 
 

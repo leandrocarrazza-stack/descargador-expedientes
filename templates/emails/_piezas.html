@@ -1,0 +1,37 @@
+{# Piezas reutilizables de los mails promocionales (compatibles con Gmail/Outlook: tablas y CSS en línea). #}
+
+{# Botón dorado a prueba de Outlook. #}
+{% macro boton(url, texto) -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <td bgcolor="#d4a54a" style="background:#d4a54a; border-radius:10px;">
+        <a href="{{ url }}" style="display:inline-block; padding:16px 34px; font-family:Arial,Helvetica,sans-serif; font-size:17px; font-weight:bold; color:#0a1f3a; text-decoration:none; border-radius:10px;">{{ texto }}&nbsp;&rarr;</a>
+    </td>
+</tr></table>
+{%- endmacro %}
+
+{# Título de sección: texto chico dorado arriba y título grande abajo. #}
+{% macro titulo_seccion(etiqueta, titulo, color_titulo='#0a1f3a') -%}
+<p style="margin:0 0 6px 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1.8px; text-transform:uppercase; color:#b8862b; font-weight:bold;">{{ etiqueta }}</p>
+<p class="h2" style="margin:0 0 20px 0; font-family:Georgia,'Times New Roman',serif; font-size:26px; line-height:1.2; color:{{ color_titulo }};">{{ titulo }}</p>
+{%- endmacro %}
+
+{# Tarjeta numerada (01, 02, 03) para los casos de uso. #}
+{% macro caso(numero, titulo, texto, ultimo=False) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 {{ '0' if ultimo else '12' }}px 0; background:#faf7f0; border:1px solid #ece4d0; border-radius:12px;">
+    <tr>
+        <td width="64" valign="top" style="padding:18px 0 18px 18px; font-family:Georgia,'Times New Roman',serif; font-size:30px; line-height:1; color:#d4a54a; font-style:italic;">{{ numero }}</td>
+        <td valign="top" style="padding:18px 20px 18px 4px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.55; color:#33425e;">
+            <strong style="display:block; margin-bottom:3px; font-size:16px; color:#0a1f3a;">{{ titulo }}</strong>
+            {{ texto|safe }}
+        </td>
+    </tr>
+</table>
+{%- endmacro %}
+
+{# Paso numerado (círculo dorado). #}
+{% macro paso(numero, texto, ultimo=False) -%}
+<tr>
+    <td width="40" valign="top" style="padding:0 0 {{ '0' if ultimo else '14' }}px 0;"><span style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; background:#0a1f3a; color:#d4a54a; border-radius:14px; font-family:Georgia,'Times New Roman',serif; font-weight:bold; font-size:15px;">{{ numero }}</span></td>
+    <td valign="top" style="padding:3px 0 {{ '0' if ultimo else '14' }}px 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.5; color:#33425e;">{{ texto|safe }}</td>
+</tr>
+{%- endmacro %}

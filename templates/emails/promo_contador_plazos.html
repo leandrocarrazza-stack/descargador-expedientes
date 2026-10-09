@@ -1,0 +1,104 @@
+{% extends "emails/promo_base.html" %}
+{% from "emails/_piezas.html" import boton, titulo_seccion, caso, paso %}
+
+{% block preheader %}Feriados, ferias e inhábiles del STJER ya descontados. Gratis para vos mientras tengas crédito.{% endblock %}
+
+{% block etiqueta %}Novedad{% endblock %}
+
+{% block filas %}
+
+        <!-- HERO: imagen (el fondo azul sigue igual si el cliente de correo bloquea imágenes) -->
+        <tr><td bgcolor="#0a1f3a" style="background:#0a1f3a; padding:0; line-height:0; font-size:0;">
+            <img src="{{ url_img }}/hero_contador_plazos.png" width="600" alt="Calendario con el conteo de 10 días hábiles que termina en la fecha de vencimiento"
+                 style="display:block; width:100%; max-width:600px; height:auto; border:0; font-family:Arial,sans-serif; font-size:13px; line-height:18px; color:#9fb0cb;">
+        </td></tr>
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:6px 36px 44px 36px;">
+            <p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1.8px; text-transform:uppercase; color:#d4a54a; font-weight:bold;">Contador de plazos judiciales</p>
+            <p class="h1" style="margin:0 0 16px 0; font-family:Georgia,'Times New Roman',serif; font-size:36px; line-height:1.15; color:#f5f1e8;">{% if nombre %}{{ nombre }}, tu{% else %}Tu{% endif %} próximo vencimiento, <span style="color:#d4a54a; font-style:italic;">calculado en segundos.</span></p>
+            <p style="margin:0 0 26px 0; font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:1.6; color:#c9d3e4;">
+                Sin calendarios, sin contar con los dedos, sin el miedo a olvidarte de un feriado.
+                Foja descuenta por vos los feriados, las ferias y los inhábiles del Poder Judicial de Entre Ríos.
+                <strong style="color:#f5f1e8;">Es gratis mientras tengas crédito en tu cuenta.</strong>
+            </p>
+            {{ boton(url_contador, 'Calcular mi primer plazo') }}
+        </td></tr>
+
+        <!-- EJEMPLO REAL -->
+        <tr><td bgcolor="#f5f1e8" class="px" style="background:#f5f1e8; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Así se ve', 'Un plazo real, resuelto en un vistazo') }}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border:1px solid #e3dac3; border-radius:14px; overflow:hidden;">
+                <tr><td style="padding:22px 24px 6px 24px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.6; color:#33425e;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:14px; line-height:1.5; color:#33425e;">
+                        <tr><td width="118" valign="top" style="padding:0 0 10px 0; color:#7d8aa3; text-transform:uppercase; font-size:11px; letter-spacing:1px; padding-top:2px;">Notificación</td>
+                            <td style="padding:0 0 10px 0;"><strong style="color:#0a1f3a;">Electrónica, viernes 6/11</strong></td></tr>
+                        <tr><td valign="top" style="padding:0 0 10px 0; color:#7d8aa3; text-transform:uppercase; font-size:11px; letter-spacing:1px; padding-top:2px;">Se perfecciona</td>
+                            <td style="padding:0 0 10px 0;"><strong style="color:#0a1f3a;">Martes 10/11</strong> (regla del Ac. Gral. 15/18)</td></tr>
+                        <tr><td valign="top" style="padding:0 0 10px 0; color:#7d8aa3; text-transform:uppercase; font-size:11px; letter-spacing:1px; padding-top:2px;">Plazo</td>
+                            <td style="padding:0 0 10px 0;"><strong style="color:#0a1f3a;">10 días hábiles</strong>, desde el 11/11</td></tr>
+                        <tr><td valign="top" style="padding:0 0 4px 0; color:#7d8aa3; text-transform:uppercase; font-size:11px; letter-spacing:1px; padding-top:2px;">Descontó</td>
+                            <td style="padding:0 0 4px 0;">lun 16/11 <span style="color:#7d8aa3;">(Día del Empleado Judicial)</span><br>lun 23/11 <span style="color:#7d8aa3;">(Soberanía Nacional, trasladado)</span></td></tr>
+                    </table>
+                </td></tr>
+                <tr><td bgcolor="#d4a54a" style="background:#d4a54a; padding:16px 24px; font-family:Arial,Helvetica,sans-serif;">
+                    <span style="font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:#5c4210; font-weight:bold;">Vence</span><br>
+                    <span style="font-family:Georgia,'Times New Roman',serif; font-size:24px; color:#0a1f3a; font-weight:bold;">Jueves 26 de noviembre de 2026</span><br>
+                    <span style="font-size:13px; color:#3d2d0a;">Hora de gracia: viernes 27/11, hasta las 09:00</span>
+                </td></tr>
+            </table>
+            <p style="margin:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; color:#7d8aa3;">Ejemplo ilustrativo con el calendario vigente.</p>
+        </td></tr>
+
+        <!-- TRES CASOS -->
+        <tr><td bgcolor="#ffffff" class="px" style="background:#ffffff; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Para qué sirve', 'Tres situaciones donde más se nota') }}
+            {{ caso('01', 'Te notificaron por el sistema electrónico',
+                    '¿Martes o viernes? Foja aplica el Acuerdo General 15/18 y te dice desde qué día corre tu traslado de 5, 10 o 15 días hábiles.') }}
+            {{ caso('02', 'Tu plazo cruza una feria o un feriado local',
+                    'Feria de enero o de julio, puentes y el feriado del patrono de tu ciudad: todo descontado sin que abras un calendario.') }}
+            {{ caso('03', 'Caducidad de instancia y plazos corridos',
+                    'Cuenta todos los días y, si el último cae en un día inhábil, lo pasa al siguiente hábil. Sin errores de un día.', True) }}
+        </td></tr>
+
+        <!-- CÓMO FUNCIONA -->
+        <tr><td bgcolor="#f5f1e8" class="px" style="background:#f5f1e8; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Cómo funciona', 'Cuatro pasos, menos de un minuto') }}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {{ paso('1', 'Entrá a <a href="' ~ url_contador ~ '" style="color:#0a1f3a; font-weight:bold;">foja.com.ar/plazos</a> con tu usuario de siempre.') }}
+                {{ paso('2', 'Elegí <strong>cómo te notificaron</strong> (cédula o electrónica) y la fecha.') }}
+                {{ paso('3', 'Indicá los <strong>días del plazo</strong> (hábiles o corridos), tu localidad y el fuero.') }}
+                {{ paso('4', 'Tocá <strong>Calcular</strong>: ves el vencimiento, la hora de gracia y el motivo de cada día que se descontó.', True) }}
+            </table>
+        </td></tr>
+
+        <!-- CALENDARIO -->
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:40px 36px 40px 36px;">
+            {{ titulo_seccion('Llevalo a tu calendario', 'Que no se te pase ninguno', '#f5f1e8') }}
+            <p style="margin:0 0 20px 0; font-family:Arial,Helvetica,sans-serif; font-size:16px; line-height:1.6; color:#c9d3e4;">
+                Con un toque agregás el vencimiento a <strong style="color:#f5f1e8;">Google Calendar</strong>, o descargás el archivo
+                <strong style="color:#f5f1e8;">.ics</strong> para Outlook y Apple Calendar. Ya viene con tres recordatorios:
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td class="chip" width="33%" style="padding:0 6px 0 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="border:1px solid #d4a54a; border-radius:10px; padding:12px 6px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:1.4; color:#f5f1e8;"><span style="font-family:Georgia,'Times New Roman',serif; font-size:22px; color:#d4a54a; font-style:italic;">3 días</span><br>antes</td></tr></table></td>
+                <td class="chip" width="33%" style="padding:0 3px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="border:1px solid #d4a54a; border-radius:10px; padding:12px 6px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:1.4; color:#f5f1e8;"><span style="font-family:Georgia,'Times New Roman',serif; font-size:22px; color:#d4a54a; font-style:italic;">1 día</span><br>antes</td></tr></table></td>
+                <td class="chip" width="33%" style="padding:0 0 0 6px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="border:1px solid #d4a54a; border-radius:10px; padding:12px 6px; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:1.4; color:#f5f1e8;"><span style="font-family:Georgia,'Times New Roman',serif; font-size:22px; color:#d4a54a; font-style:italic;">Esa mañana</span><br>del vencimiento</td></tr></table></td>
+            </tr></table>
+        </td></tr>
+
+        <!-- CONFIANZA -->
+        <tr><td bgcolor="#ffffff" class="px" style="background:#ffffff; padding:30px 36px 8px 36px; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.9; color:#33425e;">
+            <span style="color:#d4a54a; font-weight:bold;">&#10003;</span>&nbsp; Fuente oficial: <strong>jusentrerios.gov.ar</strong><br>
+            <span style="color:#d4a54a; font-weight:bold;">&#10003;</span>&nbsp; Se actualiza solo, cada 15 días, sin que hagas nada<br>
+            <span style="color:#d4a54a; font-weight:bold;">&#10003;</span>&nbsp; Todos los fueros y todos los departamentos de la provincia
+        </td></tr>
+
+        <!-- CIERRE -->
+        <tr><td bgcolor="#ffffff" align="center" class="px" style="background:#ffffff; padding:30px 36px 44px 36px;">
+            <p class="h2" style="margin:0 0 20px 0; font-family:Georgia,'Times New Roman',serif; font-size:26px; line-height:1.25; color:#0a1f3a;">Tu próximo plazo, <span style="color:#b8862b; font-style:italic;">en diez segundos.</span></p>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td>{{ boton(url_contador, 'Probar el contador de plazos') }}</td></tr></table>
+            <p style="margin:18px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.6; color:#7d8aa3;">
+                Disponible mientras tengas crédito en tu cuenta.<br>
+                Es una herramienta orientativa: verificá siempre el vencimiento en el expediente.
+            </p>
+        </td></tr>
+
+{% endblock %}
