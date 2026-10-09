@@ -275,7 +275,13 @@ class SesionUsuarioMV(db.Model):
             try:
                 plaintext = f.decrypt(raw)
             except InvalidToken:
-                raise ValueError("Descifrado de cookies falló — ENCRYPTION_KEY puede haber cambiado")
+                # Fila vieja guardada en texto plano (antes de activar el cifrado):
+                # se acepta para no romper sesiones; se cifra al próximo guardado
+                # o con scripts/encrypt_existing_cookies.py
+                try:
+                    return json.loads(raw)
+                except ValueError:
+                    raise ValueError("Descifrado de cookies falló — ENCRYPTION_KEY puede haber cambiado")
         else:
             plaintext = raw
         return json.loads(plaintext)
