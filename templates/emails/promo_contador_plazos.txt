@@ -1,0 +1,40 @@
+{% if nombre %}Hola {{ nombre }},{% else %}Hola,{% endif %}
+
+TU PRÓXIMO VENCIMIENTO, CALCULADO EN SEGUNDOS
+
+Sin calendarios, sin contar con los dedos, sin el miedo a olvidarte de un feriado. Foja descuenta por vos los feriados, las ferias y los inhábiles del Poder Judicial de Entre Ríos. Es gratis mientras tengas crédito en tu cuenta.
+
+>> Calcular mi primer plazo: {{ url_contador }}
+
+ASÍ SE VE (ejemplo)
+- Notificación: electrónica, viernes 6/11
+- Se perfecciona: martes 10/11 (regla del Ac. Gral. 15/18)
+- Plazo: 10 días hábiles, desde el 11/11
+- Descontó: lunes 16/11 (Día del Empleado Judicial) y lunes 23/11 (Soberanía Nacional, trasladado)
+- VENCE: jueves 26 de noviembre de 2026. Hora de gracia: viernes 27/11, hasta las 09:00.
+
+TRES SITUACIONES DONDE MÁS SE NOTA
+01. Te notificaron por el sistema electrónico. ¿Martes o viernes? Foja aplica el Acuerdo General 15/18 y te dice desde qué día corre tu traslado de 5, 10 o 15 días hábiles.
+02. Tu plazo cruza una feria o un feriado local. Feria de enero o de julio, puentes y el feriado del patrono de tu ciudad: todo descontado sin que abras un calendario.
+03. Caducidad de instancia y plazos corridos. Cuenta todos los días y, si el último cae en un día inhábil, lo pasa al siguiente hábil. Sin errores de un día.
+
+CÓMO FUNCIONA (menos de un minuto)
+1. Entrá a {{ url_contador }} con tu usuario de siempre.
+2. Elegí cómo te notificaron (cédula o electrónica) y la fecha.
+3. Indicá los días del plazo (hábiles o corridos), tu localidad y el fuero.
+4. Tocá Calcular: ves el vencimiento, la hora de gracia y el motivo de cada día que se descontó.
+
+QUE NO SE TE PASE NINGUNO
+Con un toque agregás el vencimiento a Google Calendar, o descargás el archivo .ics para Outlook y Apple Calendar. Ya viene con tres recordatorios: 3 días antes, 1 día antes y esa mañana del vencimiento.
+
+✓ Fuente oficial: jusentrerios.gov.ar
+✓ Se actualiza solo, cada 15 días, sin que hagas nada
+✓ Todos los fueros y todos los departamentos de la provincia
+
+Tu próximo plazo, en diez segundos: {{ url_contador }}
+(Disponible mientras tengas crédito en tu cuenta. Es una herramienta orientativa: verificá siempre el vencimiento en el expediente.)
+
+--
+Foja · foja.com.ar · {{ remitente }}
+Si no querés recibir más promociones, darte de baja acá: {{ url_baja }}
+(Seguirás recibiendo los avisos de tu cuenta.)

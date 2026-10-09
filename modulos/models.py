@@ -83,6 +83,11 @@ class User(UserMixin, db.Model):
     # nunca compró). Gatea la actualización incremental (rutas/descargas.py).
     plan_max_comprado = db.Column(db.String(50), nullable=True)
 
+    # Recibir mails promocionales (novedades, ofertas). NULL = recibe: las filas viejas
+    # no se tocan; solo se pone False cuando la persona se da de baja
+    # (rutas/promos.py). No afecta a los avisos de descarga ni de contraseña.
+    recibir_promociones = db.Column(db.Boolean, nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

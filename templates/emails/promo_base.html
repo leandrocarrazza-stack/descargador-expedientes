@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<title>{{ asunto }}</title>
+<style>
+    /* Solo mejoras para pantallas chicas; el mail se ve bien aunque el cliente de correo ignore este bloque */
+    @media only screen and (max-width: 620px) {
+        .px { padding-left: 22px !important; padding-right: 22px !important; }
+        .h1 { font-size: 29px !important; line-height: 1.18 !important; }
+        .h2 { font-size: 23px !important; }
+        .stack { display: block !important; width: 100% !important; }
+        .chip { display: block !important; width: 100% !important; padding: 0 0 8px 0 !important; }
+    }
+</style>
+</head>
+<body style="margin:0; padding:0; background:#efe9da; -webkit-text-size-adjust:100%;">
+
+{# Texto de vista previa (lo que se ve junto al asunto en la bandeja de entrada) #}
+<div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#efe9da; font-size:1px; line-height:1px;">
+    {% block preheader %}{% endblock %}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#efe9da;">
+<tr><td align="center" style="padding:20px 10px 28px 10px;">
+
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff"
+           style="width:100%; max-width:600px; background:#ffffff; border-radius:14px; overflow:hidden;">
+
+        <!-- FRANJA DORADA -->
+        <tr><td height="5" bgcolor="#d4a54a" style="height:5px; line-height:5px; font-size:0; background:#d4a54a;">&nbsp;</td></tr>
+
+        <!-- ENCABEZADO: logo + etiqueta -->
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:20px 36px 6px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="font-family:Georgia,'Times New Roman',serif; font-size:30px; color:#f5f1e8; letter-spacing:.5px;">Foja<span style="color:#d4a54a;">.</span></td>
+                <td align="right" style="font-family:Arial,Helvetica,sans-serif; font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:#d4a54a;">{% block etiqueta %}{% endblock %}</td>
+            </tr></table>
+        </td></tr>
+
+        {# Cada campaña aporta sus propias filas <tr> (hero, secciones, botón final) #}
+        {% block filas %}{% endblock %}
+
+        <!-- PIE -->
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:28px 36px 30px 36px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.7; color:#9fb0cb;">
+            <span style="font-family:Georgia,'Times New Roman',serif; font-size:20px; color:#f5f1e8;">Foja<span style="color:#d4a54a;">.</span></span><br>
+            Recibís este correo porque sos cliente de <a href="https://foja.com.ar" style="color:#d4a54a; text-decoration:none;">foja.com.ar</a>,
+            el servicio para abogados de Entre Ríos.<br>
+            ¿Dudas? Escribinos a <a href="mailto:{{ remitente }}" style="color:#d4a54a; text-decoration:none;">{{ remitente }}</a>.<br><br>
+            <a href="{{ url_baja }}" style="color:#9fb0cb; text-decoration:underline;">Darme de baja de las promociones</a>
+            (seguirás recibiendo los avisos de tu cuenta).<br>
+            © {{ anio }} Foja · Entre Ríos, Argentina
+        </td></tr>
+    </table>
+
+</td></tr>
+</table>
+</body>
+</html>

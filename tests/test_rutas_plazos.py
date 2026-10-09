@@ -44,9 +44,9 @@ def _login(client, user_id):
         sess['_fresh'] = True
 
 
-def _usuario(app, email, plan_max=None, admin=False):
+def _usuario(app, email, plan_max=None, admin=False, creditos=0):
     with app.app_context():
-        u = User(email=email, is_admin=admin, plan_max_comprado=plan_max)
+        u = User(email=email, is_admin=admin, plan_max_comprado=plan_max, creditos_disponibles=creditos)
         u.establecer_password('x')
         db.session.add(u)
         db.session.commit()
@@ -67,21 +67,21 @@ def test_sin_login():
 
 def test_sin_plan():
     app = _app()
-    uid = _usuario(app, 'sinplan@foja.com')
+    uid = _usuario(app, 'sinplan@foja.com', plan_max='estudio')   # compró antes, pero sin crédito
     client = app.test_client()
     _login(client, uid)
     r = client.get('/plazos/')
     html = r.get_data(as_text=True)
-    check("sin plan: la pantalla carga con la invitación a comprar", r.status_code == 200 and 'Ver planes' in html
+    check("sin crédito: la pantalla carga con la invitación", r.status_code == 200 and 'Ver planes' in html
           and 'id="form-plazo"' not in html, r.status_code)
     r = client.post('/plazos/api/calcular', json=BODY)
-    check("sin plan: la API devuelve 403 plan_requerido",
+    check("sin crédito (aunque haya comprado antes): la API devuelve 403",
           r.status_code == 403 and r.get_json().get('tipo_error') == 'plan_requerido', r.status_code)
 
 
 def test_con_plan():
     app = _app()
-    uid = _usuario(app, 'conplan@foja.com', plan_max='individual')
+    uid = _usuario(app, 'conplan@foja.com', plan_max='individual', creditos=2)
     client = app.test_client()
     _login(client, uid)
     r = client.get('/plazos/')
@@ -147,7 +147,7 @@ def test_con_plan():
 def test_calendario_admin():
     app = _app()
     admin_id = _usuario(app, 'admin@foja.com', admin=True)
-    user_id = _usuario(app, 'comun@foja.com', plan_max='estudio')
+    user_id = _usuario(app, 'comun@foja.com', plan_max='estudio', creditos=1)
 
     comun = app.test_client()
     _login(comun, user_id)

@@ -136,6 +136,7 @@ def crear_app(config_obj=None):
     from rutas.contacto import contacto_bp
     from rutas.cuenta import cuenta_bp
     from rutas.plazos import plazos_bp
+    from rutas.promos import promos_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
@@ -144,6 +145,7 @@ def crear_app(config_obj=None):
     app.register_blueprint(contacto_bp)
     app.register_blueprint(cuenta_bp)
     app.register_blueprint(plazos_bp)
+    app.register_blueprint(promos_bp)
 
     logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta, plazos)")
 
