@@ -22,7 +22,7 @@ from typing import Optional, List, Dict, Any
 from modulos.login import ClienteSelenium, crear_cliente_sesion
 from modulos.auth_mv import crear_cliente_desde_cookies
 from modulos.navegacion import BuscadorExpedientes
-from modulos.descarga import DescargadorArchivos, EstrategiaCompleta, EstrategiaIncremental, _leer_filas_pagina, huella_fila
+from modulos.descarga import DescargadorArchivos, EstrategiaCompleta, EstrategiaDesdeFecha, EstrategiaIncremental, _leer_filas_pagina, huella_fila
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
 from modulos.conversion import ConversorRTF, matar_procesos_soffice, memoria_disponible_mb, parece_pdf, liberar_heap, LOTE_CONVERSION
 from modulos.unificacion import UnificadorPDF, anexar_con_qpdf
@@ -122,12 +122,15 @@ class PipelineDescargador:
         logger.info("Sin cookies_mv, usando sesión local (modo desarrollo)")
         return crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
 
-    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None, debe_cancelar=None, identidad_expediente: Optional[dict] = None) -> ResultadoPipeline:
+    def ejecutar(self, numero_expediente: str, limpiar_temp: bool = True, indice_expediente: int = None, cookies_mv: list = None, on_progreso=None, control: Optional[ControlJob] = None, modo_actualizacion: Optional[dict] = None, debe_cancelar=None, identidad_expediente: Optional[dict] = None, desde_fecha=None) -> ResultadoPipeline:
         """
         Ejecuta el pipeline completo de forma sincrónica (bloqueante).
 
         Args:
             numero_expediente: Número a descargar (ej: "21/24")
+            desde_fecha: date opcional. Si se pasa (y no es una actualización),
+                se descargan solo los movimientos con fecha >= desde_fecha
+                (ver modulos/descarga.py::EstrategiaDesdeFecha).
             limpiar_temp: Limpiar carpeta temporal al finalizar
             on_progreso: callable opcional que recibe dicts con el avance real
                 (fase, actual, total...) para que el frontend muestre
@@ -284,6 +287,8 @@ class PipelineDescargador:
             # de cómo se ancla en filas). Si no es una actualización, se
             # descarga todo con la estrategia por defecto de siempre.
             estrategia = EstrategiaCompleta()
+            if desde_fecha and not modo_actualizacion:
+                estrategia = EstrategiaDesdeFecha(desde_fecha)
             if modo_actualizacion:
                 total_filas_previo = modo_actualizacion.get('total_filas_previo') or 0
                 huellas_previas = modo_actualizacion.get('huellas_previas') or []
@@ -384,6 +389,13 @@ class PipelineDescargador:
                         total_filas=total_filas_actual,
                         huellas=estrategia.huellas_iniciales,
                         parcial=es_parcial,
+                    )
+                if desde_fecha and not modo_actualizacion:
+                    return ResultadoPipeline(
+                        exito=False,
+                        error=f"No hay actuaciones desde el {desde_fecha.strftime('%d/%m/%Y')}.",
+                        tipo_error="sin_actuaciones_desde_fecha",
+                        expediente=expediente,
                     )
                 return ResultadoPipeline(
                     exito=False,
