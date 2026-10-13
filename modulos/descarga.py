@@ -44,25 +44,63 @@ def _leer_filas_pagina(driver) -> list:
     Retorna list[dict] con {fecha, tipo, fojas, descripcion, n_botones},
     o [] si no se pudo leer (nunca None: simplifica a quien llama).
     """
-    script = """
+    script = r"""
         var filas = document.querySelectorAll('table tbody tr');
         var resultado = [];
         for (var i = 0; i < filas.length; i++) {
             var fila = filas[i];
             var celdas = fila.querySelectorAll('td');
-            if (celdas.length < 4) { continue; }
-            resultado.push({
-                fecha: (celdas[0].textContent || '').trim(),
-                tipo: (celdas[1].textContent || '').trim(),
-                fojas: (celdas[2].textContent || '').trim(),
-                descripcion: (celdas[3].textContent || '').trim(),
-                n_botones: fila.querySelectorAll("[data-testid='GetAppIcon']").length,
-            });
+            var n_botones = fila.querySelectorAll("[data-testid='GetAppIcon']").length;
+            if (celdas.length >= 4) {
+                // Diseño viejo: una celda por columna.
+                resultado.push({
+                    fecha: (celdas[0].textContent || '').trim(),
+                    tipo: (celdas[1].textContent || '').trim(),
+                    fojas: (celdas[2].textContent || '').trim(),
+                    descripcion: (celdas[3].textContent || '').trim(),
+                    n_botones: n_botones,
+                });
+            } else if (celdas.length >= 1) {
+                // Diseño nuevo: UNA celda por fila con una grilla adentro
+                // (fecha con hora | chip de tipo | fojas | descripción + origen | opciones).
+                var celda = celdas[0];
+                var m = (celda.textContent || '').match(/\d{2}\/\d{2}\/\d{4}(\s+\d{1,2}:\d{2})?/);
+                if (!m) { continue; }
+                var chip = celda.querySelector('.MuiChip-root');
+                var desc = celda.querySelector('.MuiGrid-grid-md-6 span') || celda.querySelector('span:not(.MuiChip-label)');
+                resultado.push({
+                    fecha: m[0].replace(/\s+/g, ' ').trim(),
+                    tipo: chip ? (chip.getAttribute('title') || chip.textContent || '').trim() : '',
+                    fojas: '',
+                    descripcion: desc ? (desc.textContent || '').trim() : '',
+                    n_botones: n_botones,
+                });
+            }
         }
         return resultado;
     """
     try:
         filas = driver.execute_script(script)
+        if not filas:
+            # Diagnóstico: si Mesa Virtual cambió la estructura de la tabla,
+            # esto muestra qué hay realmente en la página.
+            try:
+                diag = driver.execute_script("""
+                    var tr = document.querySelectorAll('table tbody tr');
+                    var tds = [];
+                    for (var i = 0; i < Math.min(tr.length, 5); i++) {
+                        tds.push(tr[i].querySelectorAll('td').length);
+                    }
+                    var limpio = function(el) {
+                        return el ? el.outerHTML.replace(/ (class|style|tabindex|type)="[^"]*"/g, '') : null;
+                    };
+                    return {tablas: document.querySelectorAll('table').length, tr: tr.length,
+                            tds_primeras_filas: tds,
+                            fila1: limpio(tr[0]), fila2: limpio(tr[1])};
+                """)
+                logger.warning(f"_leer_filas_pagina: 0 filas legibles. Diagnóstico: {diag}")
+            except Exception:
+                pass
         return filas or []
     except Exception:
         logger.debug("No se pudieron leer las filas de la página actual", exc_info=True)
@@ -124,9 +162,13 @@ class EstrategiaDesdeFecha:
     """
     Descarga solo los movimientos con fecha >= ``desde`` (descarga parcial).
 
+    Si NINGUNA fila tiene exactamente la fecha elegida, se empieza desde la
+    fecha inmediata anterior: se incluyen también todas las filas de la
+    fecha más cercana anterior a ``desde`` (el escrito vigente a esa fecha).
+
     Mesa Virtual lista los movimientos en orden cronológico, del más nuevo
-    al más viejo: apenas una página trae una fila anterior a ``desde``, se
-    baja lo que corresponda de esa página y se corta la paginación (no hace
+    al más viejo: apenas aparece una fila que queda fuera del rango, se baja
+    lo que corresponda de esa página y se corta la paginación (no hace
     falta recorrer las páginas más viejas). Las filas con fecha ilegible
     se incluyen: es preferible que sobre un archivo a que falte.
 
@@ -139,14 +181,41 @@ class EstrategiaDesdeFecha:
         self.desde = desde
         self.huellas_iniciales: list = []
         self.total_filas_final = None
+        # Progreso: el total que se informa al usuario es la cantidad de
+        # archivos de la SELECCIÓN (no los del expediente entero, que
+        # confundiría). Se conoce de verdad recién al llegar al corte
+        # (total_esperado, exacto); antes es lo seleccionado hasta la
+        # página actual (total_estimado, provisorio).
         self.total_esperado = None
+        self.total_estimado = None
+        self._seleccionados = 0
+        # Estado entre páginas (las filas de una misma fecha pueden quedar
+        # partidas entre dos páginas):
+        self._hubo_fecha_exacta = False
+        self._fecha_anterior = None  # fecha anterior más cercana a ``desde``
 
     def _fecha_fila(self, fila):
         """Fecha de la fila como date, o None si no se puede interpretar."""
         try:
-            return datetime.strptime((fila.get('fecha') or '').strip(), '%d/%m/%Y').date()
+            # La fecha puede traer hora ("09/02/2026 11:24"): se usa solo el día.
+            m = re.search(r'(\d{2})/(\d{2})/(\d{4})', fila.get('fecha') or '')
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1))) if m else None
         except ValueError:
             return None
+
+    def _incluir(self, fecha) -> bool:
+        """¿Se descarga una fila con esta fecha? (None = ilegible = sí)."""
+        if fecha is None or fecha >= self.desde:
+            if fecha == self.desde:
+                self._hubo_fecha_exacta = True
+            return True
+        # Fila anterior a ``desde``: solo entra si no hubo fecha exacta y es
+        # de la fecha anterior más cercana (la primera que aparece).
+        if self._hubo_fecha_exacta:
+            return False
+        if self._fecha_anterior is None:
+            self._fecha_anterior = fecha
+        return fecha == self._fecha_anterior
 
     def botones_para_pagina(self, descargador, driver, pagina_actual, cantidad_botones):
         filas = _leer_filas_pagina(driver)
@@ -158,13 +227,17 @@ class EstrategiaDesdeFecha:
         llego_al_limite = False
         for fila in filas:
             n_botones = fila.get('n_botones', 0) or 0
-            fecha = self._fecha_fila(fila)
-            if fecha is not None and fecha < self.desde:
-                llego_al_limite = True
-            else:
+            if self._incluir(self._fecha_fila(fila)):
                 indices.extend(range(indice_boton_actual, indice_boton_actual + n_botones))
+            else:
+                llego_al_limite = True
             indice_boton_actual += n_botones
 
+        self._seleccionados += len(indices)
+        if llego_al_limite:
+            self.total_esperado = self._seleccionados
+        else:
+            self.total_estimado = self._seleccionados
         return indices, not llego_al_limite
 
 
@@ -1483,6 +1556,10 @@ class DescargadorArchivos:
                 )
                 if estrategia.total_esperado is not None:
                     total_est, exacto = estrategia.total_esperado, True
+                elif getattr(estrategia, 'total_estimado', None) is not None:
+                    # Descarga parcial: el total del expediente completo no
+                    # aplica; se informa lo seleccionado hasta ahora.
+                    total_est, exacto = estrategia.total_estimado, False
                 emitir(
                     pagina=pagina_actual,
                     total_paginas=total_pag,
