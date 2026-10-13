@@ -38,7 +38,7 @@ import os
 import time
 import threading
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 from flask import Blueprint, request, jsonify, send_file, render_template, current_app, Response, redirect, url_for
@@ -166,7 +166,7 @@ def _guardar_intento_fallido(user_id, numero_expediente, mensaje):
 
 
 def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, cookies_mv, entrada, notificar_email=False,
-                   modo_actualizacion=None, actualizado_desde_id=None, identidad_expediente=None):
+                   modo_actualizacion=None, actualizado_desde_id=None, identidad_expediente=None, desde_fecha=None):
     """
     Ejecuta el pipeline completo en un thread separado.
     Necesita el objeto 'app' para poder usar el contexto de Flask (BD, config, etc.)
@@ -188,6 +188,9 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
     pasa tal cual al pipeline; `actualizado_desde_id` es el id del
     ExpedienteDescargado que se está actualizando, para dejar registrada la
     cadena de actualizaciones en el nuevo registro.
+
+    `desde_fecha`: date opcional — descarga parcial (solo movimientos con
+    fecha >= desde_fecha). Ver EstrategiaDesdeFecha.
     """
     log = logging.getLogger(__name__)
     control = None
@@ -297,6 +300,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 modo_actualizacion=modo_actualizacion,
                 debe_cancelar=_debe_cancelar,
                 **({'identidad_expediente': identidad_expediente} if identidad_expediente else {}),
+                **({'desde_fecha': desde_fecha} if desde_fecha else {}),
             )
 
             log.info(f"[JOB {job_id[:8]}] Pipeline completó con exito={resultado.exito}, error={resultado.tipo_error}")
@@ -334,6 +338,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                     mv_expediente_href=(resultado.expediente.get('url') or None) if resultado.expediente else None,
                     es_actualizacion=bool(modo_actualizacion),
                     parcial=resultado.parcial,
+                    desde_fecha=desde_fecha,
                     actualizado_desde_id=actualizado_desde_id,
                 )
 
@@ -359,12 +364,15 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 # Un PDF por (usuario, expediente, tribunal): purgar del storage
                 # la key de la descarga completa anterior del mismo expediente,
                 # ahora que la nueva ya está commiteada y accesible.
-                if expediente_db.storage_key:
+                # Una descarga parcial (desde_fecha) no reemplaza a la completa,
+                # y las parciales tampoco se purgan acá: caen por retención.
+                if expediente_db.storage_key and not desde_fecha:
                     anterior = ExpedienteDescargado.query.filter(
                         ExpedienteDescargado.user_id == user_id,
                         ExpedienteDescargado.numero == numero_expediente,
                         ExpedienteDescargado.tribunal == tribunal,
                         ExpedienteDescargado.estado == 'completed',
+                        ExpedienteDescargado.desde_fecha.is_(None),
                         ExpedienteDescargado.id != expediente_db.id,
                         ExpedienteDescargado.storage_key.isnot(None),
                     ).order_by(ExpedienteDescargado.creado_en.desc()).first()
@@ -427,7 +435,7 @@ def _run_pipeline(app, job_id, user_id, numero_expediente, indice_expediente, co
                 # nuevos) no es realmente un error: no se cobra crédito, no
                 # deja rastro de "fallo" en el historial, y no amerita un
                 # email avisando que no pasó nada.
-                es_sin_novedades = resultado.tipo_error == 'sin_novedades'
+                es_sin_novedades = resultado.tipo_error in ('sin_novedades', 'sin_actuaciones_desde_fecha')
                 nivel_log = log.info if es_sin_novedades else log.error
                 nivel_log(f"[JOB {job_id[:8]}] {'Sin novedades' if es_sin_novedades else 'Error en pipeline'}: {resultado.error}")
                 mensaje = resultado.error or 'Error desconocido en la descarga'
@@ -627,6 +635,17 @@ def descargar_expediente_sync():
                 identidad_expediente = None
         notificar_email = bool(data.get('notificar_email', current_user.notificar_email))
 
+        # Descarga parcial: 'aaaa-mm-dd' (lo que manda <input type="date">).
+        desde_fecha = None
+        desde_raw = data.get('desde_fecha')
+        if desde_raw:
+            try:
+                desde_fecha = datetime.strptime(str(desde_raw), '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'exito': False, 'mensaje': 'Fecha de inicio inválida'}), 400
+            if desde_fecha > date.today():
+                return jsonify({'exito': False, 'mensaje': 'La fecha de inicio no puede ser futura'}), 400
+
         if not numero_expediente:
             return jsonify({'exito': False, 'mensaje': 'Número de expediente requerido'}), 400
 
@@ -693,7 +712,8 @@ def descargar_expediente_sync():
             t = threading.Thread(
                 target=_run_pipeline,
                 args=(app, job_id, current_user.id, numero_expediente, indice_expediente, cookies_mv, entrada),
-                kwargs={'notificar_email': notificar_email, 'identidad_expediente': identidad_expediente},
+                kwargs={'notificar_email': notificar_email, 'identidad_expediente': identidad_expediente,
+                        'desde_fecha': desde_fecha},
                 daemon=True
             )
             t.start()
@@ -760,6 +780,13 @@ def actualizar_expediente(expediente_id):
 
         if expediente.estado != 'completed':
             return jsonify({'exito': False, 'mensaje': 'Esta descarga no está completa'}), 400
+
+        if expediente.desde_fecha:
+            return jsonify({
+                'exito': False,
+                'tipo_error': 'actualizacion_no_disponible',
+                'mensaje': 'Las descargas parciales no se pueden actualizar. Hacé una descarga completa.',
+            }), 400
 
         if not expediente.storage_key or expediente.total_filas is None:
             return jsonify({
@@ -1049,7 +1076,10 @@ def descargar_pdf(expediente_id):
         return send_file(
             pdf_path,
             as_attachment=True,
-            download_name=f"Expediente_{expediente.numero.replace('/', '_')}.pdf"
+            download_name=(
+                f"Expediente_{expediente.numero.replace('/', '_')}"
+                f"{'_desde_' + expediente.desde_fecha.isoformat() if expediente.desde_fecha else ''}.pdf"
+            )
         )
 
     except Exception as e:

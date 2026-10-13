@@ -380,7 +380,7 @@
 
             {% for exp in expedientes %}
             <div class="hist-grid-row" data-estado="{{ exp.estado }}" data-mes-ano="{{ exp.creado_en.strftime('%Y-%m') if exp.creado_en else '' }}">
-                <div class="col-num">{{ exp.numero }}</div>
+                <div class="col-num">{{ exp.numero }}{% if exp.desde_fecha %} <small class="text-muted-foja" style="display:block;">Desde {{ exp.desde_fecha.strftime('%d/%m/%Y') }}</small>{% endif %}</div>
                 <div class="col-caratula">{{ exp.caratula or '—' }}</div>
                 <div class="col-tribunal">{{ exp.tribunal or '—' }}</div>
                 <div class="col-fecha">{{ exp.creado_en.strftime('%d/%m %H:%M') if exp.creado_en else '—' }}</div>

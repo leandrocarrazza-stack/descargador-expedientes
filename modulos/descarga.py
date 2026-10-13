@@ -13,6 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from pathlib import Path
 import re
 import time
+from datetime import date, datetime
 from urllib.parse import urljoin
 from typing import List, Optional
 
@@ -117,6 +118,54 @@ class EstrategiaCompleta:
                 if rango:
                     self.total_filas_final = rango[2]
         return list(range(cantidad_botones)), True
+
+
+class EstrategiaDesdeFecha:
+    """
+    Descarga solo los movimientos con fecha >= ``desde`` (descarga parcial).
+
+    Mesa Virtual lista los movimientos en orden cronológico, del más nuevo
+    al más viejo: apenas una página trae una fila anterior a ``desde``, se
+    baja lo que corresponda de esa página y se corta la paginación (no hace
+    falta recorrer las páginas más viejas). Las filas con fecha ilegible
+    se incluyen: es preferible que sobre un archivo a que falte.
+
+    No deja huellas ni total de filas (``huellas_iniciales`` vacío,
+    ``total_filas_final`` None): un PDF parcial no puede servir de base
+    para una actualización incremental.
+    """
+
+    def __init__(self, desde: date):
+        self.desde = desde
+        self.huellas_iniciales: list = []
+        self.total_filas_final = None
+        self.total_esperado = None
+
+    def _fecha_fila(self, fila):
+        """Fecha de la fila como date, o None si no se puede interpretar."""
+        try:
+            return datetime.strptime((fila.get('fecha') or '').strip(), '%d/%m/%Y').date()
+        except ValueError:
+            return None
+
+    def botones_para_pagina(self, descargador, driver, pagina_actual, cantidad_botones):
+        filas = _leer_filas_pagina(driver)
+        if not filas:
+            raise ErrorDescarga("NO_SE_PUDO_LEER_FILAS")
+
+        indices = []
+        indice_boton_actual = 0
+        llego_al_limite = False
+        for fila in filas:
+            n_botones = fila.get('n_botones', 0) or 0
+            fecha = self._fecha_fila(fila)
+            if fecha is not None and fecha < self.desde:
+                llego_al_limite = True
+            else:
+                indices.extend(range(indice_boton_actual, indice_boton_actual + n_botones))
+            indice_boton_actual += n_botones
+
+        return indices, not llego_al_limite
 
 
 class EstrategiaIncremental:
