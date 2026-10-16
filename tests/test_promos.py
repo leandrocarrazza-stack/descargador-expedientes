@@ -131,6 +131,13 @@ def test_exportador():
         emails = sorted(u.email for u in exportador.destinatarios(User))
         check("solo con crédito, sin baja y con email válido", emails == ['con@gmail.com', 'true@gmail.com'], emails)
 
+        check("el archivo de cada cliente se llama como su email",
+              exportador.nombre_archivo('Cliente.Uno+x@Gmail.com ') == 'cliente.uno+x@gmail.com.html')
+        check("caracteres raros del email no rompen el nombre de archivo",
+              exportador.nombre_archivo('a/b\\c:d*e@x.com') == 'a_b_c_d_e@x.com.html')
+        check("emails distintos dan archivos distintos",
+              len({exportador.nombre_archivo(e) for e in emails}) == len(emails))
+
         # --solo: un único mail de prueba, con el link de baja de esa cuenta
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

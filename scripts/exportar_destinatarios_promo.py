@@ -7,8 +7,10 @@ Incluye a los usuarios que:
 - no se dieron de baja de las promociones (recibir_promociones distinto de False),
 - tienen un email con formato válido.
 
-Escribe un CSV (email, nombre, creditos, url_baja) y, con --html-dir, un
-archivo .html ya personalizado por destinatario (con su link de baja).
+Escribe un CSV (email, nombre, creditos, archivo, url_baja) y, con --html-dir, un
+archivo .html ya personalizado por destinatario (con su link de baja). Cada archivo
+se llama como el email del cliente (ej. mails/cliente@gmail.com.html); la columna
+"archivo" del CSV lo indica.
 
 Uso (con las variables de entorno de producción cargadas: DATABASE_URL, SECRET_KEY, BASE_URL):
     python scripts/exportar_destinatarios_promo.py --salida destinatarios.csv
@@ -41,6 +43,11 @@ def destinatarios(User):
     q = User.query.filter(User.creditos_disponibles > 0).order_by(User.id)
     return [u for u in q.all()
             if u.recibir_promociones is not False and EMAIL_RE.match((u.email or '').strip())]
+
+
+def nombre_archivo(email):
+    """Nombre del .html de un destinatario: su email (así se sabe a quién mandarle cada archivo)."""
+    return re.sub(r'[^A-Za-z0-9@._+-]', '_', (email or '').strip().lower()) + '.html'
 
 
 def usuario_por_email(User, email):
@@ -100,9 +107,10 @@ def main():
         lista = destinatarios(User)
         with open(args.salida, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['email', 'nombre', 'creditos', 'url_baja'])
+            w.writerow(['email', 'nombre', 'creditos', 'archivo', 'url_baja'])
             for u in lista:
-                w.writerow([u.email, u.nombre or '', u.creditos_disponibles, url_baja(u.id)])
+                w.writerow([u.email, u.nombre or '', u.creditos_disponibles,
+                            nombre_archivo(u.email) if args.html_dir else '', url_baja(u.id)])
         print(f'{len(lista)} destinatarios → {args.salida}')
 
         if args.html_dir:
@@ -110,7 +118,7 @@ def main():
             carpeta.mkdir(parents=True, exist_ok=True)
             for u in lista:
                 mail = renderizar_promo(args.campana, u)
-                (carpeta / f'promo_{u.id}.html').write_text(mail['html'], encoding='utf-8')
+                (carpeta / nombre_archivo(u.email)).write_text(mail['html'], encoding='utf-8')
             print(f'{len(lista)} mails personalizados → {carpeta}/  (asunto: {mail["asunto"] if lista else ""})')
 
 
