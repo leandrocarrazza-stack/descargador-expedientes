@@ -50,6 +50,7 @@ COLUMNAS_NUEVAS = [
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.mv_expediente_href),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.es_actualizacion),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.parcial),
+    (ExpedienteDescargado.__tablename__, ExpedienteDescargado.desde_fecha),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.actualizado_desde_id),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.ultimo_acceso_en),
 ]

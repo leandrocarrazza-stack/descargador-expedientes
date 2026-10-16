@@ -1,0 +1,73 @@
+{#
+  Popup que promociona el Contador de Plazos. Se incluye al final de la presentación (inicio.html)
+  y de Descargar (descargar_expediente.html), dentro de su bloque scripts_extra: tiene que ir
+  después de cargar el JS de Bootstrap, que es el que abre el modal.
+
+  - Vigencia: solo se genera hasta config.POPUP_PLAZOS_HASTA (ver popup_plazos_activo en servidor.py).
+  - Frecuencia: una vez por sesión del navegador (sessionStorage, vale por pestaña).
+  - Botón principal según quién mira: visitante → crear cuenta; con acceso → el contador; sin crédito → planes.
+#}
+{% if popup_plazos_activo %}
+
+{% if not current_user.is_authenticated %}
+    {% set pop_audiencia, pop_boton, pop_url = 'visitante', 'Crear cuenta gratis', '/auth/signup' %}
+{% elif plazos_tiene_acceso(current_user) %}
+    {% set pop_audiencia, pop_boton, pop_url = 'cliente', 'Probar el contador', url_for('plazos.calculadora') %}
+{% else %}
+    {% set pop_audiencia, pop_boton, pop_url = 'cliente', 'Ver planes', url_for('pagos.mostrar_planes') %}
+{% endif %}
+
+<style>
+    .pop-plazos .modal-dialog { max-width: 460px; }
+    .pop-plazos-content {
+        border: 0;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+    }
+    .pop-plazos-hero { display: block; width: 100%; height: auto; background: var(--navy); }
+    .pop-plazos-cerrar { position: absolute; top: .75rem; right: .75rem; z-index: 2; opacity: .85; }
+    .pop-plazos-body { padding: 1.75rem 1.75rem 1.5rem; background: var(--cream-soft); }
+    .pop-plazos-body h3 { font-size: 2rem; margin: .4rem 0 .6rem; }
+    .pop-plazos-body p { margin-bottom: 1.4rem; }
+    .pop-plazos-acciones { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .pop-plazos-ahora-no { background: none; border: 0; padding: .5rem; font-weight: 500; color: var(--muted); }
+    .pop-plazos-ahora-no:hover { color: var(--navy); }
+</style>
+
+<div class="modal fade pop-plazos" id="popupPlazos" tabindex="-1" aria-labelledby="popupPlazosTitulo" aria-hidden="true"
+     data-pop-clave="foja_popup_plazos_{{ pop_audiencia }}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content pop-plazos-content">
+            <button type="button" class="btn-close btn-close-white pop-plazos-cerrar" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            <img class="pop-plazos-hero" src="{{ url_for('static', filename='img/promo/hero_contador_plazos.png') }}" alt="" width="1200" height="400">
+            <div class="pop-plazos-body">
+                <span class="eyebrow">Novedad</span>
+                <h3 id="popupPlazosTitulo">Contador de Plazos</h3>
+                <p>Calculá tus vencimientos descontando feriados, ferias e inhábiles de Entre Ríos, y sumalos a tu Google Calendar, Outlook o Apple Calendar.</p>
+                <div class="pop-plazos-acciones">
+                    <a href="{{ pop_url }}" class="btn-foja">{{ pop_boton }}</a>
+                    <button type="button" class="pop-plazos-ahora-no" data-bs-dismiss="modal">Ahora no</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Muestra el popup 1 segundo después de cargar, una sola vez por sesión. La marca se guarda al
+    // abrirlo (no al cerrarlo): así cuenta igual si el usuario toca el botón y la página cambia.
+    // sessionStorage va en try/catch porque puede estar bloqueado (modo privado).
+    (function () {
+        const el = document.getElementById('popupPlazos');
+        if (!el) return;
+        const clave = el.getAttribute('data-pop-clave');
+        try { if (sessionStorage.getItem(clave)) return; } catch (e) {}
+        setTimeout(function () {
+            try { sessionStorage.setItem(clave, '1'); } catch (e) {}
+            new bootstrap.Modal(el).show();
+        }, 1000);
+    })();
+</script>
+
+{% endif %}

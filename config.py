@@ -14,7 +14,7 @@ IMPORTANTE:
 import os
 import logging
 from pathlib import Path
-from datetime import timedelta
+from datetime import date, timedelta
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde .env
@@ -222,6 +222,18 @@ PLAZOS_SYNC_AUTO = os.getenv('PLAZOS_SYNC_AUTO', 'true' if FLASK_ENV == 'product
 # Cada cuántos días corre. Alcanza con 15: la página de feriados casi no cambia y
 # el admin puede forzarla con "Sincronizar ahora" en /admin/calendario.
 PLAZOS_SYNC_DIAS = float(os.getenv('PLAZOS_SYNC_DIAS', '15'))
+
+# Popup que promociona el contador de plazos (templates/_popup_contador_plazos.html).
+# Se muestra hasta esta fecha INCLUSIVE (formato AAAA-MM-DD); después deja de aparecer solo.
+# Salió en octubre de 2026 con 3 meses de vigencia. Para extenderlo, cambiá esta variable
+# en el panel de Render (POPUP_PLAZOS_HASTA) sin tocar código; para sacarlo antes, poné una fecha pasada.
+_POPUP_PLAZOS_HASTA_DEFAULT = date(2027, 1, 9)
+try:
+    POPUP_PLAZOS_HASTA = date.fromisoformat(os.getenv('POPUP_PLAZOS_HASTA', '2027-01-09').strip())
+except ValueError:
+    # Fecha mal escrita en el entorno (ej. 9/1/2027): no tiramos abajo el arranque, se usa la de siempre
+    logging.getLogger(__name__).warning("POPUP_PLAZOS_HASTA inválida, uso %s", _POPUP_PLAZOS_HASTA_DEFAULT)
+    POPUP_PLAZOS_HASTA = _POPUP_PLAZOS_HASTA_DEFAULT
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  EMAIL (Flask-Mail / SMTP)

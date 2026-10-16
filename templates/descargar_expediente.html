@@ -270,6 +270,21 @@
                        style="font-size: 1.15rem; letter-spacing: .04em;">
                 <small class="text-muted-foja d-block mb-3">Ingresá el número del expediente que querés descargar</small>
 
+                <!-- Descarga parcial: solo actuaciones desde una fecha (cuesta 1 crédito igual) -->
+                <div class="form-check mb-2">
+                    <input type="checkbox" class="form-check-input" id="soloDesdeFecha"
+                           onchange="document.getElementById('bloqueDesdeFecha').style.display = this.checked ? 'block' : 'none'">
+                    <label class="form-check-label" for="soloDesdeFecha" style="font-size: .9rem;">
+                        Descargar solo desde una fecha
+                    </label>
+                </div>
+                <div id="bloqueDesdeFecha" class="mb-3" style="display: none;">
+                    <input type="date" class="form-control" id="desdeFecha">
+                    <small class="text-muted-foja d-block mt-1">
+                        Se descargan las actuaciones de esa fecha en adelante. Si no hay ninguna en esa fecha, se empieza desde la fecha inmediata anterior. Cuesta 1 crédito igual que una descarga completa.
+                    </small>
+                </div>
+
                 <div class="form-check mb-4">
                     <input type="checkbox" class="form-check-input" id="notificarEmail" {% if notificar_email %}checked{% endif %}>
                     <label class="form-check-label" for="notificarEmail" style="font-size: .9rem;">
@@ -839,6 +854,10 @@
             alert('Ingresá un número de expediente');
             return;
         }
+        if (document.getElementById('soloDesdeFecha').checked && !document.getElementById('desdeFecha').value) {
+            alert('Elegí la fecha desde la que querés descargar');
+            return;
+        }
         numeroActual = numero;
         await enviarDescarga(numero, null);
     }
@@ -917,6 +936,10 @@
         const body = { numero_expediente: numero, notificar_email: notificarEmailActual };
         if (indice !== null) body.indice_expediente = indice;
         if (identidad) body.identidad_expediente = identidad;
+        // Descarga parcial (se lee del DOM, así también aplica al reenvío
+        // tras elegir entre varios expedientes).
+        const desdeFecha = document.getElementById('desdeFecha').value;
+        if (document.getElementById('soloDesdeFecha').checked && desdeFecha) body.desde_fecha = desdeFecha;
 
         try {
             // 1. Iniciar el job en el servidor (respuesta inmediata con job_id)
@@ -1155,4 +1178,5 @@
         }
     });
 </script>
+{% include '_popup_contador_plazos.html' %}
 {% endblock %}

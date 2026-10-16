@@ -191,6 +191,12 @@ class ExpedienteDescargado(db.Model):
     # (se detectaron movimientos intercalados por debajo del ancla de huellas).
     parcial = db.Column(db.Boolean, default=False)
 
+    # Fecha de inicio si es una descarga parcial "desde una fecha"
+    # (EstrategiaDesdeFecha); NULL en una descarga completa. Un registro con
+    # fecha no sirve de base para actualización incremental ni reemplaza al
+    # PDF completo guardado.
+    desde_fecha = db.Column(db.Date, nullable=True)
+
     # id del ExpedienteDescargado completo/actualización anterior desde el que
     # se generó este (para reconstruir la cadena de actualizaciones).
     actualizado_desde_id = db.Column(db.Integer, nullable=True)
@@ -275,7 +281,13 @@ class SesionUsuarioMV(db.Model):
             try:
                 plaintext = f.decrypt(raw)
             except InvalidToken:
-                raise ValueError("Descifrado de cookies falló — ENCRYPTION_KEY puede haber cambiado")
+                # Fila vieja guardada en texto plano (antes de activar el cifrado):
+                # se acepta para no romper sesiones; se cifra al próximo guardado
+                # o con scripts/encrypt_existing_cookies.py
+                try:
+                    return json.loads(raw)
+                except ValueError:
+                    raise ValueError("Descifrado de cookies falló — ENCRYPTION_KEY puede haber cambiado")
         else:
             plaintext = raw
         return json.loads(plaintext)

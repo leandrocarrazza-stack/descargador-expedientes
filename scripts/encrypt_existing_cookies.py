@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from modulos.database import db
 from modulos.models import SesionUsuarioMV
-from server import crear_app
+from servidor import crear_app
 
 def migrate_cookies():
     app = crear_app()

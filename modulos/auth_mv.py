@@ -720,17 +720,18 @@ def guardar_sesion_usuario(user_id: int, cookies: list, mv_usuario: str = None) 
 
         if sesion:
             # Actualizar la existente
-            sesion.cookies_json = json.dumps(cookies)
+            sesion.set_cookies(cookies)  # cifra con Fernet (ENCRYPTION_KEY)
             sesion.actualizado_en = datetime.utcnow()
             if mv_usuario:
                 sesion.mv_usuario = mv_usuario
         else:
-            # Crear nueva
+            # Crear nueva (cookies_json es NOT NULL; set_cookies lo reemplaza cifrado)
             sesion = SesionUsuarioMV(
                 user_id=user_id,
-                cookies_json=json.dumps(cookies),
+                cookies_json='',
                 mv_usuario=mv_usuario
             )
+            sesion.set_cookies(cookies)
             db.session.add(sesion)
 
         db.session.commit()
@@ -754,7 +755,7 @@ def obtener_cookies_usuario(user_id: int):
 
         sesion = SesionUsuarioMV.query.filter_by(user_id=user_id).first()
         if sesion:
-            return json.loads(sesion.cookies_json)
+            return sesion.get_cookies()
         return None
 
     except Exception as e:
