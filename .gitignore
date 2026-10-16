@@ -114,3 +114,9 @@ wheels/
 Thumbs.db
 .DS_Store
 app.db
+
+# Mails promocionales: contienen emails de clientes, nunca van al repo
+destinatarios*.csv
+envios_promo*.csv
+mails/
+mail_prueba_*.html
