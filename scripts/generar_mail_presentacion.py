@@ -22,20 +22,16 @@ def _pesos(n):
 
 
 def contexto(config, base_url):
-    planes = [{
-        'nombre': p['nombre'],
-        'creditos': p['creditos'],
-        'precio': _pesos(p['precio_ars']),
-        'por_descarga': _pesos(round(p['precio_ars'] / p['creditos'])),
-    } for p in config.PLANES.values()]
+    por_descarga = [round(p['precio_ars'] / p['creditos']) for p in config.PLANES.values()]
+    individual = next((p['precio_ars'] for p in config.PLANES.values() if p['creditos'] == 1), max(por_descarga))
     base = base_url.rstrip('/')
     return {
         'url_registro': f'{base}/auth/signup',
         'url_sitio': base,
-        'url_img': f'{base}/static/img/promo',
         'url_baja': '{$unsubscribe}',
         'remitente': 'asistenciafoja@gmail.com',
-        'planes': planes,
+        'individual': _pesos(individual),
+        'minimo': _pesos(min(por_descarga)),
         'anio': 2026,
         'asunto': 'Foja: la forma más simple de tener todo el expediente a mano',
     }

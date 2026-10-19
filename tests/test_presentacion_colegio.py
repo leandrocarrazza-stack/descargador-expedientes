@@ -47,13 +47,13 @@ def test_presentacion():
     check("trae el link de baja de MailerLite una sola vez y no personaliza con nombre",
           html.count('{$unsubscribe}') == 1 and '{$name' not in html)
     check("el botón lleva al registro", 'href="https://foja.com.ar/auth/signup"' in html and 'Crear una cuenta gratis' in html)
-    check("la imagen existe en static/ y está referenciada", 'hero_descarga_expedientes.png' in html
-          and (RAIZ / 'static' / 'img' / 'promo' / 'hero_descarga_expedientes.png').exists())
-    for p in config.PLANES.values():
-        check(f"precio del plan {p['nombre']} igual a config.PLANES", gen._pesos(p['precio_ars']) in texto, gen._pesos(p['precio_ars']))
+    por_descarga = [round(p['precio_ars'] / p['creditos']) for p in config.PLANES.values()]
+    check("el precio individual y el mínimo por descarga salen de config.PLANES",
+          gen._pesos(max(por_descarga)) in texto and gen._pesos(min(por_descarga)) in texto,
+          (gen._pesos(max(por_descarga)), gen._pesos(min(por_descarga))))
     check("menciona las dos descargas de prueba", 'dos descargas de prueba' in texto)
-    check("incluye los casos: estudiar todo y analizar una parte", 'Estudio integral del expediente' in texto and 'Análisis de un tramo' in texto)
-    check("crédito del desarrollo y contacto, sin nota de saludo", 'Leandro Oscar Carrazza' in texto and 'asistenciafoja@gmail.com' in texto
+    check("incluye los casos: estudiar todo y analizar una parte", 'estudiar la causa completa' in texto and 'analizar solo un tramo' in texto)
+    check("crédito del desarrollo y contacto, sin nota de saludo", 'Desarrollado por Leandro Carrazza' in texto and 'Oscar' not in texto and 'asistenciafoja@gmail.com' in texto
           and 'cordial saludo' not in texto and 'Abogado' not in texto)
 
 
