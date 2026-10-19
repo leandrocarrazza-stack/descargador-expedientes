@@ -52,8 +52,9 @@ def test_presentacion():
     for p in config.PLANES.values():
         check(f"precio del plan {p['nombre']} igual a config.PLANES", gen._pesos(p['precio_ars']) in texto, gen._pesos(p['precio_ars']))
     check("menciona las dos descargas de prueba", 'dos descargas de prueba' in texto)
-    check("incluye los casos: estudiar todo y analizar una parte", 'Estudiar un expediente completo' in texto and 'Analizar solo una parte' in texto)
-    check("firma con el contacto", 'Leandro Oscar Carrazza' in texto and 'asistenciafoja@gmail.com' in texto)
+    check("incluye los casos: estudiar todo y analizar una parte", 'Estudio integral del expediente' in texto and 'Análisis de un tramo' in texto)
+    check("crédito del desarrollo y contacto, sin nota de saludo", 'Leandro Oscar Carrazza' in texto and 'asistenciafoja@gmail.com' in texto
+          and 'cordial saludo' not in texto and 'Abogado' not in texto)
 
 
 def test_sin_afirmaciones_falsas_ni_primera_persona():
@@ -65,6 +66,8 @@ def test_sin_afirmaciones_falsas_ni_primera_persona():
     check("no afirma nada que el sistema no hace ni usa tecnicismos", not halladas, halladas)
     singular = [p for p in ['les presento', 'desarrollé', ' soy ', ' mi cuenta', 'creé ', 'quiero ', 'quedo a '] if p in texto]
     check("el texto no está en primera persona del singular", not singular, singular)
+    tuteo = [p for p in [' tu ', ' tus ', ' vos ', ' tenés', ' creá ', ' pruébenlo', 'entrá ', 'conectá ', 'elegí '] if p in ' ' + texto + ' ']
+    check("trato formal, sin tuteo ni voseo", not tuteo, tuteo)
 
 
 if __name__ == '__main__':
