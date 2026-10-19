@@ -799,7 +799,7 @@ def actualizar_expediente(expediente_id):
             return jsonify({
                 'exito': False,
                 'tipo_error': 'plan_requerido',
-                'mensaje': 'La actualización incremental requiere el plan Estudio o Matrícula.',
+                'mensaje': 'La actualización incremental requiere el plan Estudio o Estudio Plus.',
             }), 403
 
         if not current_user.is_admin and current_user.creditos_disponibles < 1:
