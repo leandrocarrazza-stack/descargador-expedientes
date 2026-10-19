@@ -47,10 +47,7 @@ def test_presentacion():
     check("trae el link de baja de MailerLite una sola vez y no personaliza con nombre",
           html.count('{$unsubscribe}') == 1 and '{$name' not in html)
     check("el botón lleva al registro", 'href="https://foja.com.ar/auth/signup"' in html and 'Crear una cuenta gratis' in html)
-    por_descarga = [round(p['precio_ars'] / p['creditos']) for p in config.PLANES.values()]
-    check("el precio individual y el mínimo por descarga salen de config.PLANES",
-          gen._pesos(max(por_descarga)) in texto and gen._pesos(min(por_descarga)) in texto,
-          (gen._pesos(max(por_descarga)), gen._pesos(min(por_descarga))))
+    check("no fija precios (pueden cambiar): habla de planes accesibles", '$' not in texto and 'planes sumamente accesibles' in texto)
     check("menciona las dos descargas de prueba", 'dos descargas de prueba' in texto)
     check("incluye los casos: estudiar todo y analizar una parte", 'estudiar la causa completa' in texto and 'analizar solo un tramo' in texto)
     check("crédito del desarrollo y contacto, sin nota de saludo", 'Desarrollado por Leandro Carrazza' in texto and 'Oscar' not in texto and 'asistenciafoja@gmail.com' in texto

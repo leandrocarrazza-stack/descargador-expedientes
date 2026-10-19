@@ -17,21 +17,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-def _pesos(n):
-    return '$' + f'{n:,}'.replace(',', '.')
-
-
 def contexto(config, base_url):
-    por_descarga = [round(p['precio_ars'] / p['creditos']) for p in config.PLANES.values()]
-    individual = next((p['precio_ars'] for p in config.PLANES.values() if p['creditos'] == 1), max(por_descarga))
     base = base_url.rstrip('/')
     return {
         'url_registro': f'{base}/auth/signup',
         'url_sitio': base,
         'url_baja': '{$unsubscribe}',
         'remitente': 'asistenciafoja@gmail.com',
-        'individual': _pesos(individual),
-        'minimo': _pesos(min(por_descarga)),
         'anio': 2026,
         'asunto': 'Foja: la forma más simple de tener todo el expediente a mano',
     }
