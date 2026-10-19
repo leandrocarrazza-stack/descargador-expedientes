@@ -44,6 +44,7 @@
         {# Cada campaña aporta sus propias filas <tr> (hero, secciones, botón final) #}
         {% block filas %}{% endblock %}
 
+        {% block pie %}
         <!-- PIE -->
         <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:28px 36px 30px 36px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.7; color:#9fb0cb;">
             <span style="font-family:Georgia,'Times New Roman',serif; font-size:20px; color:#f5f1e8;">Foja<span style="color:#d4a54a;">.</span></span><br>
@@ -54,6 +55,7 @@
             (seguirás recibiendo los avisos de tu cuenta).<br>
             © {{ anio }} Foja · Entre Ríos, Argentina
         </td></tr>
+        {% endblock %}
     </table>
 
 </td></tr>

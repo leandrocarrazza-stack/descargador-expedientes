@@ -1,0 +1,99 @@
+{% extends "emails/promo_base.html" %}
+{% from "emails/_piezas.html" import boton, titulo_seccion, caso, paso %}
+
+{# Mail de presentación de Foja para difundir entre los colegas del foro (lo reenvía el Colegio).
+   Voz en plural, sin tecnicismos. Variables: url_registro, url_sitio, url_img, url_baja, remitente, planes, anio, asunto. #}
+
+{% block preheader %}Sin bajar escrito por escrito: todo el expediente en un archivo, en pocos minutos.{% endblock %}
+
+{% block etiqueta %}Para los colegas del foro{% endblock %}
+
+{% block filas %}
+
+        <!-- IMAGEN -->
+        <tr><td bgcolor="#0a1f3a" style="background:#0a1f3a; padding:0; line-height:0; font-size:0;">
+            <img src="{{ url_img }}/hero_descarga_expedientes.png" width="600" alt="Muchos escritos sueltos que se reúnen en un único documento ordenado"
+                 style="display:block; width:100%; max-width:600px; height:auto; border:0; font-family:Arial,sans-serif; font-size:13px; line-height:18px; color:#9fb0cb;">
+        </td></tr>
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:6px 36px 44px 36px;">
+            <p style="margin:0 0 14px 0; font-family:Georgia,'Times New Roman',serif; font-size:21px; line-height:1.3; color:#c9d3e4; font-style:italic;">Estimadas y estimados colegas:</p>
+            <p class="h1" style="margin:0 0 16px 0; font-family:Georgia,'Times New Roman',serif; font-size:36px; line-height:1.15; color:#f5f1e8;">Todo el expediente de Mesa Virtual, <span style="color:#d4a54a; font-style:italic;">en un solo archivo.</span></p>
+            <p style="margin:0 0 26px 0; font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:1.6; color:#c9d3e4;">
+                Les presentamos <strong style="color:#f5f1e8;">Foja</strong>, una herramienta sencilla que descarga por ustedes todos los escritos de un expediente de Mesa Virtual
+                y se los entrega ordenados, de principio a fin, en un único PDF. Sin ir abriendo escrito por escrito, y sin instalar nada: funciona desde el navegador.
+            </p>
+            {{ boton(url_registro, 'Crear una cuenta gratis') }}
+            <p style="margin:12px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#9fb0cb;">Incluye dos descargas de prueba, sin costo.</p>
+        </td></tr>
+
+        <!-- PARA QUÉ SIRVE -->
+        <tr><td bgcolor="#f5f1e8" class="px" style="background:#f5f1e8; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Para qué sirve', 'Situaciones de todos los días') }}
+            {{ caso('01', 'Estudiar un expediente completo',
+                    'Un caso que recién llega, una audiencia, un alegato: toda la causa en orden cronológico, para leerla de corrido.') }}
+            {{ caso('02', 'Analizar solo una parte',
+                    '¿Interesa lo ocurrido desde una fecha determinada, por ejemplo desde la última resolución? Se puede descargar únicamente ese tramo.') }}
+            {{ caso('03', 'Seguir un expediente en trámite',
+                    'Cuando hay novedades, se descargan solo los movimientos nuevos, sin repetir todo lo anterior (planes Estudio y Matrícula).') }}
+            {{ caso('04', 'Compartir o respaldar',
+                    'Una copia ordenada para enviar a un cliente o a un colega, o para tener en el archivo propio.', True) }}
+        </td></tr>
+
+        <!-- CÓMO FUNCIONA -->
+        <tr><td bgcolor="#ffffff" class="px" style="background:#ffffff; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Cómo funciona', 'Tres pasos, pocos minutos') }}
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                {{ paso('1', '<strong>Crear la cuenta</strong>, que es gratis.') }}
+                {{ paso('2', '<strong>Conectar Mesa Virtual</strong> con el usuario de siempre.') }}
+                {{ paso('3', 'Escribir el <strong>número de expediente</strong>. En pocos minutos llega el PDF, con un aviso por mail.', True) }}
+            </table>
+            <p style="margin:22px 0 0 0; padding:14px 18px; background:#faf7f0; border-left:3px solid #d4a54a; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.6; color:#33425e;">
+                <strong style="color:#0a1f3a;">Seguro y simple.</strong> Foja no guarda la contraseña de Mesa Virtual: cada colega ingresa con su propio usuario y accede únicamente a sus expedientes.
+            </p>
+        </td></tr>
+
+        <!-- COSTOS -->
+        <tr><td bgcolor="#f5f1e8" class="px" style="background:#f5f1e8; padding:40px 36px 38px 36px;">
+            {{ titulo_seccion('Cuánto cuesta', 'Se paga solo lo que se usa') }}
+            <p style="margin:0 0 16px 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#33425e;">
+                Cada crédito equivale a una descarga completa y se descuenta únicamente si la descarga termina bien. Sin cuotas mensuales y sin vencimiento.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border:1px solid #e3dac3; border-radius:12px; overflow:hidden; font-family:Arial,Helvetica,sans-serif; font-size:14px; color:#33425e;">
+                {% for p in planes %}
+                <tr>
+                    <td style="padding:13px 18px;{% if not loop.last %} border-bottom:1px solid #efe7d4;{% endif %}"><strong style="color:#0a1f3a;">{{ p.nombre }}</strong><br><span style="font-size:12px; color:#7d8aa3;">{{ p.creditos }} {{ 'descarga' if p.creditos == 1 else 'descargas' }}</span></td>
+                    <td align="right" style="padding:13px 18px;{% if not loop.last %} border-bottom:1px solid #efe7d4;{% endif %}"><strong style="font-family:Georgia,'Times New Roman',serif; font-size:19px; color:#0a1f3a;">{{ p.precio }}</strong><br><span style="font-size:12px; color:#7d8aa3;">{{ p.por_descarga }} por descarga</span></td>
+                </tr>
+                {% endfor %}
+            </table>
+            <p style="margin:14px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.6; color:#33425e;">
+                Además, quienes tengan crédito disponible acceden sin costo al <strong style="color:#0a1f3a;">contador de plazos judiciales</strong>, con los feriados, ferias e inhábiles del STJER al día.
+            </p>
+        </td></tr>
+
+        <!-- CIERRE Y FIRMA -->
+        <tr><td bgcolor="#ffffff" class="px" style="background:#ffffff; padding:38px 36px 44px 36px;">
+            <p class="h2" style="margin:0 0 20px 0; font-family:Georgia,'Times New Roman',serif; font-size:26px; line-height:1.25; color:#0a1f3a;">Pruébenlo con <span style="color:#b8862b; font-style:italic;">dos descargas sin costo.</span></p>
+            {{ boton(url_registro, 'Crear una cuenta gratis') }}
+            <p style="margin:34px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#33425e;">
+                Quedamos a disposición para cualquier consulta.<br>
+                Un cordial saludo.
+            </p>
+            <p style="margin:16px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:1.6; color:#33425e;">
+                <strong style="color:#0a1f3a;">Leandro Oscar Carrazza</strong><br>
+                Abogado · Gualeguaychú<br>
+                <a href="mailto:{{ remitente }}" style="color:#0a1f3a;">{{ remitente }}</a> · <a href="{{ url_sitio }}" style="color:#0a1f3a;">foja.com.ar</a><br>
+                <span style="font-size:12px; color:#7d8aa3;">Foja es un desarrollo de un colega del foro.</span>
+            </p>
+        </td></tr>
+
+{% endblock %}
+
+{% block pie %}
+        <!-- PIE MÍNIMO -->
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:24px 36px 26px 36px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.7; color:#9fb0cb;">
+            <span style="font-family:Georgia,'Times New Roman',serif; font-size:20px; color:#f5f1e8;">Foja<span style="color:#d4a54a;">.</span></span>
+            <span style="color:#9fb0cb;"> &nbsp;·&nbsp; Entre Ríos, Argentina</span><br>
+            <a href="{{ url_baja }}" style="color:#9fb0cb; text-decoration:underline;">Dejar de recibir estos mensajes</a>
+        </td></tr>
+{% endblock %}
