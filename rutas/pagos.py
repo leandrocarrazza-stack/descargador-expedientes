@@ -238,26 +238,69 @@ def _actualizar_plan_max_comprado(usuario: User, plan_comprado: str) -> None:
         usuario.plan_max_comprado = plan_comprado
 
 
-def _confirmar_compra(compra: CompraCreditos) -> None:
+def _confirmar_compra(compra: CompraCreditos) -> bool:
     """
     Marca una compra como completada y acredita los créditos al usuario.
     Función auxiliar usada tanto por el webhook como por pago_confirmado.
+
+    El webhook y la redirección de MP llegan casi a la vez y pueden correr en
+    threads distintos. El UPDATE condicional (solo si sigue 'pending') lo
+    resuelve la base de datos de forma atómica: exactamente uno lo gana y es el
+    único que acredita. Estado y créditos van en un solo commit, así una falla
+    a mitad de camino no deja una compra 'completed' sin créditos.
+
+    Returns:
+        True si esta llamada acreditó los créditos, False si otra ya lo había hecho.
     """
     from datetime import datetime
 
-    compra.estado = 'completed'
-    compra.completado_en = datetime.utcnow()
-    db.session.commit()
+    try:
+        filas = CompraCreditos.query.filter_by(id=compra.id, estado='pending').update(
+            {'estado': 'completed', 'completado_en': datetime.utcnow()},
+            synchronize_session=False,
+        )
+        if filas != 1:
+            db.session.rollback()
+            logger.info(f"Compra {compra.id} ya había sido acreditada, se ignora")
+            return False
 
-    usuario = User.query.get(compra.user_id)
-    if usuario:
-        usuario.creditos_disponibles += compra.creditos_comprados
-        _actualizar_plan_max_comprado(usuario, compra.plan)
+        # Suma hecha por la base (creditos = creditos + N), no leída y reescrita en Python
+        User.query.filter_by(id=compra.user_id).update(
+            {'creditos_disponibles': User.creditos_disponibles + compra.creditos_comprados},
+            synchronize_session=False,
+        )
+        usuario = db.session.get(User, compra.user_id)
+        if usuario:
+            _actualizar_plan_max_comprado(usuario, compra.plan)
         db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+
+    db.session.refresh(compra)
+    if usuario:
+        db.session.refresh(usuario)
         logger.info(
             f"Créditos acreditados: {usuario.email} recibió "
             f"+{compra.creditos_comprados} créditos (total: {usuario.creditos_disponibles})"
         )
+    return True
+
+
+def _pago_aprobado_en_mp(payment_id, external_ref) -> bool:
+    """
+    True solo si Mercado Pago confirma que ese pago existe, está aprobado y
+    pertenece a esa referencia. Ante cualquier duda (sin payment_id, error de
+    la API) devuelve False: en ese caso el webhook acredita igual.
+    """
+    if not payment_id:
+        return False
+    try:
+        pago = obtener_pago(str(payment_id))
+    except MercadoPagoError as e:
+        logger.warning(f"No se pudo verificar el pago {payment_id} en MP: {e}")
+        return False
+    return pago.get('status') == 'approved' and pago.get('external_reference') == external_ref
 
 
 @pagos_bp.route('/pago-confirmado', methods=['GET'])
@@ -284,20 +327,31 @@ def pago_confirmado():
         compra = None
 
         # Si el pago fue aprobado, intentar acreditar créditos
-        # (el webhook puede llegar después que el redirect, así que lo hacemos acá también)
+        # (el webhook puede llegar después que el redirect, así que lo hacemos acá también).
+        # Los parámetros de la URL los controla el usuario: NO alcanza con que diga
+        # status=approved. Se confirma contra la API de MP y la compra tiene que ser
+        # del usuario logueado.
         if status == 'approved' and external_ref:
             compra = CompraCreditos.query.filter_by(
                 stripe_session_id=external_ref,
+                user_id=current_user.id,
                 estado='pending'
             ).first()
 
             if compra:
-                _confirmar_compra(compra)
-                logger.info(f"Créditos acreditados via redirect (antes que el webhook)")
+                if _pago_aprobado_en_mp(payment_id, external_ref):
+                    _confirmar_compra(compra)
+                    logger.info("Créditos acreditados via redirect (antes que el webhook)")
+                else:
+                    logger.warning(
+                        f"[SECURITY] pago-confirmado: MP no confirma el pago "
+                        f"(payment_id={payment_id}, ref={external_ref}, user={current_user.id})"
+                    )
             else:
                 # Ya fue procesado por el webhook, buscar la compra completada
                 compra = CompraCreditos.query.filter_by(
-                    stripe_session_id=external_ref
+                    stripe_session_id=external_ref,
+                    user_id=current_user.id
                 ).first()
 
         # Si no tenemos compra todavía, buscar la más reciente del usuario
