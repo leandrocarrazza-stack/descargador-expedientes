@@ -847,6 +847,31 @@
         });
     }
 
+    // ─── Reanudar tras reconectar Mesa Virtual ────────────────────────────
+    // Al reconectar la página se recarga y el formulario se pierde: se guarda
+    // el número Y la fecha de "descargar solo desde" para retomar igual que
+    // estaba (si no, la descarga reanudada bajaba el expediente completo).
+    function guardarPendiente(numero) {
+        try {
+            if (!numero) return;
+            const datos = { numero: numero };
+            const desde = document.getElementById('desdeFecha').value;
+            if (document.getElementById('soloDesdeFecha').checked && desde) datos.desde_fecha = desde;
+            localStorage.setItem('expediente_pendiente', JSON.stringify(datos));
+        } catch (e) {}
+    }
+
+    function leerPendiente() {
+        const crudo = localStorage.getItem('expediente_pendiente');
+        if (!crudo) return null;
+        localStorage.removeItem('expediente_pendiente');
+        try {
+            const datos = JSON.parse(crudo);
+            if (datos && typeof datos === 'object' && datos.numero) return datos;
+        } catch (e) {}
+        return { numero: crudo };  // formato viejo: solo el número como texto
+    }
+
     // ─── FLUJO PRINCIPAL ──────────────────────────────────────────────────
     async function iniciarDescarga() {
         const numero = document.getElementById('numero_expediente').value.trim();
@@ -954,7 +979,7 @@
             // Errores de validación inmediatos (sin créditos, sin sesión MV, etc.)
             if (resp.status === 401 && data.tipo_error === 'sesion_mv_requerida') {
                 detenerAnimacion();
-                try { if (numero) localStorage.setItem('expediente_pendiente', numero); } catch(e) {}
+                guardarPendiente(numero);
                 window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
                 return;
             }
@@ -1023,7 +1048,7 @@
             } else if (data.estado === 'error') {
                 if (data.tipo_error === 'sesion_mv_requerida') {
                     detenerAnimacion();
-                    try { if (numeroActual) localStorage.setItem('expediente_pendiente', numeroActual); } catch(e) {}
+                    guardarPendiente(numeroActual);
                     window.location.href = data.login_url || '/auth/mv-login?next=/descargas/expediente';
                     return;
                 }
@@ -1148,10 +1173,14 @@
             if (e.key === 'Enter') iniciarDescarga();
         });
         try {
-            const pendiente = localStorage.getItem('expediente_pendiente');
+            const pendiente = leerPendiente();
             if (pendiente) {
-                document.getElementById('numero_expediente').value = pendiente;
-                localStorage.removeItem('expediente_pendiente');
+                document.getElementById('numero_expediente').value = pendiente.numero;
+                if (pendiente.desde_fecha) {
+                    document.getElementById('soloDesdeFecha').checked = true;
+                    document.getElementById('desdeFecha').value = pendiente.desde_fecha;
+                    document.getElementById('bloqueDesdeFecha').style.display = 'block';
+                }
                 // Sólo se guarda acá cuando el usuario ya había escrito el
                 // número y apretado "Descargar", y hubo que mandarlo a
                 // reconectar Mesa Virtual en el medio (ver enviarDescarga y
