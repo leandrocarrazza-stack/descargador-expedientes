@@ -184,7 +184,7 @@ PLANES = {
         'descripcion': '10 descargas · $2.400 c/u'
     },
     'matricula': {
-        'nombre': 'Matrícula',
+        'nombre': 'Estudio Plus',  # la clave interna sigue siendo 'matricula'
         'creditos': 30,
         'precio_ars': 63000,  # $2.100 c/u, ahorra $27.000
         'descripcion': '30 descargas · $2.100 c/u'
