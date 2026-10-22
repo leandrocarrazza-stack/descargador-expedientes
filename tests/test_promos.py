@@ -131,6 +131,28 @@ def test_exportador():
         emails = sorted(u.email for u in exportador.destinatarios(User))
         check("solo con crédito, sin baja y con email válido", emails == ['con@gmail.com', 'true@gmail.com'], emails)
 
+        check("el archivo de cada cliente se llama como su email",
+              exportador.nombre_archivo('Cliente.Uno+x@Gmail.com ') == 'cliente.uno+x@gmail.com.html')
+        check("caracteres raros del email no rompen el nombre de archivo",
+              exportador.nombre_archivo('a/b\\c:d*e@x.com') == 'a_b_c_d_e@x.com.html')
+        check("emails distintos dan archivos distintos",
+              len({exportador.nombre_archivo(e) for e in emails}) == len(emails))
+
+        # --solo: un único mail de prueba, con el link de baja de esa cuenta
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            u = _usuario('Mi_Cuenta@gmail.com', nombre='Leandro', creditos=0)
+            _usuario('miXcuenta@gmail.com', creditos=5)   # el "_" no debe actuar como comodín
+            ruta, mail, motivos = exportador.generar_solo(User, ' mi_cuenta@GMAIL.com ', tmp, 'contador_plazos')
+            html = ruta.read_text(encoding='utf-8')
+            check("--solo encuentra la cuenta sin importar mayúsculas ni espacios", ruta.name == 'promo_prueba.html' and 'Leandro' in html)
+            check("--solo usa el link de baja de esa cuenta y no de otra", promos.url_baja(u.id) in html)
+            check("--solo genera un único archivo", len(list(Path(tmp).iterdir())) == 1)
+            check("--solo avisa por qué no entraría en la tanda real", motivos == ['no tiene crédito disponible'], motivos)
+            check("--solo con un email que no existe no genera nada",
+                  exportador.generar_solo(User, 'nadie@gmail.com', tmp, 'contador_plazos') == (None, None, [])
+                  and len(list(Path(tmp).iterdir())) == 1)
+
 
 def test_acceso_por_credito():
     from rutas.plazos import tiene_acceso
