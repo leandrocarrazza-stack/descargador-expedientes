@@ -58,6 +58,53 @@ def nombre_para_saludo(usuario):
     return nombre.split()[0] if nombre else ''
 
 
+def url_whatsapp(link_referido):
+    """Link de WhatsApp con el mensaje para compartir ya armado (incluye el link personal)."""
+    from urllib.parse import quote
+    texto = f'Uso Foja para descargar expedientes de Mesa Virtual en un solo PDF. Probala acá: {link_referido}'
+    return f'https://wa.me/?text={quote(texto)}'
+
+
+def _contexto_comun(campana, anio=None):
+    """Datos de una campaña que son iguales para todas las personas."""
+    from datetime import date
+    from modulos.referidos import PREMIO_CREDITOS, TOPE_PREMIADOS
+    return {
+        'premio_creditos': PREMIO_CREDITOS,
+        'tope_premiados': TOPE_PREMIADOS,
+        'tope_descargas': PREMIO_CREDITOS * TOPE_PREMIADOS,
+        'url_contador': f'{_base_url()}/plazos/',
+        'url_img': f'{_base_url()}/static/img/promo',   # imágenes de los mails (static/img/promo/)
+        'remitente': REMITENTE,
+        'anio': anio or date.today().year,
+        'asunto': ASUNTOS[campana],
+    }
+
+
+def renderizar_promo_mailerlite(campana, anio=None):
+    """
+    Arma el HTML de una campaña para pegar en el editor de HTML de MailerLite.
+
+    No lleva datos de una persona: los que cambian por destinatario quedan como
+    marcadores que MailerLite reemplaza al enviar — el link de baja
+    ({$unsubscribe}), el saludo ({$name}) y, en la campaña 'recomenda', los
+    campos personalizados link_referido y link_whatsapp (se cargan con el CSV de
+    scripts/exportar_destinatarios_promo.py). Devuelve el HTML (str). Debe
+    llamarse dentro de un contexto de aplicación Flask.
+    """
+    if campana not in ASUNTOS:
+        raise ValueError(f'Campaña desconocida: {campana}')
+    from markupsafe import Markup   # para que Jinja no escape las comillas del marcador
+    contexto = _contexto_comun(campana, anio)
+    contexto.update({
+        'nombre': Markup("{$name|default('colega')}"),
+        'url_baja': '{$unsubscribe}',
+        'url_referido': '{$link_referido}',
+        'url_whatsapp': '{$link_whatsapp}',
+    })
+    return render_template(f'emails/promo_{campana}.html', **contexto)
+
+
 def renderizar_promo(campana, usuario, anio=None):
     """
     Arma el mail de una campaña para un usuario.
@@ -67,25 +114,15 @@ def renderizar_promo(campana, usuario, anio=None):
     """
     if campana not in ASUNTOS:
         raise ValueError(f'Campaña desconocida: {campana}')
-    from datetime import date
-    from urllib.parse import quote
-    from modulos.referidos import PREMIO_CREDITOS, TOPE_PREMIADOS, url_referido
+    from modulos.referidos import url_referido
     link_referido = url_referido(usuario.id)
-    texto_wa = f'Uso Foja para descargar expedientes de Mesa Virtual en un solo PDF. Probala acá: {link_referido}'
-    contexto = {
+    contexto = _contexto_comun(campana, anio)
+    contexto.update({
         'url_referido': link_referido,
-        'url_whatsapp': f'https://wa.me/?text={quote(texto_wa)}',
-        'premio_creditos': PREMIO_CREDITOS,
-        'tope_premiados': TOPE_PREMIADOS,
-        'tope_descargas': PREMIO_CREDITOS * TOPE_PREMIADOS,
+        'url_whatsapp': url_whatsapp(link_referido),
         'nombre': nombre_para_saludo(usuario),
-        'url_contador': f'{_base_url()}/plazos/',
-        'url_img': f'{_base_url()}/static/img/promo',   # imágenes de los mails (static/img/promo/)
         'url_baja': url_baja(usuario.id),
-        'remitente': REMITENTE,
-        'anio': anio or date.today().year,
-        'asunto': ASUNTOS[campana],
-    }
+    })
     return {
         'asunto': ASUNTOS[campana],
         'html': render_template(f'emails/promo_{campana}.html', **contexto),

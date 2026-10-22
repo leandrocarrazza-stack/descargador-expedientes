@@ -164,6 +164,29 @@ def test_campana_recomenda():
         check("no quedan variables sin reemplazar", '{{' not in h and '{{' not in t and '{%' not in h)
 
 
+def test_version_mailerlite():
+    app = _app()
+    with app.app_context():
+        h = promos.renderizar_promo_mailerlite('recomenda', anio=2026)
+        check("trae los marcadores de MailerLite para el link, WhatsApp y la baja",
+              h.count('{$link_referido}') >= 1 and '{$link_whatsapp}' in h and h.count('{$unsubscribe}') == 1)
+        check("el saludo usa el primer nombre con valor por defecto, sin escapar las comillas",
+              "{$name|default('colega')}" in h and '&#39;' not in h)
+        check("no lleva el link ni el código de ninguna persona", '/auth/signup?ref=' not in h and 'wa.me' not in h)
+        check("no quedan variables de Jinja sin resolver", '{{' not in h and '{%' not in h)
+        check("mantiene el tope y el premio", '20 descargas' in h and '2 descargas' in h)
+
+        u = _usuario('cli@gmail.com', nombre='María Pérez', creditos=1)
+        link = referidos.url_referido(u.id)
+        check("el link de WhatsApp lleva el link personal codificado",
+              promos.url_whatsapp(link).startswith('https://wa.me/?text=') and 'ref%3D' in promos.url_whatsapp(link))
+        try:
+            promos.renderizar_promo_mailerlite('no_existe')
+            check("campaña desconocida → error", False)
+        except ValueError:
+            check("campaña desconocida → error", True)
+
+
 if __name__ == '__main__':
     print("=" * 70)
     print(" TESTS DE REFERIDOS")
@@ -173,6 +196,7 @@ if __name__ == '__main__':
     test_premio_primera_compra()
     test_tope()
     test_campana_recomenda()
+    test_version_mailerlite()
     print("\n" + "=" * 70)
     if _fallos:
         print(f" {len(_fallos)} FALLA(S): " + ", ".join(_fallos))

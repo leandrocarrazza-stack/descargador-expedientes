@@ -9,7 +9,7 @@ Incluye a los usuarios que:
 
 Con --todos incluye también a los de 0 créditos (útil para la campaña "recomenda").
 
-Escribe un CSV (email, nombre, creditos, archivo, url_baja, url_referido) y, con --html-dir, un
+Escribe un CSV (email, nombre, creditos, archivo, url_baja, url_referido, url_whatsapp) y, con --html-dir, un
 archivo .html ya personalizado por destinatario (con su link de baja). Cada archivo
 se llama como el email del cliente (ej. mails/cliente@gmail.com.html); la columna
 "archivo" del CSV lo indica.
@@ -101,7 +101,7 @@ def main():
 
     from servidor import crear_app
     from modulos.models import User
-    from modulos.promos import renderizar_promo, url_baja
+    from modulos.promos import renderizar_promo, url_baja, url_whatsapp
     from modulos.referidos import url_referido
 
     app = crear_app()
@@ -117,10 +117,11 @@ def main():
         lista = destinatarios(User, todos=args.todos)
         with open(args.salida, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['email', 'nombre', 'creditos', 'archivo', 'url_baja', 'url_referido'])
+            w.writerow(['email', 'nombre', 'creditos', 'archivo', 'url_baja', 'url_referido', 'url_whatsapp'])
             for u in lista:
+                link = url_referido(u.id)
                 w.writerow([u.email, u.nombre or '', u.creditos_disponibles,
-                            nombre_archivo(u.email) if args.html_dir else '', url_baja(u.id), url_referido(u.id)])
+                            nombre_archivo(u.email) if args.html_dir else '', url_baja(u.id), link, url_whatsapp(link)])
         print(f'{len(lista)} destinatarios → {args.salida}')
 
         if args.html_dir:
