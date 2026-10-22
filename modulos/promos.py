@@ -22,6 +22,7 @@ REMITENTE = 'asistenciafoja@gmail.com'
 # campaña → asunto del mail
 ASUNTOS = {
     'contador_plazos': 'Nuevo en Foja: calculá tus plazos judiciales en segundos',
+    'recomenda': 'Recomendá Foja y ganá 2 descargas por cada colega',
 }
 
 
@@ -67,7 +68,16 @@ def renderizar_promo(campana, usuario, anio=None):
     if campana not in ASUNTOS:
         raise ValueError(f'Campaña desconocida: {campana}')
     from datetime import date
+    from urllib.parse import quote
+    from modulos.referidos import PREMIO_CREDITOS, TOPE_PREMIADOS, url_referido
+    link_referido = url_referido(usuario.id)
+    texto_wa = f'Uso Foja para descargar expedientes de Mesa Virtual en un solo PDF. Probala acá: {link_referido}'
     contexto = {
+        'url_referido': link_referido,
+        'url_whatsapp': f'https://wa.me/?text={quote(texto_wa)}',
+        'premio_creditos': PREMIO_CREDITOS,
+        'tope_premiados': TOPE_PREMIADOS,
+        'tope_descargas': PREMIO_CREDITOS * TOPE_PREMIADOS,
         'nombre': nombre_para_saludo(usuario),
         'url_contador': f'{_base_url()}/plazos/',
         'url_img': f'{_base_url()}/static/img/promo',   # imágenes de los mails (static/img/promo/)

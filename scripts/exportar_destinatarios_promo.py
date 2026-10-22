@@ -7,7 +7,9 @@ Incluye a los usuarios que:
 - no se dieron de baja de las promociones (recibir_promociones distinto de False),
 - tienen un email con formato válido.
 
-Escribe un CSV (email, nombre, creditos, url_baja) y, con --html-dir, un
+Con --todos incluye también a los de 0 créditos (útil para la campaña "recomenda").
+
+Escribe un CSV (email, nombre, creditos, url_baja, url_referido) y, con --html-dir, un
 archivo .html ya personalizado por destinatario (con su link de baja).
 
 Uso (con las variables de entorno de producción cargadas: DATABASE_URL, SECRET_KEY, BASE_URL):
@@ -30,9 +32,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
-def destinatarios(User):
-    """Usuarios a los que corresponde mandarles la promoción."""
-    q = User.query.filter(User.creditos_disponibles > 0).order_by(User.id)
+def destinatarios(User, todos=False):
+    """
+    Usuarios a los que corresponde mandarles la promoción. Por defecto solo los
+    que tienen crédito; con todos=True también los de 0 créditos (siguen
+    excluidos los que se dieron de baja).
+    """
+    q = User.query.order_by(User.id)
+    if not todos:
+        q = q.filter(User.creditos_disponibles > 0)
     return [u for u in q.all()
             if u.recibir_promociones is not False and EMAIL_RE.match((u.email or '').strip())]
 
@@ -42,20 +50,22 @@ def main():
     ap.add_argument('--salida', default='destinatarios_promo.csv', help='archivo CSV de salida')
     ap.add_argument('--campana', default='contador_plazos', help='campaña (plantilla en templates/emails/)')
     ap.add_argument('--html-dir', help='si se indica, guarda un .html personalizado por destinatario')
+    ap.add_argument('--todos', action='store_true', help='incluir también a los usuarios con 0 créditos')
     args = ap.parse_args()
 
     from servidor import crear_app
     from modulos.models import User
     from modulos.promos import renderizar_promo, url_baja
+    from modulos.referidos import url_referido
 
     app = crear_app()
     with app.app_context():
-        lista = destinatarios(User)
+        lista = destinatarios(User, todos=args.todos)
         with open(args.salida, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['email', 'nombre', 'creditos', 'url_baja'])
+            w.writerow(['email', 'nombre', 'creditos', 'url_baja', 'url_referido'])
             for u in lista:
-                w.writerow([u.email, u.nombre or '', u.creditos_disponibles, url_baja(u.id)])
+                w.writerow([u.email, u.nombre or '', u.creditos_disponibles, url_baja(u.id), url_referido(u.id)])
         print(f'{len(lista)} destinatarios → {args.salida}')
 
         if args.html_dir:
