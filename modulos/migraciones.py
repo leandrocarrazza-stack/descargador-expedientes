@@ -43,6 +43,8 @@ COLUMNAS_NUEVAS = [
     (User.__tablename__, User.notificar_email),
     (User.__tablename__, User.plan_max_comprado),
     (User.__tablename__, User.recibir_promociones),
+    (User.__tablename__, User.referido_por_id),
+    (User.__tablename__, User.referido_premiado),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.storage_key),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.total_filas),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.total_archivos),

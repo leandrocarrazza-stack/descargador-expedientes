@@ -17,6 +17,7 @@ app_context (ya lo hay), y da la ruta relativa para concatenar con BASE_URL.
 """
 
 import logging
+from html import escape
 from flask import current_app, url_for
 from flask_mail import Message
 
@@ -84,3 +85,41 @@ def enviar_email_error(user, numero_expediente, mensaje):
         logger.info(f"[EMAIL] Aviso de error enviado a user {user.id}")
     except Exception:
         logger.warning(f"[EMAIL] No se pudo enviar el aviso de error a user {user.id}", exc_info=True)
+
+
+def enviar_email_premio_referido(referidor, nuevo_usuario):
+    """
+    Avisa a quien recomendó Foja que ganó descargas porque su recomendado hizo
+    su primera compra (modulos/referidos.py). Es un aviso de cuenta, no una
+    promoción: se envía aunque la persona se haya dado de baja de las promos.
+    """
+    try:
+        # Import acá para no crear un ciclo (referidos importa modelos, no emails)
+        from modulos.referidos import PREMIO_CREDITOS, TOPE_PREMIADOS, premiados_de
+
+        quien = escape((nuevo_usuario.nombre or '').strip() or 'Un colega')
+        restantes = max(TOPE_PREMIADOS - premiados_de(referidor.id), 0)
+        cuenta_url = _url_absoluta('cuenta.mi_cuenta')
+        msg = Message(
+            subject=f'Ganaste {PREMIO_CREDITOS} descargas gratis · Foja',
+            recipients=[referidor.email],
+            html=f"""
+            <p>Hola,</p>
+            <p><strong>{quien}</strong> empezó a usar Foja gracias a tu recomendación.
+               Te sumamos <strong>{PREMIO_CREDITOS} descargas</strong>: ahora tenés
+               <strong>{referidor.creditos_disponibles}</strong> disponibles.</p>
+            <p>Te quedan {restantes} recomendaciones que suman descargas.</p>
+            <p><a href="{cuenta_url}" style="color:#b8860b;">Ir a mi cuenta</a></p>
+            <p>¡Gracias por recomendar Foja!</p>
+            <p>El equipo de Foja</p>
+            """,
+            body=(
+                f"{quien} empezó a usar Foja gracias a tu recomendación. "
+                f"Te sumamos {PREMIO_CREDITOS} descargas: ahora tenés {referidor.creditos_disponibles}. "
+                f"Te quedan {restantes} recomendaciones que suman descargas.\n\nMi cuenta: {cuenta_url}"
+            )
+        )
+        mail.send(msg)
+        logger.info(f"[EMAIL] Aviso de premio por referido enviado a user {referidor.id}")
+    except Exception:
+        logger.warning(f"[EMAIL] No se pudo enviar el aviso de premio a user {referidor.id}", exc_info=True)

@@ -88,6 +88,11 @@ class User(UserMixin, db.Model):
     # (rutas/promos.py). No afecta a los avisos de descarga ni de contraseña.
     recibir_promociones = db.Column(db.Boolean, nullable=True)
 
+    # Programa de referidos (modulos/referidos.py): quién lo recomendó (NULL si
+    # nadie) y si su primera compra ya le dio el premio al que lo recomendó.
+    referido_por_id = db.Column(db.Integer, nullable=True, index=True)
+    referido_premiado = db.Column(db.Boolean, nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
