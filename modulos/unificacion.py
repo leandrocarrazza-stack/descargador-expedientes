@@ -13,7 +13,7 @@ OPTIMIZACIÓN DE MEMORIA:
 """
 
 from pathlib import Path
-from PyPDF2 import PdfMerger, PdfReader
+from pypdf import PdfWriter, PdfReader
 from typing import List, Optional
 import os
 import shutil
@@ -82,7 +82,7 @@ def anexar_con_qpdf(pdf_base: Path, pdf_delta: Path, salida: Path, timeout: int 
         f"qpdf no está instalado; usando PyPDF2 en memoria como fallback "
         f"(PDF base de sólo {tamaño_base / (1024*1024):.1f} MB, dentro del límite seguro)"
     )
-    merger = PdfMerger()
+    merger = PdfWriter()  # pypdf >= 5 eliminó PdfMerger; PdfWriter.append() lo reemplaza
     try:
         merger.append(str(pdf_base))
         merger.append(str(pdf_delta))
@@ -386,7 +386,7 @@ class UnificadorPDF:
         Retorna:
             List[Path]: subconjunto de `rutas` que efectivamente se unió
         """
-        merger = PdfMerger()
+        merger = PdfWriter()
         incluidos = []
         try:
             for ruta in rutas:

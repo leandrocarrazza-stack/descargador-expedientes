@@ -4,8 +4,8 @@ Flask-SQLAlchemy==3.1.1
 Flask-Migrate==4.1.0
 Flask-Login==0.6.3
 Flask-WTF==1.2.2
-Flask-CORS==5.0.0
-Werkzeug==3.1.8
+Flask-CORS==6.0.5
+Werkzeug==3.1.9
 
 # Database
 SQLAlchemy==2.0.36
@@ -13,17 +13,17 @@ psycopg2-binary==2.9.9
 
 # Authentication & Security
 email-validator==2.0.0
-python-dotenv==1.0.0
+python-dotenv==1.2.4
 
 # Web Scraping & Automation
-selenium==4.12.0
+selenium==4.20.0  # >=4.14 corrige CVE-2023-5590; NO subir a >=4.27 sin adaptar RemoteConnection.set_timeout (modulos/auth_mv.py)
 webdriver-manager==3.9.1
-requests==2.31.0
+requests==2.33.0
 beautifulsoup4==4.12.2
 
 # PDF Processing
-PyPDF2==3.0.1
-pdfplumber==0.11.0
+pypdf==6.21.2
+pdfplumber==0.11.10
 
 # Storage de PDFs (Cloudflare R2, API S3-compatible)
 boto3==1.34.162
@@ -34,7 +34,7 @@ redis==5.0.0
 
 # Security & Encryption
 flask-limiter==3.5.0
-cryptography==42.0.5
+cryptography==49.0.0
 Flask-Mail==0.10.0
 
 # Google APIs (Gmail OAuth2)
@@ -49,24 +49,12 @@ anthropic==0.30.0
 APScheduler==3.10.4
 
 # Server & Production
-gunicorn==21.2.0
+gunicorn==23.0.0
 
 # Payment (Mercado Pago via requests, sin SDK separado)
 
 # Logging & Monitoring
 python-json-logger==2.0.7
-
-# Testing (opcional para desarrollo)
-pytest==7.4.0
-pytest-cov==4.1.0
-pytest-mock==3.11.1
-pytest-asyncio==0.21.1
-
-# Code Quality (opcional para desarrollo)
-mypy==1.4.1
-black==23.7.0
-flake8==6.0.0
-isort==5.12.0
 
 # Utilities
 python-dateutil==2.8.2

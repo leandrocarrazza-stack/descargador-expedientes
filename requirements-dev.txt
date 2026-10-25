@@ -1,0 +1,14 @@
+# Herramientas de desarrollo y testing (NO se instalan en la imagen de producción)
+# Uso: pip install -r requirements.txt -r requirements-dev.txt
+
+# Testing (opcional para desarrollo)
+pytest==9.0.3
+pytest-cov==4.1.0
+pytest-mock==3.11.1
+pytest-asyncio==0.21.1
+
+# Code Quality (opcional para desarrollo)
+mypy==1.4.1
+black==23.7.0
+flake8==6.0.0
+isort==5.12.0
