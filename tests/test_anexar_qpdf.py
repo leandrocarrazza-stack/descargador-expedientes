@@ -14,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from PyPDF2 import PdfWriter, PdfReader
+from pypdf import PdfWriter, PdfReader
 import modulos.unificacion as unificacion_mod
 from modulos.unificacion import anexar_con_qpdf, ErrorUnificacion
 

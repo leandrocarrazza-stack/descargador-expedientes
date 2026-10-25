@@ -1100,7 +1100,7 @@ class DescargadorArchivos:
         # ver descargar_todo_por_paginas)
         if ruta_destino.name.endswith(".pdf"):
             try:
-                from PyPDF2 import PdfReader
+                from pypdf import PdfReader
 
                 reader = PdfReader(str(ruta_destino))
                 if len(reader.pages) == 0:

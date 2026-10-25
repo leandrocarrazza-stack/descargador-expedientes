@@ -7,7 +7,9 @@
 # Build:  docker build -t descargador .
 # Run:    docker run -p 5000:5000 --env-file .env descargador
 
-FROM python:3.11-slim
+# Parche fijado a propósito (auditoría 2026-10-25): el tag flotante "3.11-slim"
+# dependía de la fecha del último build. Al subir de parche, cambiar acá.
+FROM python:3.11.17-slim
 
 # ── Variables de entorno para que Python y Chrome funcionen bien en Docker ──
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -60,8 +62,16 @@ WORKDIR /app
 
 # ── Instalar dependencias Python ──
 # Copiar requirements primero para aprovechar cache de Docker
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.lock = requirements.txt + dependencias transitivas, todo fijado con
+# hashes (--require-hashes rechaza cualquier paquete que no coincida: protege de
+# versiones maliciosas en PyPI). Se regenera con:
+#   uv pip compile requirements.txt --python-version 3.11 --python-platform linux \
+#       --generate-hashes --no-header -o requirements.lock
+# pip >= 26.2.2: trae el certifi vendorizado sin la CA emSign (incidente eMudhra);
+# pip usa SU PROPIO certifi, no el de site-packages.
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir "pip>=26.2.2" \
+    && pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # ── Copiar código fuente ──
 COPY . .
