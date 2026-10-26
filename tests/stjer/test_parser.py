@@ -236,6 +236,22 @@ def test_un_detalle_real_pasa_el_chequeo_de_cordura():
     assert es_valido and not motivo
 
 
+def test_lee_la_caratula_cuando_la_etiqueta_va_en_negrita():
+    # Caso real (2026-10): el sitio muestra "<b>CARATULA</b>: valor<br>...".
+    # get_text("\n") separaba la etiqueta del valor y la caratula quedaba vacia.
+    html = (
+        '<div id="ef_form_1_sumariomemo">'
+        "<b>CARATULA</b>: DELFINO, CARLOS C/ IAPSER S/ ACCIDENTE DE TRABAJO<br>"
+        "<b>EXPEDIENTE</b>: 1907/SL<br>"
+        "<b>ORGANISMO</b>: Camara de Apelaciones - Sala II del Trabajo<br>"
+        "LIQUIDACION. APLICACION DE CRETTAZ"
+        "</div>"
+    )
+    d = P.parsear_detalle(html)
+    assert d.caratula == "DELFINO, CARLOS C/ IAPSER S/ ACCIDENTE DE TRABAJO"
+    assert d.nro_expediente == "1907/SL"
+
+
 def test_detecta_encabezados_de_columna_como_caratula():
     # Caso real: la caratula quedo con el encabezado de columna "Sumario" en
     # vez de la caratula real del fallo.

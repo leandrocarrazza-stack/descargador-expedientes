@@ -543,7 +543,16 @@ def _pares_etiqueta_valor(sopa) -> dict:
                     encontrados[campo] = valor
 
     # Forma 2: "CARATULA: Perez c/ Municipalidad"
-    texto = sopa.get_text("\n")
+    # Ojo: get_text("\n") pone un salto de linea entre CADA pedazo de texto. En la
+    # vista real la etiqueta va en negrita (<b>CARATULA</b>: valor), asi que la
+    # etiqueta quedaba sola en una linea y el valor se perdia. Por eso se trabaja
+    # sobre una copia: se desenvuelven las etiquetas en linea (<b>, <span>...) y
+    # se unen los pedazos de texto contiguos antes de cortar por lineas.
+    copia = BeautifulSoup(str(sopa), "html.parser")
+    for etiqueta in copia.find_all(["b", "strong", "em", "i", "span", "a"]):
+        etiqueta.unwrap()
+    copia.smooth()
+    texto = copia.get_text("\n")
     for linea in texto.split("\n"):
         if ":" not in linea:
             continue
