@@ -143,7 +143,10 @@ def index():
 
 @app.route("/buscar", methods=["POST"])
 def buscar():
-    mensaje = (request.get_json(silent=True) or {}).get("mensaje", "").strip()
+    datos = request.get_json(silent=True) or {}
+    mensaje = datos.get("mensaje", "").strip()
+    # Opcional: interpretacion ya hecha por Claude Code (sin API), ver /voces.
+    interpretacion = datos.get("interpretacion")
     if not mensaje:
         return jsonify({"error": "Escribí una consulta"}), 400
     try:
@@ -151,9 +154,17 @@ def buscar():
     except FileNotFoundError as e:
         return jsonify({"error": str(e)}), 503
     try:
-        return jsonify(chat.procesar_mensaje(mensaje))
+        return jsonify(chat.procesar_mensaje(mensaje, interpretacion=interpretacion))
     finally:
         con.close()
+
+
+@app.route("/voces")
+def voces():
+    """Lista de voces reales del tesauro, para que un Claude externo las use."""
+    from modulos.jurisprudencia.stjer.tesauro_stjer import Tesauro
+
+    return jsonify(sorted(Tesauro.cargar().voces()))
 
 
 @app.route("/escrito", methods=["POST"])

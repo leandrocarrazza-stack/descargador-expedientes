@@ -78,15 +78,22 @@ class ChatSTJER:
 
     # ── consulta corta (chat) ────────────────────────────────────────────
 
-    def procesar_mensaje(self, mensaje: str, historial=None, limite: int = 5) -> dict:
-        """Interpreta una consulta de chat y devuelve fallos relacionados."""
+    def procesar_mensaje(
+        self, mensaje: str, historial=None, limite: int = 5, interpretacion=None
+    ) -> dict:
+        """Interpreta una consulta de chat y devuelve fallos relacionados.
+
+        `interpretacion` permite que la interpretacion (terminos + voces) la
+        haga un Claude externo, sin API: se usa tal cual, validando las voces.
+        """
         if not mensaje or not mensaje.strip():
             return self._respuesta_vacia("Escribime una consulta.")
 
-        interpretacion = None
-        if self.cliente:
+        if interpretacion:
+            interpretacion = self._validar_interpretacion_externa(interpretacion)
+        elif self.cliente:
             interpretacion = self._interpretar_con_claude(mensaje, historial)
-        if interpretacion is None:
+        if not interpretacion:
             interpretacion = self._interpretar_localmente(mensaje)
 
         return self._buscar_y_formatear(interpretacion, limite)
@@ -162,6 +169,17 @@ class ChatSTJER:
         datos.setdefault("terminos_busqueda", [])
         datos.setdefault("respuesta_usuario", "")
         return datos
+
+    def _validar_interpretacion_externa(self, datos: dict) -> dict:
+        """Misma validacion que la de Claude por API: descarta voces inexistentes."""
+        voces_reales = set(self.tesauro.voces())
+        return {
+            "terminos_busqueda": list(datos.get("terminos_busqueda") or []),
+            "voces_juridicas": [
+                v for v in (datos.get("voces_juridicas") or []) if v in voces_reales
+            ],
+            "respuesta_usuario": datos.get("respuesta_usuario") or "",
+        }
 
     def _interpretar_localmente(self, texto: str) -> dict:
         sugerencias = self.buscador.sugerir_voces(texto, n=5)
