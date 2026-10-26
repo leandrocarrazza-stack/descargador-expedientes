@@ -232,7 +232,13 @@ SELECTORES = {
         "a:has-text('Buscar')",
     ],
     "siguiente": [
-        "a:has-text('Siguiente')", "input[value*='Siguiente' i]",
+        # OJO: NO usar "a:has-text('Siguiente')". Matchea cualquier enlace cuyo
+        # texto CONTENGA la palabra, y los enlaces de las filas llevan el
+        # extracto del sumario completo (a veces dice "...el siguiente...").
+        # Con `.first` se clickeaba una fila, se abria un fallo sin querer y
+        # la paginacion quedaba rota (pasaba desde la pagina 6 de 2026-04).
+        # El boton real dice "Siguiente →": el texto EMPIEZA con la palabra.
+        "a:text-matches('^\\\\s*Siguiente', 'i')", "input[value*='Siguiente' i]",
         "a[title*='Siguiente' i]",
     ],
     "panel_tesauro": [
