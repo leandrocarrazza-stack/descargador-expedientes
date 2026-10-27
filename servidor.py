@@ -137,6 +137,7 @@ def crear_app(config_obj=None):
     from rutas.cuenta import cuenta_bp
     from rutas.plazos import plazos_bp
     from rutas.promos import promos_bp
+    from rutas.legal import legal_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(pagos_bp)
@@ -146,6 +147,7 @@ def crear_app(config_obj=None):
     app.register_blueprint(cuenta_bp)
     app.register_blueprint(plazos_bp)
     app.register_blueprint(promos_bp)
+    app.register_blueprint(legal_bp)
 
     logger.info("[OK] Blueprints registrados (auth, pagos, descargas, admin, contacto, cuenta, plazos)")
 
@@ -259,6 +261,27 @@ def crear_app(config_obj=None):
         return dict(
             contact_email=config.CONTACT_EMAIL,
             contact_whatsapp=config.CONTACT_WHATSAPP,
+        )
+
+    @app.context_processor
+    def inyectar_responsable():
+        """Datos de la persona responsable de Foja y versión de los términos.
+
+        responsable es None si falta alguno de los datos obligatorios: así el
+        pie de página no muestra un bloque a medias.
+        """
+        datos = dict(
+            nombre=config.RESPONSABLE_NOMBRE,
+            cuit=config.RESPONSABLE_CUIT,
+            domicilio=config.RESPONSABLE_DOMICILIO,
+            email=config.RESPONSABLE_EMAIL,
+        )
+        completo = all(datos[k] for k in ('nombre', 'cuit', 'domicilio'))
+        return dict(
+            responsable=datos if completo else None,
+            terminos_version=config.TERMINOS_VERSION,
+            terminos_fecha=config.TERMINOS_FECHA,
+            terminos_borrador=config.TERMINOS_BORRADOR,
         )
 
     @app.context_processor

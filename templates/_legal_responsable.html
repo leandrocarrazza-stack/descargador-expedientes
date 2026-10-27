@@ -1,0 +1,15 @@
+{# Identificación de la persona responsable de Foja. Los datos vienen de
+   variables de entorno (ver config.RESPONSABLE_*); si falta alguno, no se muestra. #}
+{% if responsable %}
+<div class="legal-responsable">
+    <h2 style="font-size: 1.1rem; margin-top: 0;">Responsable de Foja</h2>
+    <dl class="mb-0">
+        <dt>Nombre y apellido</dt><dd>{{ responsable.nombre }}</dd>
+        <dt>CUIT</dt><dd>{{ responsable.cuit }}</dd>
+        <dt>Domicilio</dt><dd>{{ responsable.domicilio }}</dd>
+        {% if responsable.email %}
+        <dt>Contacto</dt><dd><a href="mailto:{{ responsable.email }}">{{ responsable.email }}</a></dd>
+        {% endif %}
+    </dl>
+</div>
+{% endif %}

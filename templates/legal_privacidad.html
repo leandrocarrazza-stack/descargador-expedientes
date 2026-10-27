@@ -1,0 +1,20 @@
+{% extends "legal_base.html" %}
+
+{% block titulo %}Política de privacidad · Foja{% endblock %}
+{% block titulo_legal %}Política de privacidad{% endblock %}
+
+{% block texto_legal %}
+{% if terminos_borrador %}
+<h2>Temas que se tratan</h2>
+<ol class="legal-pendiente">
+    <li>Qué datos se recopilan</li>
+    <li>Para qué se usan</li>
+    <li>Con quién se comparten</li>
+    <li>Cuánto tiempo se conservan</li>
+    <li>Tus derechos de acceso, rectificación y supresión</li>
+    <li>Cómo darte de baja de las comunicaciones</li>
+</ol>
+{% else %}
+{# Texto definitivo: pegar acá la redacción final de la Política de Privacidad. #}
+{% endif %}
+{% endblock %}

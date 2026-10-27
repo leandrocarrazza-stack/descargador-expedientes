@@ -1,0 +1,26 @@
+{% extends "legal_base.html" %}
+
+{% block titulo %}Términos y condiciones · Foja{% endblock %}
+{% block titulo_legal %}Términos y condiciones{% endblock %}
+
+{% block texto_legal %}
+{% if terminos_borrador %}
+<h2>Temas que se tratan</h2>
+<ol class="legal-pendiente">
+    <li>Quién es el responsable de Foja</li>
+    <li>Qué es Foja y qué no es</li>
+    <li>Uso con las credenciales propias de Mesa Virtual</li>
+    <li>Disponibilidad y dependencia de terceros</li>
+    <li>Créditos y pagos</li>
+    <li>Devoluciones</li>
+    <li>Conductas prohibidas</li>
+    <li>Limitación de responsabilidad</li>
+    <li>Propiedad intelectual</li>
+    <li>Datos personales</li>
+    <li>Modificaciones, ley aplicable y jurisdicción</li>
+    <li>Reclamos</li>
+</ol>
+{% else %}
+{# Texto definitivo: pegar acá la redacción final de los Términos. #}
+{% endif %}
+{% endblock %}

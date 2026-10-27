@@ -98,7 +98,7 @@ def validar_password(password):
     return True, None
 
 
-def crear_usuario(email, nombre, password, plan='free'):
+def crear_usuario(email, nombre, password, plan='free', terminos=None):
     """
     Crea un nuevo usuario en la BD.
 
@@ -107,6 +107,7 @@ def crear_usuario(email, nombre, password, plan='free'):
         nombre (str): Nombre completo
         password (str): Contraseña (será hasheada)
         plan (str): Plan inicial (por defecto: free)
+        terminos (dict): Constancia de aceptación {'version', 'ip'} (opcional)
 
     Returns:
         tuple: (usuario: User o None, error: str o None)
@@ -138,6 +139,10 @@ def crear_usuario(email, nombre, password, plan='free'):
             creditos_disponibles=2 if plan == 'free' else 0  # Free tier: 2 descargas de prueba
         )
         usuario.establecer_password(password)
+        if terminos:
+            usuario.terminos_version = terminos['version']
+            usuario.terminos_aceptados_en = datetime.utcnow()
+            usuario.terminos_aceptados_ip = (terminos.get('ip') or '')[:64] or None
 
         db.session.add(usuario)
         db.session.commit()
