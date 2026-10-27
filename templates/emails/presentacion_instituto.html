@@ -1,0 +1,64 @@
+{% extends "emails/promo_base.html" %}
+{% from "emails/_piezas.html" import boton %}
+
+{# Mail personal de presentación de Foja para la directora del Instituto de Derecho Procesal del CAER.
+   Acompaña al informe en PDF (funcionamiento, casos de uso, seguridad y privacidad).
+   Trato formal, de una persona a otra: va en primera persona del singular, a diferencia del mail para el foro.
+   Variables: url_registro, url_sitio, url_baja (vacía = sin link de baja), remitente, anio, asunto. #}
+
+{% block preheader %}Le comparto un informe sobre Foja, con especial atención a la seguridad y la privacidad.{% endblock %}
+
+{% block etiqueta %}Instituto de Derecho Procesal{% endblock %}
+
+{% block filas %}
+
+        <tr><td bgcolor="#ffffff" class="px" style="background:#ffffff; padding:42px 40px 8px 40px; font-family:Georgia,'Times New Roman',serif; color:#1f2d48;">
+
+            <p style="margin:0 0 22px 0; font-size:17px; line-height:1.6; font-style:italic; color:#5b6a86;">Estimada Dra. Warlet:</p>
+
+            <p style="margin:0 0 20px 0; font-size:18px; line-height:1.7;">
+                Me dirijo a usted, en su carácter de Directora del Instituto de Derecho Procesal del Colegio de la Abogacía de Entre Ríos, para compartirle
+                <strong style="color:#0a1f3a;">Foja</strong>, una herramienta que desarrollé para quienes litigamos a diario con Mesa Virtual: a partir del número de expediente,
+                reúne todos los escritos y los entrega <strong style="color:#0a1f3a;">ordenados cronológicamente, en un único PDF</strong>.
+            </p>
+
+            <p style="margin:0 0 20px 0; font-size:18px; line-height:1.7;">
+                Le adjunto un informe que explica cómo funciona, para qué sirve y algunos casos prácticos de uso, con
+                <strong style="color:#0a1f3a;">especial atención a la seguridad y la privacidad</strong>: cómo se maneja el acceso a Mesa Virtual
+                (la contraseña no se guarda), qué información se conserva, por cuánto tiempo y quién puede acceder a ella.
+            </p>
+
+            <p style="margin:26px 0; padding:4px 0 4px 20px; border-left:3px solid #d4a54a; font-size:20px; line-height:1.55; font-style:italic; color:#0a1f3a;">
+                Cada profesional ingresa con su propio usuario de Mesa Virtual y accede únicamente a lo que ya le corresponde.
+            </p>
+
+            <p style="margin:0 0 20px 0; font-size:18px; line-height:1.7;">
+                Para que pueda probarla, la dirección es <a href="{{ url_sitio }}" style="color:#0a1f3a;"><strong>foja.com.ar</strong></a>.
+                Al registrarse, la cuenta incluye <strong style="color:#0a1f3a;">dos créditos sin costo</strong>, equivalentes a dos descargas completas de expedientes.
+            </p>
+
+            <p style="margin:0 0 30px 0; font-size:18px; line-height:1.7;">
+                Quedo a su entera disposición para cualquier consulta, y aguardo con interés su opinión, que para mí tendrá un valor especial.
+            </p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td>{{ boton(url_registro, 'Crear una cuenta gratis') }}</td></tr></table>
+
+            <p style="margin:34px 0 0 0; font-size:18px; line-height:1.7;">Cordialmente,</p>
+
+            <p style="margin:40px 0 0 0; padding:20px 0 34px 0; border-top:1px solid #ece4d0; font-family:Arial,Helvetica,sans-serif; font-size:13px; line-height:1.8; color:#5b6a86;">
+                <strong style="color:#0a1f3a;">Leandro Carrazza</strong> · Abogado · Gualeguaychú, Entre Ríos<br>
+                Consultas: <a href="mailto:{{ remitente }}" style="color:#0a1f3a;">{{ remitente }}</a> · <a href="{{ url_sitio }}" style="color:#0a1f3a;">foja.com.ar</a>
+            </p>
+        </td></tr>
+
+{% endblock %}
+
+{% block pie %}
+        <!-- PIE MÍNIMO -->
+        <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:22px 40px 24px 40px; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.7; color:#9fb0cb;">
+            <span style="font-family:Georgia,'Times New Roman',serif; font-size:20px; color:#f5f1e8;">Foja<span style="color:#d4a54a;">.</span></span>
+            <span style="color:#9fb0cb;"> &nbsp;·&nbsp; Entre Ríos, Argentina</span>
+            {% if url_baja %}<br>
+            <a href="{{ url_baja }}" style="color:#9fb0cb; text-decoration:underline;">Dejar de recibir estos mensajes</a>{% endif %}
+        </td></tr>
+{% endblock %}
