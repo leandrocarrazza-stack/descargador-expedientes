@@ -100,11 +100,30 @@ def test_terminos_definitivos():
               'Documento en preparación' in html and 'persona humana, CUIT' not in html)
 
         _setear_responsable()
+        _set_legal(terminos_borrador=False)
+        html = client.get('/terminos').get_data(as_text=True)
+        check("términos: están los 24 artículos", all(f'id="art-{n}"' in html for n in range(1, 25)))
+        check("términos: incluye la decisión sobre créditos con piezas omitidas",
+              'aun cuando alguna pieza haya sido omitida' in html)
+        check("términos: incluye el pago aprobado y no acreditado", 'no se acreditaran en la cuenta' in html)
+
+        _setear_responsable()
         html = client.get('/privacidad').get_data(as_text=True)
         check("la política sigue en preparación si su flag está encendido",
               'Documento en preparación' in html)
+
+        _set_legal(terminos_borrador=False, privacidad_borrador=False)
+        html = client.get('/privacidad').get_data(as_text=True)
+        check("política definitiva: sin cartel ni placeholders",
+              'Documento en preparación' not in html
+              and not any(m in html for m in ('[RESPONSABLE', '[TERMINOS', '[RETENCION', 'A CONFIRMAR', 'Nota de uso')))
+        check("política definitiva: están los 14 artículos", all(f'id="priv-{n}"' in html for n in range(1, 15)))
+        check("política definitiva: datos del responsable y retención desde la configuración",
+              'EJEMPLO Nombre Apellido' in html and f'{config.RETENCION_PDF_DIAS} días desde el último acceso' in html)
+        check("política definitiva: incluye la leyenda de la AAIP", 'ÓRGANO DE CONTROL DE LA LEY N° 25.326' in html)
+        check("política definitiva: enlaza a los términos", 'href="/terminos"' in html)
     finally:
-        _set_legal(terminos_borrador=True, email='')
+        _set_legal(terminos_borrador=True, privacidad_borrador=True, email='')
         _setear_responsable()
 
 
