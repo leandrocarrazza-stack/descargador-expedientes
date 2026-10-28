@@ -1,10 +1,11 @@
 {% extends "legal_base.html" %}
+{% set es_borrador = privacidad_borrador %}
 
 {% block titulo %}Política de privacidad · Foja{% endblock %}
 {% block titulo_legal %}Política de privacidad{% endblock %}
 
 {% block texto_legal %}
-{% if terminos_borrador %}
+{% if privacidad_borrador %}
 <h2>Temas que se tratan</h2>
 <ol class="legal-pendiente">
     <li>Qué datos se recopilan</li>

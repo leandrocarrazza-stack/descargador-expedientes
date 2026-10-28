@@ -265,10 +265,16 @@ def crear_app(config_obj=None):
 
     @app.context_processor
     def inyectar_responsable():
-        """Datos de la persona responsable de Foja y versión de los términos.
+        """Datos de la persona responsable de Foja y estado de los documentos legales.
 
         responsable es None si falta alguno de los datos obligatorios: así el
         pie de página no muestra un bloque a medias.
+
+        terminos_borrador / privacidad_borrador: un documento solo se publica
+        como definitivo si su flag de borrador está apagado Y están cargados
+        todos los datos del responsable (incluido el email, que el texto usa
+        para bajas y notificaciones). Si no, la página sigue mostrando el
+        cartel "En preparación" en vez de un texto con datos faltantes.
         """
         datos = dict(
             nombre=config.RESPONSABLE_NOMBRE,
@@ -277,11 +283,14 @@ def crear_app(config_obj=None):
             email=config.RESPONSABLE_EMAIL,
         )
         completo = all(datos[k] for k in ('nombre', 'cuit', 'domicilio'))
+        publicable = completo and bool(datos['email'])
         return dict(
             responsable=datos if completo else None,
             terminos_version=config.TERMINOS_VERSION,
             terminos_fecha=config.TERMINOS_FECHA,
-            terminos_borrador=config.TERMINOS_BORRADOR,
+            terminos_borrador=config.TERMINOS_BORRADOR or not publicable,
+            privacidad_borrador=config.PRIVACIDAD_BORRADOR or not publicable,
+            retencion_pdf_dias=config.RETENCION_PDF_DIAS,
         )
 
     @app.context_processor

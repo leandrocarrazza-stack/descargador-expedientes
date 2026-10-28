@@ -219,10 +219,12 @@ RESPONSABLE_EMAIL = os.getenv('RESPONSABLE_EMAIL', '').strip() or CONTACT_EMAIL
 
 # Versión de los Términos y Política de Privacidad vigentes. Se guarda en cada
 # usuario al registrarse (User.terminos_version); al cambiarla, se puede pedir
-# nueva aceptación. TERMINOS_BORRADOR=1 muestra el cartel "En preparación".
+# nueva aceptación. TERMINOS_BORRADOR=1 / PRIVACIDAD_BORRADOR=1 muestran el cartel
+# "En preparación" en cada documento hasta que se cargue su texto definitivo.
 TERMINOS_VERSION = os.getenv('TERMINOS_VERSION', '2026-10').strip()
 TERMINOS_FECHA = os.getenv('TERMINOS_FECHA', '27 de octubre de 2026').strip()
 TERMINOS_BORRADOR = os.getenv('TERMINOS_BORRADOR', '1').strip() == '1'
+PRIVACIDAD_BORRADOR = os.getenv('PRIVACIDAD_BORRADOR', '1').strip() == '1'
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONTADOR DE PLAZOS (modulos/plazos)

@@ -67,6 +67,47 @@ def test_pie_con_y_sin_responsable():
     _setear_responsable()
 
 
+def _set_legal(terminos_borrador, privacidad_borrador=True, email='ejemplo@foja.com.ar'):
+    config.TERMINOS_BORRADOR = terminos_borrador
+    config.PRIVACIDAD_BORRADOR = privacidad_borrador
+    config.RESPONSABLE_EMAIL = email
+
+
+def test_terminos_definitivos():
+    client = _app().test_client()
+    _setear_responsable()
+    _set_legal(terminos_borrador=False)
+    try:
+        html = client.get('/terminos').get_data(as_text=True)
+        check("términos definitivos: sin cartel de borrador", 'Documento en preparación' not in html)
+        check("términos definitivos: datos del responsable en el art. 1",
+              'EJEMPLO Nombre Apellido, persona humana, CUIT 20-00000000-0' in html)
+        check("términos definitivos: sin placeholders ni marcas pendientes",
+              not any(m in html for m in ('[RESPONSABLE', '[TERMINOS', 'A CONFIRMAR', 'A DEFINIR', 'Nota de uso')))
+        check("términos definitivos: la retención sale de la configuración",
+              f'{config.RETENCION_PDF_DIAS} días desde el último acceso' in html)
+        check("términos definitivos: enlaza a la política de privacidad", 'href="/privacidad"' in html)
+
+        _set_legal(terminos_borrador=False, email='')
+        html = client.get('/terminos').get_data(as_text=True)
+        check("sin email del responsable el texto no se publica como definitivo",
+              'Documento en preparación' in html and 'persona humana, CUIT' not in html)
+
+        _set_legal(terminos_borrador=False)
+        config.RESPONSABLE_CUIT = ''
+        html = client.get('/terminos').get_data(as_text=True)
+        check("sin CUIT el texto no se publica como definitivo",
+              'Documento en preparación' in html and 'persona humana, CUIT' not in html)
+
+        _setear_responsable()
+        html = client.get('/privacidad').get_data(as_text=True)
+        check("la política sigue en preparación si su flag está encendido",
+              'Documento en preparación' in html)
+    finally:
+        _set_legal(terminos_borrador=True, email='')
+        _setear_responsable()
+
+
 def test_signup_exige_terminos_y_deja_constancia():
     # validar_email consulta el DNS del dominio; el test no depende de la red
     auth_mod.validar_email = lambda e: (True, e.strip().lower(), None)
@@ -94,6 +135,7 @@ def test_signup_exige_terminos_y_deja_constancia():
 if __name__ == '__main__':
     test_paginas_publicas()
     test_pie_con_y_sin_responsable()
+    test_terminos_definitivos()
     test_signup_exige_terminos_y_deja_constancia()
     if _fallos:
         print(f"\n{len(_fallos)} fallo(s): {_fallos}")

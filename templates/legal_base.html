@@ -42,6 +42,13 @@
     .legal-responsable dt { color: var(--gold-dark); font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; }
     .legal-responsable dd { margin-bottom: .6rem; }
     .legal-pendiente { color: #8a8a8a; font-style: italic; }
+    .legal-card h2 { scroll-margin-top: 1.5rem; }
+    .legal-card p, .legal-card li { line-height: 1.7; }
+    .legal-indice { columns: 2; column-gap: 2rem; font-size: .9rem; margin-bottom: 2rem; }
+    @media (max-width: 576px) { .legal-indice { columns: 1; } }
+    .legal-letras { list-style: none; padding-left: 1.25rem; counter-reset: letra; }
+    .legal-letras li { margin-bottom: .6rem; }
+    .legal-letras li::before { counter-increment: letra; content: counter(letra, lower-alpha) ") "; font-weight: 600; }
     @media (max-width: 576px) { .legal-card { padding: 1.5rem; } }
 </style>
 {% endblock %}
@@ -56,7 +63,7 @@
 
 <div class="container">
     <div class="legal-card">
-        {% if terminos_borrador %}
+        {% if es_borrador %}
         <div class="legal-borrador" role="note">
             <strong>Documento en preparación.</strong>
             El texto definitivo se publicará próximamente. Mientras tanto, esta página

@@ -103,6 +103,6 @@ Lo que no pude verificar en el código está marcado **[A CONFIRMAR]**.
 ## 9. Cómo integrar el texto final en el sitio
 
 1. Pegar la redacción en `templates/legal_terminos.html` y `templates/legal_privacidad.html`, dentro del bloque `texto_legal`, en el lugar indicado.
-2. Poner `TERMINOS_BORRADOR=0` en el hosting para quitar el cartel "Documento en preparación".
+2. Poner `TERMINOS_BORRADOR=0` (Términos) y/o `PRIVACIDAD_BORRADOR=0` (Política) en el hosting para quitar el cartel "Documento en preparación" de cada uno. Aunque el flag esté apagado, la página sigue en "preparación" si falta cargar nombre, CUIT, domicilio o email del responsable.
 3. Actualizar `TERMINOS_VERSION` y `TERMINOS_FECHA` (variables de entorno). Cada alta nueva guarda la versión aceptada.
 4. Cargar las variables `RESPONSABLE_*`.
