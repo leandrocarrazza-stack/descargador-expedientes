@@ -177,6 +177,37 @@
         </div>
     </div>
 
+    <!-- RECOMENDÁ FOJA -->
+    <div class="section-card" id="recomenda">
+        <div class="section-card-header"><i class="bi bi-gift-fill icon-sm"></i> Recomendá Foja</div>
+        <div class="section-card-body">
+            <p style="margin-bottom: 1rem;">
+                Por cada colega que se registre con tu link y haga su primera compra,
+                te regalamos <strong>{{ premio_creditos }} descargas</strong>
+                (hasta {{ tope_premiados }} recomendaciones, {{ premio_creditos * tope_premiados }} descargas).
+            </p>
+            <label class="form-label" for="linkReferido">Tu link personal</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" id="linkReferido" value="{{ link_referido }}" readonly onclick="this.select()">
+                <button type="button" class="btn-foja" id="btnCopiarLink">Copiar</button>
+            </div>
+            <a href="{{ link_whatsapp }}" target="_blank" rel="noopener" class="btn-foja">
+                <i class="bi bi-whatsapp"></i> Compartir por WhatsApp
+            </a>
+            <div id="toastLink" class="form-toast"></div>
+            <div class="row g-3 mt-2">
+                <div class="col-6">
+                    <span class="text-muted-foja" style="font-size: .82rem;">Colegas que se registraron con tu link</span>
+                    <div id="cantRecomendados" style="font-weight: 600; color: var(--navy);">{{ recomendados }}</div>
+                </div>
+                <div class="col-6">
+                    <span class="text-muted-foja" style="font-size: .82rem;">Recomendaciones premiadas</span>
+                    <div id="cantPremiados" style="font-weight: 600; color: var(--gold-dark);">{{ premiados }} de {{ tope_premiados }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -189,6 +220,17 @@
         div.textContent = texto;
         div.style.color = tipo === 'danger' ? '#b3261e' : '#2e7d32';
     }
+
+    document.getElementById('btnCopiarLink').addEventListener('click', async () => {
+        const campo = document.getElementById('linkReferido');
+        try {
+            await navigator.clipboard.writeText(campo.value);
+            mostrarToast('toastLink', 'Link copiado.', 'success');
+        } catch (err) {
+            campo.select();
+            mostrarToast('toastLink', 'Seleccionado: copialo con Ctrl+C.', 'success');
+        }
+    });
 
     document.getElementById('formNombre').addEventListener('submit', async (e) => {
         e.preventDefault();
