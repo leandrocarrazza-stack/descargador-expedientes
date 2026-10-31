@@ -11,6 +11,10 @@ Para una campaña nueva: crear templates/emails/promo_<nombre>.html (y .txt)
 extendiendo promo_base.html, y agregar su asunto en ASUNTOS.
 """
 
+import csv
+import io
+import re
+
 import config
 from flask import render_template
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -129,3 +133,56 @@ def renderizar_promo(campana, usuario, anio=None):
         'texto': render_template(f'emails/promo_{campana}.txt', **contexto),
         'remitente': REMITENTE,
     }
+
+
+# ---------------------------------------------------------------------------
+# Lista de destinatarios (la usan scripts/exportar_destinatarios_promo.py y el
+# panel de administración)
+# ---------------------------------------------------------------------------
+
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+COLUMNAS_CSV = ['email', 'nombre', 'creditos', 'archivo', 'url_baja', 'url_referido', 'url_whatsapp']
+
+
+def destinatarios_promo(User, todos=False):
+    """
+    Usuarios a los que corresponde mandarles una promoción: no se dieron de baja
+    de las promociones y tienen un email con formato válido. Por defecto solo
+    los que tienen crédito disponible; con todos=True, también los de 0 créditos.
+    """
+    q = User.query.order_by(User.id)
+    if not todos:
+        q = q.filter(User.creditos_disponibles > 0)
+    return [u for u in q.all()
+            if u.recibir_promociones is not False and EMAIL_RE.match((u.email or '').strip())]
+
+
+def _celda_segura(valor):
+    """
+    Evita la inyección de fórmulas al abrir el CSV en Excel o Google Sheets: un
+    texto escrito por un usuario (su nombre) que empiece con = + - @ se
+    interpretaría como fórmula. Se le antepone un apóstrofo.
+    """
+    texto = '' if valor is None else str(valor)
+    return "'" + texto if texto[:1] in ('=', '+', '-', '@', '\t', '\r') else texto
+
+
+def csv_destinatarios(User, todos=False, archivo=None):
+    """
+    CSV (texto, con BOM para que Excel lo abra bien) con una fila por destinatario:
+    email, nombre, creditos, archivo, url_baja y los dos campos personalizados de
+    MailerLite (url_referido y url_whatsapp). `archivo` es una función
+    email → nombre de archivo, o None para dejar la columna vacía.
+    Devuelve (texto_csv, cantidad_de_filas).
+    """
+    from modulos.referidos import url_referido
+    lista = destinatarios_promo(User, todos=todos)
+    salida = io.StringIO()
+    w = csv.writer(salida)
+    w.writerow(COLUMNAS_CSV)
+    for u in lista:
+        link = url_referido(u.id)
+        w.writerow([_celda_segura(u.email), _celda_segura(u.nombre), u.creditos_disponibles,
+                    archivo(u.email) if archivo else '', url_baja(u.id), link, url_whatsapp(link)])
+    return '\ufeff' + salida.getvalue(), len(lista)

@@ -149,9 +149,15 @@
     <div class="section-card">
         <div class="section-card-header navy" style="justify-content: space-between;">
             <span><i class="bi bi-people-fill icon-sm"></i> Usuarios registrados ({{ usuarios|length }})</span>
-            <button class="btn-foja-outline-light" style="padding: .4rem 1rem; font-size: .85rem;" onclick="location.reload()">
-                <i class="bi bi-arrow-clockwise"></i> Actualizar
-            </button>
+            <span>
+                <a href="{{ url_for('admin.descargar_csv_recomenda') }}" class="btn-foja-outline-light" style="padding: .4rem 1rem; font-size: .85rem; text-decoration: none;"
+                   title="Lista de destinatarios con el link personal de cada uno, para cargar en MailerLite">
+                    <i class="bi bi-download"></i> CSV campaña Recomendá Foja
+                </a>
+                <button class="btn-foja-outline-light" style="padding: .4rem 1rem; font-size: .85rem;" onclick="location.reload()">
+                    <i class="bi bi-arrow-clockwise"></i> Actualizar
+                </button>
+            </span>
         </div>
         <div class="section-card-body p-0">
             {% if usuarios %}
