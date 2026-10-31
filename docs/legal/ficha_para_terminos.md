@@ -100,9 +100,10 @@ Lo que no pude verificar en el código está marcado **[A CONFIRMAR]**.
 - **Registro de la base de datos ante la AAIP** (arts. 21 y 22 Ley 25.326): **[A CONFIRMAR]** si corresponde y si ya se tramitó. La Política debe incluir la leyenda del art. 6 y de la AAIP como órgano de control.
 - Las normas citadas surgen de fuentes secundarias consultadas el 27/10/2026; **verificar el texto vigente** en Infoleg o el Boletín Oficial antes de publicar.
 
-## 9. Cómo integrar el texto final en el sitio
+## 9. Cómo se publica el texto
 
-1. Pegar la redacción en `templates/legal_terminos.html` y `templates/legal_privacidad.html`, dentro del bloque `texto_legal`, en el lugar indicado.
-2. Poner `TERMINOS_BORRADOR=0` (Términos) y/o `PRIVACIDAD_BORRADOR=0` (Política) en el hosting para quitar el cartel "Documento en preparación" de cada uno. Aunque el flag esté apagado, la página sigue en "preparación" si falta cargar nombre, CUIT, domicilio o email del responsable.
-3. Actualizar `TERMINOS_VERSION` y `TERMINOS_FECHA` (variables de entorno). Cada alta nueva guarda la versión aceptada.
-4. Cargar las variables `RESPONSABLE_*`.
+Los Términos y la política de privacidad son **un solo documento**: la política es el **artículo 25** de `templates/legal_terminos.html`. `/privacidad` redirige a ese artículo.
+
+1. Cargar en el hosting las variables `RESPONSABLE_NOMBRE`, `RESPONSABLE_CUIT`, `RESPONSABLE_DOMICILIO` y `RESPONSABLE_EMAIL`. Los datos salen de ahí, tanto en el pie como en el artículo 1; no se escriben a mano en el texto.
+2. Poner `TERMINOS_VERSION` y `TERMINOS_FECHA` con los valores reales de vigencia.
+3. Poner `TERMINOS_BORRADOR=0` para quitar el cartel "Documento en preparación". Aunque el flag esté apagado, la página sigue en "preparación" si falta el nombre, el CUIT, el domicilio o el email.

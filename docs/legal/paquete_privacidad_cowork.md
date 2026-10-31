@@ -1,5 +1,7 @@
 # Foja — Paquete para redactar la Política de Privacidad (Cowork)
 
+> **Reemplazado.** La política de privacidad ya no es un documento aparte: quedó como el **artículo 25** de los Términos (`templates/legal_terminos.html`), en versión corta. Este paquete se conserva solo como respaldo de los hechos verificados en el código.
+
 Hechos verificados en el código del repositorio `descargador-expedientes` al 28/10/2026. Lo marcado **[CONFIRMAR]** no surge del código y debe completarlo el Titular antes de enviar este paquete.
 
 ## 1. Mensaje para pegar en Cowork

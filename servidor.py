@@ -270,11 +270,11 @@ def crear_app(config_obj=None):
         responsable es None si falta alguno de los datos obligatorios: así el
         pie de página no muestra un bloque a medias.
 
-        terminos_borrador / privacidad_borrador: un documento solo se publica
-        como definitivo si su flag de borrador está apagado Y están cargados
-        todos los datos del responsable (incluido el email, que el texto usa
-        para bajas y notificaciones). Si no, la página sigue mostrando el
-        cartel "En preparación" en vez de un texto con datos faltantes.
+        terminos_borrador: el texto solo se publica como definitivo si su flag
+        de borrador está apagado Y están cargados todos los datos del
+        responsable (incluido el email, que el texto usa para bajas y
+        notificaciones). Si no, la página sigue mostrando el cartel
+        "En preparación" en vez de un texto con datos faltantes.
         """
         datos = dict(
             nombre=config.RESPONSABLE_NOMBRE,
@@ -289,7 +289,6 @@ def crear_app(config_obj=None):
             terminos_version=config.TERMINOS_VERSION,
             terminos_fecha=config.TERMINOS_FECHA,
             terminos_borrador=config.TERMINOS_BORRADOR or not publicable,
-            privacidad_borrador=config.PRIVACIDAD_BORRADOR or not publicable,
             retencion_pdf_dias=config.RETENCION_PDF_DIAS,
         )
 
