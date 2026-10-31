@@ -88,6 +88,12 @@ class User(UserMixin, db.Model):
     # (rutas/promos.py). No afecta a los avisos de descarga ni de contraseña.
     recibir_promociones = db.Column(db.Boolean, nullable=True)
 
+    # Constancia de aceptación de Términos y Política de Privacidad. NULL = cuenta
+    # anterior a la publicación de los términos (no aceptó una versión concreta).
+    terminos_version = db.Column(db.String(20), nullable=True)
+    terminos_aceptados_en = db.Column(db.DateTime, nullable=True)
+    terminos_aceptados_ip = db.Column(db.String(64), nullable=True)
+
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     actualizado_en = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

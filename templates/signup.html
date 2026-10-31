@@ -95,7 +95,8 @@
             <div class="mb-4 form-check">
                 <input type="checkbox" class="form-check-input" id="terminos" name="terminos" required>
                 <label class="form-check-label" for="terminos">
-                    Acepto los términos y condiciones de Foja
+                    Acepto los <a href="/terminos" target="_blank" rel="noopener">términos y condiciones</a>
+                    de Foja, que incluyen la política de privacidad
                 </label>
             </div>
 
@@ -151,7 +152,7 @@ document.getElementById('formSignup').addEventListener('submit', async (e) => {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
-            body: JSON.stringify({ email, nombre, password })
+            body: JSON.stringify({ email, nombre, password, terminos })
         });
         const datos = await response.json();
 

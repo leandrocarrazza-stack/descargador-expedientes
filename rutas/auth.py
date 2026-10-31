@@ -24,6 +24,7 @@ Uso:
 """
 
 import logging
+import config
 from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for, current_app
 from flask_login import login_user, logout_user, login_required, current_user
@@ -86,8 +87,21 @@ def signup():
         if not email or not nombre or not password:
             return jsonify({'error': 'Email, nombre y contraseña son requeridos'}), 400
 
+        # Los términos son condición del registro: se valida acá, no solo en el JS
+        if datos.get('terminos') is not True:
+            return jsonify({'error': 'Tenés que aceptar los términos y condiciones'}), 400
+
+        # Detrás del proxy del hosting, remote_addr es el del proxy: el primer
+        # elemento de X-Forwarded-For es la IP del cliente (dato de constancia,
+        # no de seguridad: el cliente puede falsearlo).
+        ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+              or request.remote_addr)
+
         # Crear usuario
-        usuario, error = crear_usuario(email, nombre, password, plan='free')
+        usuario, error = crear_usuario(
+            email, nombre, password, plan='free',
+            terminos={'version': config.TERMINOS_VERSION, 'ip': ip},
+        )
 
         if error:
             logger.warning(f"Error en signup: {error}")
