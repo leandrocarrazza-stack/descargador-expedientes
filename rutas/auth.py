@@ -31,6 +31,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 from modulos.auth import crear_usuario, verificar_credenciales, validar_email, generar_token_reset, resetear_password
 from modulos.models import User, TokenResetPassword
+from modulos.referidos import anotar_referido
 from modulos.database import db
 from modulos.extensions import limiter, csrf, mail
 
@@ -70,6 +71,10 @@ def signup():
     """
     # Si es GET, retornar el formulario
     if request.method == 'GET':
+        # Link de recomendación (/auth/signup?ref=...): se guarda en la sesión
+        # para anotarlo cuando la persona termine de crear la cuenta.
+        if request.args.get('ref'):
+            session['ref'] = request.args['ref']
         return render_template('signup.html')
 
     # Si es POST, crear la cuenta
@@ -106,6 +111,15 @@ def signup():
         if error:
             logger.warning(f"Error en signup: {error}")
             return jsonify({'error': error}), 400
+
+        # Anotar quién lo recomendó (sin premio todavía: se da en su primera compra).
+        # Si algo falla acá, la cuenta ya está creada y sigue adelante.
+        try:
+            if anotar_referido(usuario, session.pop('ref', None)):
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.warning("No se pudo anotar el referido", exc_info=True)
 
         # Login automático después de crear cuenta
         login_user(usuario, remember=False)

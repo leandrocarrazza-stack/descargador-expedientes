@@ -1,6 +1,5 @@
 """
 Modelos de Base de Datos con SQLAlchemy
-========================================
 
 Define la estructura de las tablas:
 - User: Información de usuarios
@@ -93,6 +92,10 @@ class User(UserMixin, db.Model):
     terminos_version = db.Column(db.String(20), nullable=True)
     terminos_aceptados_en = db.Column(db.DateTime, nullable=True)
     terminos_aceptados_ip = db.Column(db.String(64), nullable=True)
+    # Programa de referidos (modulos/referidos.py): quién lo recomendó (NULL si
+    # nadie) y si su primera compra ya le dio el premio al que lo recomendó.
+    referido_por_id = db.Column(db.Integer, nullable=True, index=True)
+    referido_premiado = db.Column(db.Boolean, nullable=True)
 
     # Timestamps
     creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

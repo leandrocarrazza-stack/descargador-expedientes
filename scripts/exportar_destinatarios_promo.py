@@ -7,7 +7,9 @@ Incluye a los usuarios que:
 - no se dieron de baja de las promociones (recibir_promociones distinto de False),
 - tienen un email con formato válido.
 
-Escribe un CSV (email, nombre, creditos, archivo, url_baja) y, con --html-dir, un
+Con --todos incluye también a los de 0 créditos (útil para la campaña "recomenda").
+
+Escribe un CSV (email, nombre, creditos, archivo, url_baja, url_referido, url_whatsapp) y, con --html-dir, un
 archivo .html ya personalizado por destinatario (con su link de baja). Cada archivo
 se llama como el email del cliente (ej. mails/cliente@gmail.com.html); la columna
 "archivo" del CSV lo indica.
@@ -38,9 +40,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
-def destinatarios(User):
-    """Usuarios a los que corresponde mandarles la promoción."""
-    q = User.query.filter(User.creditos_disponibles > 0).order_by(User.id)
+def destinatarios(User, todos=False):
+    """
+    Usuarios a los que corresponde mandarles la promoción. Por defecto solo los
+    que tienen crédito; con todos=True también los de 0 créditos (siguen
+    excluidos los que se dieron de baja).
+    """
+    q = User.query.order_by(User.id)
+    if not todos:
+        q = q.filter(User.creditos_disponibles > 0)
     return [u for u in q.all()
             if u.recibir_promociones is not False and EMAIL_RE.match((u.email or '').strip())]
 
@@ -86,13 +94,15 @@ def main():
     ap.add_argument('--salida', default='destinatarios_promo.csv', help='archivo CSV de salida')
     ap.add_argument('--campana', default='contador_plazos', help='campaña (plantilla en templates/emails/)')
     ap.add_argument('--html-dir', help='si se indica, guarda un .html personalizado por destinatario')
+    ap.add_argument('--todos', action='store_true', help='incluir también a los usuarios con 0 créditos')
     ap.add_argument('--solo', metavar='EMAIL',
                     help='genera solo el mail de prueba de esta cuenta (promo_prueba.html), sin CSV ni el resto de la lista')
     args = ap.parse_args()
 
     from servidor import crear_app
     from modulos.models import User
-    from modulos.promos import renderizar_promo, url_baja
+    from modulos.promos import renderizar_promo, url_baja, url_whatsapp
+    from modulos.referidos import url_referido
 
     app = crear_app()
     with app.app_context():
@@ -104,13 +114,14 @@ def main():
             if motivos:
                 print('Aviso: esta cuenta no entraría en la tanda real porque ' + ' y '.join(motivos) + '.')
             return
-        lista = destinatarios(User)
+        lista = destinatarios(User, todos=args.todos)
         with open(args.salida, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
-            w.writerow(['email', 'nombre', 'creditos', 'archivo', 'url_baja'])
+            w.writerow(['email', 'nombre', 'creditos', 'archivo', 'url_baja', 'url_referido', 'url_whatsapp'])
             for u in lista:
+                link = url_referido(u.id)
                 w.writerow([u.email, u.nombre or '', u.creditos_disponibles,
-                            nombre_archivo(u.email) if args.html_dir else '', url_baja(u.id)])
+                            nombre_archivo(u.email) if args.html_dir else '', url_baja(u.id), link, url_whatsapp(link)])
         print(f'{len(lista)} destinatarios → {args.salida}')
 
         if args.html_dir:

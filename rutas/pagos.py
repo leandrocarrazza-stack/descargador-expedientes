@@ -15,6 +15,8 @@ from dotenv import load_dotenv
 from modulos.mercado_pago import crear_orden_pago, procesar_webhook, obtener_pago, validar_firma_webhook, MercadoPagoError
 from modulos.database import db
 from modulos.models import CompraCreditos, User
+from modulos.referidos import premiar_referidor_si_corresponde
+from modulos.emails import enviar_email_premio_referido
 from modulos.extensions import limiter, csrf
 import config
 
@@ -253,11 +255,25 @@ def _confirmar_compra(compra: CompraCreditos) -> None:
     if usuario:
         usuario.creditos_disponibles += compra.creditos_comprados
         _actualizar_plan_max_comprado(usuario, compra.plan)
+
+        # Programa de referidos: si es su primera compra y vino recomendado, el
+        # que lo recomendó gana créditos. Nunca debe impedir que el comprador
+        # reciba los suyos, por eso va aparte y con su propio try/except.
+        referidor = None
+        try:
+            referidor = premiar_referidor_si_corresponde(usuario)
+        except Exception:
+            logger.warning("Error al premiar al referidor", exc_info=True)
+            referidor = None
+
         db.session.commit()
         logger.info(
             f"Créditos acreditados: {usuario.email} recibió "
             f"+{compra.creditos_comprados} créditos (total: {usuario.creditos_disponibles})"
         )
+        if referidor:
+            logger.info(f"Referido: user {referidor.id} ganó créditos por la compra de user {usuario.id}")
+            enviar_email_premio_referido(referidor, usuario)
 
 
 @pagos_bp.route('/pago-confirmado', methods=['GET'])
