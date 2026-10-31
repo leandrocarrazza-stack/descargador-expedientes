@@ -95,7 +95,7 @@
             <div class="mb-4 form-check">
                 <input type="checkbox" class="form-check-input" id="terminos" name="terminos" required>
                 <label class="form-check-label" for="terminos">
-                    Acepto los <a href="/terminos" target="_blank" rel="noopener">términos y condiciones</a>
+                    Acepto los <a href="#" data-bs-toggle="modal" data-bs-target="#modalTerminos">términos y condiciones</a>
                     de Foja, que incluyen la política de privacidad
                 </label>
             </div>
@@ -115,6 +115,34 @@
 {% endblock %}
 
 {% block scripts_extra %}
+<div class="modal fade" id="modalTerminos" tabindex="-1" aria-labelledby="modalTerminosTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTerminosTitulo">Términos y condiciones · versión {{ terminos_version }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                {% if terminos_borrador %}
+                <p>El texto definitivo se publicará próximamente.</p>
+                {% else %}
+                {% include '_legal_responsable.html' %}
+                {% include '_terminos_texto.html' %}
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn-foja" id="btnAceptoTerminos">Acepto</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('btnAceptoTerminos').addEventListener('click', () => {
+    document.getElementById('terminos').checked = true;
+    bootstrap.Modal.getInstance(document.getElementById('modalTerminos')).hide();
+});
+</script>
 <script>
 document.getElementById('formSignup').addEventListener('submit', async (e) => {
     e.preventDefault();

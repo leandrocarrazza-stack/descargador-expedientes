@@ -49,6 +49,18 @@ def _setear_responsable(nombre='EJEMPLO Nombre Apellido', cuit='20-00000000-0',
     config.RESPONSABLE_DOMICILIO = domicilio
 
 
+def test_texto_compartido_con_el_registro():
+    """El texto de los Términos vive en un parcial: /terminos y el modal del registro lo muestran igual."""
+    config.TERMINOS_BORRADOR = False
+    config.RESPONSABLE_EMAIL = 'ejemplo@example.com'
+    _setear_responsable()
+    client = _app().test_client()
+    t = client.get('/terminos').get_data(as_text=True)
+    s = client.get('/auth/signup').get_data(as_text=True)
+    check("/terminos trae el art. 25", 'id="art-25"' in t)
+    check("registro: modal con el texto y botón Acepto", 'id="modalTerminos"' in s and 'id="art-25"' in s and 'btnAceptoTerminos' in s)
+
+
 def test_paginas_publicas():
     client = _app().test_client()
     r = client.get('/terminos')
@@ -160,6 +172,7 @@ def test_signup_exige_terminos_y_deja_constancia():
 
 if __name__ == '__main__':
     test_paginas_publicas()
+    test_texto_compartido_con_el_registro()
     test_pie_con_y_sin_responsable()
     test_terminos_definitivos()
     test_signup_exige_terminos_y_deja_constancia()
