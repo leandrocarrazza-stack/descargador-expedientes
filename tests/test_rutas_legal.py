@@ -68,8 +68,8 @@ def test_pie_con_y_sin_responsable():
     html = client.get('/').get_data(as_text=True)
     check("pie muestra al responsable cuando los datos están completos",
           'EJEMPLO Nombre Apellido' in html and '20-00000000-0' in html)
-    check("pie enlaza a términos y a la política de privacidad (art. 25)",
-          'href="/terminos"' in html and 'href="/terminos#art-25"' in html)
+    check("pie enlaza a los términos y no tiene un enlace aparte a la política de privacidad",
+          'href="/terminos"' in html and 'Política de privacidad' not in html and '/privacidad' not in html)
 
     _setear_responsable(cuit='')
     html = client.get('/').get_data(as_text=True)
