@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from flask import Flask, render_template, redirect, url_for
-from flask_login import LoginManager, UserMixin
+from flask_login import LoginManager, UserMixin, current_user
 from flask_cors import CORS
 
 import config
@@ -293,18 +293,19 @@ def crear_app(config_obj=None):
         )
 
     @app.context_processor
-    def inyectar_popup_plazos():
-        """Datos del popup del contador de plazos (templates/_popup_contador_plazos.html).
+    def inyectar_popup_terminos():
+        """pedir_terminos: si hay que mostrar el popup de aceptación (templates/_popup_terminos.html).
 
-        popup_plazos_activo: el popup solo se genera hasta config.POPUP_PLAZOS_HASTA (inclusive).
-        plazos_tiene_acceso: la misma regla que usa /plazos/, para no copiarla en la plantilla.
+        Se muestra al usuario logueado que no aceptó la versión vigente (nunca aceptó, o cambió
+        config.TERMINOS_VERSION), y solo si el texto está publicado (no en borrador).
         """
-        from datetime import date
-        from rutas.plazos import tiene_acceso
-        return dict(
-            popup_plazos_activo=date.today() <= config.POPUP_PLAZOS_HASTA,
-            plazos_tiene_acceso=tiene_acceso,
-        )
+        # Fuera de un request (emails renderizados desde scripts) current_user no existe
+        if not getattr(current_user, 'is_authenticated', False):
+            return dict(pedir_terminos=False)
+        datos = (config.RESPONSABLE_NOMBRE, config.RESPONSABLE_CUIT,
+                 config.RESPONSABLE_DOMICILIO, config.RESPONSABLE_EMAIL)
+        publicado = all(datos) and not config.TERMINOS_BORRADOR
+        return dict(pedir_terminos=publicado and current_user.terminos_version != config.TERMINOS_VERSION)
 
     # ═════════════════════════════════════════════════════════════════════
     #  LOGGING

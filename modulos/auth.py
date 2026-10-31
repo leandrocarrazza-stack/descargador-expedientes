@@ -98,6 +98,22 @@ def validar_password(password):
     return True, None
 
 
+def registrar_aceptacion_terminos(usuario, version, ip=None):
+    """Deja en el usuario la constancia de aceptación de los Términos (versión, fecha UTC e IP).
+
+    No hace commit: lo hace quien llama.
+    """
+    usuario.terminos_version = version
+    usuario.terminos_aceptados_en = datetime.utcnow()
+    usuario.terminos_aceptados_ip = (ip or '')[:64] or None
+
+
+def ip_cliente(req):
+    """IP del cliente. Detrás del proxy del hosting, remote_addr es la del proxy: se usa el
+    primer elemento de X-Forwarded-For (dato de constancia, no de seguridad: el cliente puede falsearlo)."""
+    return req.headers.get('X-Forwarded-For', '').split(',')[0].strip() or req.remote_addr
+
+
 def crear_usuario(email, nombre, password, plan='free', terminos=None):
     """
     Crea un nuevo usuario en la BD.
@@ -140,9 +156,7 @@ def crear_usuario(email, nombre, password, plan='free', terminos=None):
         )
         usuario.establecer_password(password)
         if terminos:
-            usuario.terminos_version = terminos['version']
-            usuario.terminos_aceptados_en = datetime.utcnow()
-            usuario.terminos_aceptados_ip = (terminos.get('ip') or '')[:64] or None
+            registrar_aceptacion_terminos(usuario, terminos['version'], terminos.get('ip'))
 
         db.session.add(usuario)
         db.session.commit()
