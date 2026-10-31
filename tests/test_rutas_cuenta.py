@@ -136,6 +136,29 @@ def test_toggle_notificaciones_persiste():
         check("notificar_email vuelve a False", user.notificar_email is False)
 
 
+def test_muestra_link_de_recomendacion_y_contadores():
+    from modulos import referidos
+    app = _app_y_cliente()
+    with app.app_context():
+        user_id = _crear_usuario()
+        # dos recomendados, uno ya premiado
+        for email, premiado in (('a@foja.com', True), ('b@foja.com', None)):
+            u = User(email=email, nombre='X', referido_por_id=user_id, referido_premiado=premiado)
+            u.establecer_password('Password123!')
+            db.session.add(u)
+        db.session.commit()
+        link = referidos.url_referido(user_id)
+
+    client = app.test_client()
+    _login(client, user_id)
+    html = client.get('/cuenta/').get_data(as_text=True)
+    check("Mi cuenta muestra el link personal de recomendación", link in html)
+    check("Mi cuenta ofrece compartir por WhatsApp", 'https://wa.me/?text=' in html)
+    check("cuenta 2 recomendados", 'id="cantRecomendados"' in html
+          and '>2</div>' in html.split('id="cantRecomendados"')[1][:120])
+    check("cuenta 1 premiado de 10", '1 de 10' in html)
+
+
 def test_requiere_login():
     app = _app_y_cliente()
     client = app.test_client()
@@ -153,6 +176,7 @@ if __name__ == '__main__':
     test_cambiar_password_debil_rechazada()
     test_cambiar_password_ok_y_permite_login()
     test_toggle_notificaciones_persiste()
+    test_muestra_link_de_recomendacion_y_contadores()
     test_requiere_login()
 
     print("\n" + "=" * 70)

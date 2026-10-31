@@ -17,7 +17,9 @@ from flask_login import login_required, current_user
 
 from modulos.auth import validar_password
 from modulos.database import db
-from modulos.models import SesionUsuarioMV
+from modulos.models import SesionUsuarioMV, User
+from modulos.promos import url_whatsapp
+from modulos.referidos import PREMIO_CREDITOS, TOPE_PREMIADOS, premiados_de, url_referido
 from modulos.extensions import limiter
 
 logger = logging.getLogger(__name__)
@@ -30,9 +32,17 @@ cuenta_bp = Blueprint('cuenta', __name__, url_prefix='/cuenta')
 def mi_cuenta():
     """Muestra la página de Mi cuenta."""
     sesion_mv = SesionUsuarioMV.query.filter_by(user_id=current_user.id).first()
+    link_referido = url_referido(current_user.id)
     return render_template(
         'cuenta.html',
         sesion_mv=sesion_mv,
+        # Programa de recomendación (modulos/referidos.py)
+        link_referido=link_referido,
+        link_whatsapp=url_whatsapp(link_referido),
+        recomendados=User.query.filter_by(referido_por_id=current_user.id).count(),
+        premiados=premiados_de(current_user.id),
+        premio_creditos=PREMIO_CREDITOS,
+        tope_premiados=TOPE_PREMIADOS,
     )
 
 
