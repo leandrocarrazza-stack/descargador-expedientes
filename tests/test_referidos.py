@@ -87,7 +87,7 @@ def test_registro():
     # el código viaja en la sesión.
     c = app.test_client()
     c.get(f'/auth/signup?ref={codigo}')
-    r = c.post('/auth/signup', json={'email': 'nuevo@gmail.com', 'nombre': 'Ana', 'password': 'Secreta123!'})
+    r = c.post('/auth/signup', json={'email': 'nuevo@gmail.com', 'nombre': 'Ana', 'password': 'Secreta123!', 'terminos': True})
     check("el registro con link funciona", r.status_code == 200, r.get_data(as_text=True))
     with app.app_context():
         nuevo = User.query.filter_by(email='nuevo@gmail.com').first()
@@ -98,7 +98,7 @@ def test_registro():
     # Código inválido: la cuenta se crea igual, sin referido.
     c2 = app.test_client()
     c2.get('/auth/signup?ref=basura')
-    r = c2.post('/auth/signup', json={'email': 'otro@gmail.com', 'nombre': 'Beto', 'password': 'Secreta123!'})
+    r = c2.post('/auth/signup', json={'email': 'otro@gmail.com', 'nombre': 'Beto', 'password': 'Secreta123!', 'terminos': True})
     check("con ref inválido la cuenta se crea igual", r.status_code == 200)
     with app.app_context():
         check("con ref inválido no queda referido", User.query.filter_by(email='otro@gmail.com').first().referido_por_id is None)
