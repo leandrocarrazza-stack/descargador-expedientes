@@ -109,6 +109,13 @@ def test_terminos_definitivos():
               'ni a administradores del Servicio ver o descargar esos archivos' in html)
         check("art. 25: leyenda de la AAIP", 'ÓRGANO DE CONTROL DE LA LEY N° 25.326' in html)
         check("art. 19 remite al art. 25", 'href="#art-25"' in html)
+        check("art. 9: programa de recomendación con premio, tope y primera compra",
+              'Programa de recomendación' in html and '2 (dos) créditos por cada Recomendado' in html
+              and 'hasta 10 (diez) Recomendados' in html and 'primera compra de créditos del Recomendado' in html)
+        check("art. 9 y 11: los créditos de recomendación no son canjeables ni reembolsables",
+              'no son canjeables por dinero' in html and 'ni tampoco los Créditos de Recomendación' in html)
+        check("art. 25: datos del programa de recomendación", 'el vínculo entre el Usuario que recomendó Foja' in html)
+        check("art. 9: el título figura en el índice", 'programa de recomendación</a></li>' in html)
 
         _set_legal(terminos_borrador=False, email='')
         html = client.get('/terminos').get_data(as_text=True)
