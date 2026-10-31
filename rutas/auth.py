@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, request, jsonify, session, render_template, redirect, url_for, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
-from modulos.auth import crear_usuario, verificar_credenciales, validar_email, generar_token_reset, resetear_password
+from modulos.auth import ip_cliente, crear_usuario, verificar_credenciales, validar_email, generar_token_reset, resetear_password
 from modulos.models import User, TokenResetPassword
 from modulos.referidos import anotar_referido
 from modulos.database import db
@@ -96,11 +96,7 @@ def signup():
         if datos.get('terminos') is not True:
             return jsonify({'error': 'Tenés que aceptar los términos y condiciones'}), 400
 
-        # Detrás del proxy del hosting, remote_addr es el del proxy: el primer
-        # elemento de X-Forwarded-For es la IP del cliente (dato de constancia,
-        # no de seguridad: el cliente puede falsearlo).
-        ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip()
-              or request.remote_addr)
+        ip = ip_cliente(request)
 
         # Crear usuario
         usuario, error = crear_usuario(
