@@ -1,0 +1,23 @@
+{% if nombre %}Hola {{ nombre }},{% else %}Hola,{% endif %}
+
+RECOMENDÁ FOJA Y GANÁ {{ premio_creditos }} DESCARGAS GRATIS
+
+Si un colega te pregunta cómo bajás los expedientes de Mesa Virtual, pasale tu link. Por cada persona que se sume y haga su primera compra, te regalamos {{ premio_creditos }} descargas.
+
+TU LINK PERSONAL
+{{ url_referido }}
+
+>> Compartir por WhatsApp: {{ url_whatsapp }}
+
+CÓMO FUNCIONA
+1. Compartís tu link personal con un colega.
+2. Tu colega crea su cuenta desde ese link y hace su primera compra.
+3. Te acreditamos {{ premio_creditos }} descargas y te avisamos por mail.
+
+Podés sumar hasta {{ tope_premiados }} recomendaciones ({{ tope_descargas }} descargas). El premio se acredita una sola vez por colega, cuando completa su primera compra.
+
+—
+Foja · foja.com.ar
+Dudas: {{ remitente }}
+Darme de baja de las promociones: {{ url_baja }}
+(seguirás recibiendo los avisos de tu cuenta)

@@ -1,6 +1,5 @@
 """
 Migraciones ligeras
-====================
 
 Esta app no usa Flask-Migrate/Alembic para migraciones reales: nunca se
 generó una migración y `servidor.py` solo llama `db.create_all()`, que
@@ -46,6 +45,8 @@ COLUMNAS_NUEVAS = [
     (User.__tablename__, User.terminos_version),
     (User.__tablename__, User.terminos_aceptados_en),
     (User.__tablename__, User.terminos_aceptados_ip),
+    (User.__tablename__, User.referido_por_id),
+    (User.__tablename__, User.referido_premiado),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.storage_key),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.total_filas),
     (ExpedienteDescargado.__tablename__, ExpedienteDescargado.total_archivos),
