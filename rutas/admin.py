@@ -10,7 +10,7 @@ Funciones:
 
 import logging
 from functools import wraps
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, Response
 from flask_login import login_required, current_user
 
 from modulos.database import db
@@ -41,6 +41,29 @@ def panel():
     mensajes = MensajeContacto.query.order_by(MensajeContacto.creado_en.desc()).all()
     no_leidos = sum(1 for m in mensajes if not m.leido)
     return render_template('admin_panel.html', usuarios=usuarios, mensajes=mensajes, no_leidos=no_leidos)
+
+
+@admin_bp.route('/promo/recomenda.csv', methods=['GET'])
+@login_required
+@requiere_admin
+def descargar_csv_recomenda():
+    """
+    CSV para cargar en MailerLite en la campaña "Recomendá Foja": todos los usuarios
+    que no se dieron de baja de las promociones, con el link personal de cada uno
+    (url_referido) y su link de WhatsApp (url_whatsapp). Contiene datos de clientes:
+    solo para administradores y sin caché.
+    """
+    from modulos.promos import csv_destinatarios
+    texto, cantidad = csv_destinatarios(User, todos=True)
+    logger.info(f"Admin {current_user.id} descargó el CSV de la campaña recomenda ({cantidad} destinatarios)")
+    return Response(
+        texto,
+        mimetype='text/csv; charset=utf-8',
+        headers={
+            'Content-Disposition': 'attachment; filename="destinatarios_recomenda.csv"',
+            'Cache-Control': 'no-store',
+        },
+    )
 
 
 @admin_bp.route('/mensajes/<int:mensaje_id>/leido', methods=['POST'])

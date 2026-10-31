@@ -41,16 +41,9 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 def destinatarios(User, todos=False):
-    """
-    Usuarios a los que corresponde mandarles la promoción. Por defecto solo los
-    que tienen crédito; con todos=True también los de 0 créditos (siguen
-    excluidos los que se dieron de baja).
-    """
-    q = User.query.order_by(User.id)
-    if not todos:
-        q = q.filter(User.creditos_disponibles > 0)
-    return [u for u in q.all()
-            if u.recibir_promociones is not False and EMAIL_RE.match((u.email or '').strip())]
+    """Usuarios a los que corresponde mandarles la promoción (ver modulos/promos.py)."""
+    from modulos.promos import destinatarios_promo
+    return destinatarios_promo(User, todos=todos)
 
 
 def nombre_archivo(email):
