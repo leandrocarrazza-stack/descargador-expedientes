@@ -551,7 +551,7 @@ def limpiar_storage_antiguo():
 INTERVALO_LIMPIEZA_PDFS_SEG = 3600  # 1 hora
 
 
-def iniciar_limpieza_periodica_pdfs():
+def iniciar_limpieza_periodica_pdfs(app):
     """
     Repite limpiar_pdfs_antiguos() y limpiar_storage_antiguo() cada
     INTERVALO_LIMPIEZA_PDFS_SEG en un hilo de fondo, en vez de una sola vez
@@ -563,11 +563,19 @@ def iniciar_limpieza_periodica_pdfs():
     output/ sin que nada los tocara hasta el próximo deploy o reinicio
     manual — disco silenciosamente lleno entre medio.
     """
+    # El hilo no tiene contexto de Flask: limpiar_storage_antiguo() usa la BD
+    # (db.session) y sin app_context() fallaba con "Working outside of
+    # application context", matando el hilo entero (y con él también la
+    # limpieza de output/, que depende del mismo loop).
     def _loop():
         while True:
             time.sleep(INTERVALO_LIMPIEZA_PDFS_SEG)
-            limpiar_pdfs_antiguos()
-            limpiar_storage_antiguo()
+            try:
+                limpiar_pdfs_antiguos()
+                with app.app_context():
+                    limpiar_storage_antiguo()
+            except Exception:
+                logger.exception("[CLEANUP] Falló una pasada de limpieza periódica")
 
     threading.Thread(target=_loop, daemon=True).start()
 

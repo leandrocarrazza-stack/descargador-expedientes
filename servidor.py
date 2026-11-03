@@ -164,7 +164,7 @@ def crear_app(config_obj=None):
     # sin la repetición, un proceso que corre varios días sin reiniciarse
     # deja que el disco se llene de a poco entre deploys.
     limpiar_pdfs_antiguos()
-    iniciar_limpieza_periodica_pdfs()
+    iniciar_limpieza_periodica_pdfs(app)
 
     # Matar cualquier soffice.bin residual de un proceso anterior (crash,
     # redeploy a mitad de una conversión). Se hace UNA sola vez acá, al
