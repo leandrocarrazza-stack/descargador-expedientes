@@ -180,11 +180,32 @@ def obtener_pago(payment_id: str) -> Dict[str, Any]:
     }
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         error_msg = f"Error al obtener pago {payment_id}: {str(e)}"
+        logger.error(error_msg)
+        raise MercadoPagoError(error_msg)
+
+
+def buscar_pagos_por_referencia(external_reference: str) -> list:
+    """
+    Busca en MP los pagos asociados a un external_reference.
+
+    Sirve para recuperar compras cuyo webhook nunca llegó (o se rechazó) y
+    cuyo comprador no volvió por el redirect: con la referencia que guardamos
+    al crear la preferencia se puede preguntar directamente a MP si se pagó.
+    """
+    url = f'{MP_API_BASE}/v1/payments/search'
+    headers = {'Authorization': f'Bearer {MP_ACCESS_TOKEN}'}
+    params = {'external_reference': external_reference, 'sort': 'date_created', 'criteria': 'desc'}
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=15)
+        response.raise_for_status()
+        return response.json().get('results', []) or []
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Error al buscar pagos de {external_reference}: {str(e)}"
         logger.error(error_msg)
         raise MercadoPagoError(error_msg)
 
@@ -296,7 +317,18 @@ def validar_firma_webhook(signature: str, request_id: str, data_id: str) -> bool
         logger.warning("[SECURITY] Header x-signature malformado.")
         return False
 
-    signed_string = f"id:{data_id};request-id:{request_id};ts:{ts}"
+    # Plantilla oficial de MP: "id:[data.id];request-id:[x-request-id];ts:[ts];"
+    # — termina en ";". Sin ese punto y coma final el HMAC nunca coincide y
+    # TODOS los webhooks se rechazan (así se perdió la acreditación de compras
+    # aprobadas cuyo comprador no volvía a /pagos/pago-confirmado).
+    # Si data.id es alfanumérico, MP pide pasarlo a minúsculas.
+    partes = []
+    if data_id:
+        partes.append(f"id:{str(data_id).lower()};")
+    if request_id:
+        partes.append(f"request-id:{request_id};")
+    partes.append(f"ts:{ts};")
+    signed_string = "".join(partes)
     expected = hmac.new(
         secret.encode('utf-8'),
         signed_string.encode('utf-8'),
