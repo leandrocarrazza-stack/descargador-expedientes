@@ -19,3 +19,5 @@ tests/
 *.lnk
 memory/
 scripts/
+# Excepción: se necesita dentro del contenedor para correrlo desde la consola de Render
+!scripts/reconciliar_pagos.py
