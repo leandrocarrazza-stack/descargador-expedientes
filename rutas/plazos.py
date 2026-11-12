@@ -6,14 +6,19 @@ Contador de plazos judiciales (Poder Judicial de Entre Ríos).
 - POST /plazos/api/calcular  → cálculo (JSON). Se hace en el servidor para
                                que el calendario (feriados, inhábiles, ferias)
                                viva en un solo lugar.
+- GET  /plazos/calendario.json → calendario exportado (público, solo lectura) para
+                               usar el motor en un plugin local; ver
+                               modulos/plazos/exportacion.py.
 
-Acceso: usuarios con crédito disponible y admins.
+Acceso a la calculadora: usuarios con crédito disponible y admins.
 """
 
+import hashlib
+import json
 import logging
 from datetime import date, datetime
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, Response, render_template, request, jsonify
 from flask_login import login_required, current_user
 
 import config
@@ -69,6 +74,38 @@ def calculadora():
         sync_fecha=sync_fecha,
         sync_ok=sync_ok,
     )
+
+
+@plazos_bp.route('/calendario.json', methods=['GET'])
+@limiter.limit("120 per minute")
+def calendario_json():
+    """
+    Calendario exportado: las entradas guardadas en la base (feria de julio, puentes,
+    inhábiles por acuerdo, feriados locales) más el estado de la última sincronización.
+    Es información pública del sitio del STJER, sin datos de usuarios, por eso no pide
+    login. Las reglas fijas no viajan: están en el código (reglas.py).
+    """
+    from modulos.models import CalendarioSyncLog, DiaInhabil
+    from modulos.plazos.exportacion import armar_exportacion
+
+    entradas = [f.a_entrada() for f in DiaInhabil.query.filter_by(activo=True).all()]
+    sincronizaciones = {}
+    for fuente in ('pagina', 'feria', 'rss'):
+        ultima = (CalendarioSyncLog.query.filter_by(fuente=fuente)
+                  .order_by(CalendarioSyncLog.fecha.desc()).first())
+        if ultima:
+            sincronizaciones[fuente] = {
+                'fecha': ultima.fecha.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'resultado': ultima.resultado,
+            }
+    datos = armar_exportacion(entradas, sincronizaciones)
+    # El ETag no incluye la hora de generación, así un cliente que ya tiene la última
+    # versión recibe 304 y no vuelve a bajar nada.
+    firma = json.dumps({'e': datos['entradas'], 's': sincronizaciones}, sort_keys=True)
+    respuesta = Response(json.dumps(datos, ensure_ascii=False), mimetype='application/json')
+    respuesta.set_etag(hashlib.sha256(firma.encode('utf-8')).hexdigest())
+    respuesta.headers['Cache-Control'] = 'public, max-age=3600'
+    return respuesta.make_conditional(request)
 
 
 def _entero(valor):
