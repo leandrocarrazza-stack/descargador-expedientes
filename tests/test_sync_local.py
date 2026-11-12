@@ -177,6 +177,11 @@ def test_guardado_y_codigos():
         r = sync_local.actualizar_calendario_local(destino, descargar=_sitio(caidos=('pagina', 'feria', 'rss')), hoy=HOY, pausa=0)
         check("sin internet no pisa el archivo anterior", r['codigo'] == 1 and not r['guardado'])
 
+        vacio = str(Path(tmp) / 'vacio.json')
+        r = sync_local.actualizar_calendario_local(vacio, descargar=_sitio(caidos=('pagina', 'feria', 'rss')), hoy=HOY, pausa=0)
+        check("sin internet y sin archivo previo no crea un calendario vacío", r['codigo'] == 1 and not Path(vacio).exists()
+              and 'ninguna fuente' in r['motivo'], r['motivo'])
+
         nuevo = str(Path(tmp) / 'nuevo.json')
         r = sync_local.actualizar_calendario_local(nuevo, descargar=_sitio(caidos=('pagina',)), hoy=HOY, pausa=0)
         check("sin archivo anterior y con la página caída guarda lo que hay y avisa (código 2)",

@@ -169,17 +169,23 @@ def construir_exportacion(hoy=None, descargar=None, dias_rss=None, pausa=PAUSA_S
     return datos, {'fuentes': fuentes, 'problemas': problemas, 'para_revisar': para_revisar}
 
 
-def actualizar_calendario_local(destino, descargar=None, hoy=None, dias_rss=None, pausa=PAUSA_SEG, avisar=None):
+def actualizar_calendario_local(destino, descargar=None, hoy=None, dias_rss=None, pausa=PAUSA_SEG, avisar=None, ahora=None):
     """
     Lee el sitio del STJER y guarda el calendario en `destino`. Devuelve un dict con
     'codigo' (0 / 2 / 1, ver el docstring del módulo), 'guardado', 'datos' e 'informe'.
     Nunca pisa con algo peor un archivo anterior: si la página de feriados no se pudo
     leer y ya había un archivo, se conserva el anterior.
     """
-    datos, informe = construir_exportacion(hoy=hoy, descargar=descargar, dias_rss=dias_rss, pausa=pausa, avisar=avisar)
+    datos, informe = construir_exportacion(hoy=hoy, descargar=descargar, dias_rss=dias_rss, pausa=pausa, avisar=avisar,
+                                           ahora=ahora)
     pagina_ok = informe['fuentes']['pagina']['resultado'] == 'ok'
     todo_ok = all(f['resultado'] in ('ok', 'sin_cambios') for f in informe['fuentes'].values())
+    ninguna_ok = not any(f['resultado'] in ('ok', 'sin_cambios') for f in informe['fuentes'].values())
     hay_previo = os.path.exists(destino)
+    if ninguna_ok:   # sin internet o sitio caído: un calendario vacío no le sirve a nadie
+        return {'codigo': 1, 'guardado': False, 'datos': datos, 'informe': informe,
+                'motivo': 'No se pudo leer ninguna fuente del STJER (¿sin internet?): no se guardó nada.'
+                          + (' Se conserva el archivo anterior.' if hay_previo else '')}
     if not pagina_ok and hay_previo:
         return {'codigo': 1, 'guardado': False, 'datos': datos, 'informe': informe,
                 'motivo': 'No se pudo leer la página de feriados e inhábiles: se conserva el archivo anterior.'}
