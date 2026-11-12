@@ -180,6 +180,21 @@ def cargar_archivo(ruta):
         return json.load(f)
 
 
+def guardar_atomico(datos, destino):
+    """Guarda el JSON con reemplazo atómico: nunca queda un archivo a medias."""
+    carpeta = os.path.dirname(os.path.abspath(destino))
+    os.makedirs(carpeta, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=carpeta, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(datos, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, destino)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
 def descargar_calendario(url=URL_OFICIAL, destino=None, timeout=15):
     """
     Baja el calendario del servidor, lo valida y (si se pide) lo guarda en `destino`.
@@ -204,17 +219,7 @@ def descargar_calendario(url=URL_OFICIAL, destino=None, timeout=15):
         raise ErrorExportacion('La respuesta no es un JSON válido.')
     calendario_desde_exportacion(datos)   # valida el archivo entero antes de guardarlo
     if destino:
-        carpeta = os.path.dirname(os.path.abspath(destino))
-        os.makedirs(carpeta, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=carpeta, suffix='.tmp')
-        try:
-            with os.fdopen(fd, 'w', encoding='utf-8') as f:
-                json.dump(datos, f, ensure_ascii=False, indent=1)
-            os.replace(tmp, destino)   # reemplazo atómico: nunca queda un archivo a medias
-        except BaseException:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-            raise
+        guardar_atomico(datos, destino)
     return datos
 
 
