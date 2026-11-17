@@ -257,10 +257,10 @@ class ClienteSelenium:
 
             fetch(arguments[0], {{
                 method: 'POST',
-                headers: {{
+                headers: Object.assign({{
                     'Content-Type': 'application/json',
                     'Accept': '*/*'
-                }},
+                }}, arguments[2] ? {{'Authorization': arguments[2]}} : {{}}),
                 body: JSON.stringify(arguments[1]),
                 credentials: 'include'
             }})
@@ -286,7 +286,9 @@ class ClienteSelenium:
                     "operationName": query.get("operationName"),
                     "variables": variables or {},
                     "query": query.get("query")
-                }
+                },
+                # Si se capturó el token de la página, va como "Authorization: Bearer ..."
+                getattr(self, "token_api", None)
             )
 
             # Esperar a que se complete la petición (máximo 30 segundos)
@@ -309,6 +311,46 @@ class ClienteSelenium:
 
         except Exception as e:
             return {"error": str(e)}
+
+    def capturar_token_api(self, timeout=30):
+        """
+        Captura el token "Bearer" que la propia página de Mesa Virtual manda a su API.
+
+        La API GraphQL (/api/graphql) rechaza ("Acceso no permitido") las consultas
+        que traen solo cookies: pide además un token de acceso, que el sitio obtiene
+        de Keycloak y guarda en memoria. Acá instalamos un pequeño "espía" que se
+        ejecuta antes que el código del sitio, anota el encabezado Authorization del
+        primer fetch que lo traiga, y recargamos la página para que el sitio lo use.
+
+        El token queda en self.token_api (solo en memoria; nunca se imprime ni se guarda).
+        Devuelve True si se capturó.
+        """
+        espia = """
+        (function(){
+          const f = window.fetch;
+          window.fetch = function(input, init){
+            try {
+              let a = null;
+              const h = (init && init.headers) || (input && input.headers) || {};
+              if (typeof h.get === 'function') a = h.get('authorization');
+              else a = h.authorization || h.Authorization;
+              if (a && /^bearer /i.test(a)) window.__mv_auth = a;
+            } catch (e) {}
+            return f.apply(this, arguments);
+          };
+        })();
+        """
+        self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": espia})
+        self.driver.get(self.url_mesa_virtual)  # recarga: el espía corre antes que el sitio
+
+        inicio = time.time()
+        while time.time() - inicio < timeout:
+            token = self.driver.execute_script("return window.__mv_auth || null;")
+            if token:
+                self.token_api = token
+                return True
+            time.sleep(1)
+        return False
 
     def cerrar(self):
         """Cierra el navegador."""
