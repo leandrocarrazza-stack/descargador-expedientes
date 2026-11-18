@@ -155,6 +155,14 @@ class DescargarExpedienteInput(BaseModel):
         min_length=1,
         max_length=50
     )
+    desde: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fecha AAAA-MM-DD. Si se indica, se descargan SOLO los movimientos con fecha igual o posterior "
+            "(descarga parcial: mucho más rápida; ideal para leer una providencia reciente)."
+        ),
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
 
     @field_validator("numero")
     @classmethod
@@ -838,11 +846,13 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
         - no_files: Expediente sin archivos adjuntos
         - download_failed: Fallo en descarga → reintentar
     """
-    def _descargar(numero: str) -> dict:
+    def _descargar(numero: str, desde: Optional[str] = None) -> dict:
+        from datetime import date
         from modulos.pipeline import PipelineDescargador
 
         pipeline = PipelineDescargador()
-        resultado = pipeline.ejecutar(numero)
+        # Descarga parcial: solo los movimientos con fecha >= desde (ver EstrategiaDesdeFecha en modulos/descarga.py)
+        resultado = pipeline.ejecutar(numero, desde_fecha=date.fromisoformat(desde) if desde else None)
 
         if resultado.exito:
             return {
@@ -871,6 +881,7 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
                     "Verificá que LibreOffice esté instalado."
                 ),
                 "unification_failed": "Se convirtieron los archivos pero falló la unificación en PDF.",
+                "sin_actuaciones_desde_fecha": f"No hay actuaciones desde el {desde} en el expediente '{numero}'.",
             }
 
             tipo = resultado.tipo_error or "exception"
@@ -883,7 +894,7 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
             }
 
     try:
-        resultado = await asyncio.to_thread(_descargar, params.numero)
+        resultado = await asyncio.to_thread(_descargar, params.numero, params.desde)
         return json.dumps(resultado, ensure_ascii=False, indent=2)
     except Exception as e:
         return json.dumps({
