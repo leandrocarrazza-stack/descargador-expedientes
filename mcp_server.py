@@ -249,7 +249,7 @@ async def mesa_virtual_verificar_sesion() -> str:
 
         # Intentar cargar sesión en modo headless para verificar validez
         try:
-            cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+            cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
             if cliente:
                 cliente.cerrar()
                 return {
@@ -425,7 +425,7 @@ async def mesa_virtual_buscar_expediente(params: BuscarExpedienteInput) -> str:
         from modulos.login import crear_cliente_sesion
         from modulos.navegacion import BuscadorExpedientes
 
-        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
         if not cliente:
             raise RuntimeError(
                 "Sesión no disponible o expirada. "
@@ -529,7 +529,7 @@ async def mesa_virtual_obtener_movimientos(params: ObtenerMovimientosInput) -> s
         from modulos.descarga import DescargadorArchivos
         import config
 
-        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
         if not cliente:
             raise RuntimeError(
                 "Sesión no disponible o expirada. "
@@ -679,7 +679,7 @@ async def mesa_virtual_listar_notificaciones(params: ListarNotificacionesInput) 
     def _listar(p: ListarNotificacionesInput) -> dict:
         from modulos.login import crear_cliente_sesion
 
-        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
         if not cliente:
             raise RuntimeError(
                 "Sesión no disponible o expirada. "
@@ -734,6 +734,9 @@ async def mesa_virtual_listar_notificaciones(params: ListarNotificacionesInput) 
                         "tipo_documento": n.get("tipo_documento"),
                         "organismo": exp.get("organismo"),
                         "localidad": exp.get("localidad"),
+                        # La carátula de la notificación viene vacía; la real está en el expediente
+                        "expediente_caratula": exp.get("caratula"),
+                        "tipo_proceso": (exp.get("tipo_proceso") or {}).get("tipo"),
                         "expediente_nro": nro,  # partes del número tal como las da la API
                         "movimiento": n.get("movimiento"),
                     })

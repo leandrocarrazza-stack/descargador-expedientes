@@ -358,9 +358,12 @@ class ClienteSelenium:
             self.driver.quit()
 
 
-def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True, headless=True):
+def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_virtual=None, usar_sesion_guardada=True, headless=True, login_manual=True):
     """
     Crea un cliente Selenium para acceso autenticado.
+
+    login_manual=False: si la sesión guardada no sirve, devuelve None en lugar de
+    abrir el navegador para que alguien inicie sesión (para uso sin supervisión).
 
     Usa Selenium directamente - sin necesidad de guardar/cargar cookies manualmente.
     Selenium maneja automáticamente todas las cookies del navegador.
@@ -439,6 +442,12 @@ def crear_cliente_sesion(carpeta_cookies=None, api_graphql_url=None, url_mesa_vi
                     pass
             cliente.driver = None
             sesion_cargada = False
+
+    # Sin login manual (uso desatendido, p.ej. las revisiones programadas): si la sesión
+    # guardada no sirve, devolvemos None enseguida en vez de abrir un Chrome visible
+    # y quedarnos esperando hasta 10 minutos a que alguien inicie sesión.
+    if not sesion_cargada and not login_manual:
+        return None
 
     # Si no se cargó sesión, hacer login manual
     if not sesion_cargada:
