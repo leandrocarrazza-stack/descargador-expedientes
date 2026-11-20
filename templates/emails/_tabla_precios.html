@@ -1,0 +1,17 @@
+{# Tabla de precios de los tres planes: hasta el 30/11 y (opcional) desde el 1/12. Datos de config vía modulos/promos.py. #}
+{% macro tabla_precios(filas, con_nuevo=True) -%}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #ece4d0; border-radius:12px; background:#faf7f0;">
+    <tr>
+        <td style="padding:12px 14px; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#b8862b; font-weight:bold;">Plan</td>
+        <td align="right" style="padding:12px 14px; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#b8862b; font-weight:bold;">Hasta el 30/11</td>
+        {% if con_nuevo %}<td align="right" style="padding:12px 14px; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#b8862b; font-weight:bold;">Desde el 1/12</td>{% endif %}
+    </tr>
+    {% for f in filas %}
+    <tr>
+        <td style="padding:12px 14px; border-top:1px solid #ece4d0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.4; color:#33425e;"><strong style="color:#0a1f3a;">{{ f.nombre }}</strong><br>{{ f.creditos }} descarga{{ 's' if f.creditos != 1 }}</td>
+        <td align="right" style="padding:12px 14px; border-top:1px solid #ece4d0; font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#0a1f3a;"><strong>{{ f.viejo }}</strong><br><span style="font-size:12px; color:#6b7a94;">{{ f.viejo_cu }} c/u</span></td>
+        {% if con_nuevo %}<td align="right" style="padding:12px 14px; border-top:1px solid #ece4d0; font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#0a1f3a;"><strong>{{ f.nuevo }}</strong><br><span style="font-size:12px; color:#6b7a94;">{{ f.nuevo_cu }} c/u</span></td>{% endif %}
+    </tr>
+    {% endfor %}
+</table>
+{%- endmacro %}

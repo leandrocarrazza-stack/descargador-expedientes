@@ -1,0 +1,14 @@
+{% if nombre %}Hola {{ nombre }},{% else %}Hola,{% endif %}
+
+DESDE EL 1 DE DICIEMBRE EL CRÉDITO PASA A {{ precio_credito_nuevo }}
+
+Hasta el 30 de noviembre podés cargar créditos al precio actual. Los créditos no vencen y los que ya tenés no cambian.
+{% for f in filas_precios %}
+- {{ f.nombre }} ({{ f.creditos }}): {{ f.viejo }} hasta el 30/11 → {{ f.nuevo }} desde el 1/12 ({{ f.nuevo_cu }} c/u){% endfor %}
+
+Cargar créditos: {{ url_planes }}
+
+—
+Foja · foja.com.ar
+Dudas: {{ remitente }}
+Darme de baja de las promociones: {{ url_baja }}
