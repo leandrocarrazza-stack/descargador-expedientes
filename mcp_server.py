@@ -163,6 +163,14 @@ class DescargarExpedienteInput(BaseModel):
         ),
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     )
+    indice: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Si el número coincide con varios expedientes (tipo_error 'multiples_opciones', que devuelve 'opciones'), "
+            "cuál descargar (1 = el primero de la lista)."
+        )
+    )
 
     @field_validator("numero")
     @classmethod
@@ -846,13 +854,13 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
         - no_files: Expediente sin archivos adjuntos
         - download_failed: Fallo en descarga → reintentar
     """
-    def _descargar(numero: str, desde: Optional[str] = None) -> dict:
+    def _descargar(numero: str, desde: Optional[str] = None, indice: Optional[int] = None) -> dict:
         from datetime import date
         from modulos.pipeline import PipelineDescargador
 
         pipeline = PipelineDescargador()
         # Descarga parcial: solo los movimientos con fecha >= desde (ver EstrategiaDesdeFecha en modulos/descarga.py)
-        resultado = pipeline.ejecutar(numero, desde_fecha=date.fromisoformat(desde) if desde else None)
+        resultado = pipeline.ejecutar(numero, desde_fecha=date.fromisoformat(desde) if desde else None, indice_expediente=indice)
 
         if resultado.exito:
             return {
@@ -887,14 +895,17 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
             tipo = resultado.tipo_error or "exception"
             mensaje = mensajes_por_tipo.get(tipo, resultado.error or "Error desconocido")
 
-            return {
+            fallo = {
                 "exito": False,
                 "tipo_error": tipo,
                 "mensaje": mensaje
             }
+            if tipo == "multiples_opciones":  # el número coincide con varios expedientes: devolver la lista para elegir con `indice`
+                fallo["opciones"] = resultado.opciones
+            return fallo
 
     try:
-        resultado = await asyncio.to_thread(_descargar, params.numero, params.desde)
+        resultado = await asyncio.to_thread(_descargar, params.numero, params.desde, params.indice)
         return json.dumps(resultado, ensure_ascii=False, indent=2)
     except Exception as e:
         return json.dumps({
