@@ -2,7 +2,7 @@
 {% from "emails/_piezas.html" import boton, titulo_seccion %}
 {% from "emails/_tabla_precios.html" import tabla_precios %}
 
-{% block preheader %}El lunes 1 de diciembre el crédito pasa a {{ precio_credito_nuevo }}. Hasta el domingo 30 cargás al precio actual.{% endblock %}
+{% block preheader %}Mañana el crédito pasa a {{ precio_credito_nuevo }}. Hoy, lunes 30 de noviembre, es el último día con el precio actual.{% endblock %}
 
 {% block etiqueta %}Último aviso{% endblock %}
 
@@ -11,10 +11,10 @@
         <!-- HERO -->
         <tr><td bgcolor="#0a1f3a" class="px" style="background:#0a1f3a; padding:18px 36px 44px 36px;">
             <p style="margin:0 0 12px 0; font-family:Arial,Helvetica,sans-serif; font-size:12px; letter-spacing:1.8px; text-transform:uppercase; color:#d4a54a; font-weight:bold;">Recordatorio</p>
-            <p class="h1" style="margin:0 0 16px 0; font-family:Georgia,'Times New Roman',serif; font-size:34px; line-height:1.15; color:#f5f1e8;">{% if nombre %}{{ nombre }}, hoy{% else %}Hoy{% endif %} es el <span style="color:#d4a54a; font-style:italic;">último día hábil</span> con el precio actual.</p>
+            <p class="h1" style="margin:0 0 16px 0; font-family:Georgia,'Times New Roman',serif; font-size:34px; line-height:1.15; color:#f5f1e8;">{% if nombre %}{{ nombre }}, hoy{% else %}Hoy{% endif %} es el <span style="color:#d4a54a; font-style:italic;">último día</span> con el precio actual.</p>
             <p style="margin:0 0 26px 0; font-family:Arial,Helvetica,sans-serif; font-size:17px; line-height:1.6; color:#c9d3e4;">
-                El lunes <strong style="color:#f5f1e8;">1 de diciembre</strong> el crédito pasa a {{ precio_credito_nuevo }}.
-                Hasta el domingo 30 de noviembre podés cargar créditos a los precios de hoy, y no vencen.
+                Mañana, martes <strong style="color:#f5f1e8;">1 de diciembre</strong>, el crédito pasa a {{ precio_credito_nuevo }}.
+                Hasta hoy podés cargar créditos a los precios actuales, y no vencen.
             </p>
             {{ boton(url_planes, 'Cargar créditos') }}
         </td></tr>
