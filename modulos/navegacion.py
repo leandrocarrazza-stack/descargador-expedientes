@@ -12,6 +12,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 
+def _es_pagina_login(url):
+    """True si `url` es la pantalla de login del SSO. Mira solo dominio y ruta: el fragmento (#state=...&iss=...ol-sso...)
+    que deja Keycloak al volver a la página NO cuenta (antes daba falsos 'sesión expirada')."""
+    from urllib.parse import urlparse
+    p = urlparse(url or "")
+    return "ol-sso" in p.netloc or "/login" in p.path
+
+
 
 class BuscadorExpedientes:
     """Cliente para buscar expedientes en la Mesa Virtual (Web Scraping)."""
@@ -103,10 +111,10 @@ class BuscadorExpedientes:
             # se confirma con un segundo vistazo antes de abortar el job (evita
             # emails de error prematuros por falsos positivos).
             url_actual = driver.current_url
-            if "ol-sso" in url_actual or "/login" in url_actual:
+            if _es_pagina_login(url_actual):
                 time.sleep(2)
                 url_actual = driver.current_url
-                if "ol-sso" in url_actual or "/login" in url_actual:
+                if _es_pagina_login(url_actual):
                     raise Exception(f"SESION_MV_EXPIRADA: redirigido a login durante búsqueda ({url_actual[:80]})")
 
             # IMPORTANTE: Cerrar cartel de notificaciones PRIMERO (puede bloquear otros clicks)
