@@ -23,6 +23,7 @@ Por qué capturar cookies de todos los dominios:
 import sys
 import time
 import pickle
+import argparse
 from pathlib import Path
 
 # Agregar el proyecto al path para poder importar los módulos
@@ -33,6 +34,9 @@ from selenium import webdriver
 
 URL_MESA_VIRTUAL = "https://mesavirtual.jusentrerios.gov.ar/"
 ARCHIVO_SESION = Path.home() / ".mesa_virtual_sesion.pkl"
+# Perfil propio de Chrome: recuerda el usuario (por "Seguir conectado") y, si VOS lo guardás en el
+# administrador de contraseñas de Chrome, también la clave. El script nunca lee ni escribe credenciales.
+PERFIL_CHROME = Path.home() / ".mesa_virtual_chrome"
 TIMEOUT_SEGUNDOS = 600  # 10 minutos
 
 
@@ -49,6 +53,11 @@ def renovar_sesion():
     # Abrir Chrome VISIBLE (sin headless)
     options = webdriver.ChromeOptions()
     options.add_argument('--window-size=1200,800')
+    options.add_argument(f'--user-data-dir={PERFIL_CHROME}')
+    # Dejar activo el administrador de contraseñas de Chrome (Selenium lo apaga por defecto)
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+    options.add_experimental_option('prefs', {'credentials_enable_service': True,
+                                              'profile.password_manager_enabled': True})
 
     driver = webdriver.Chrome(options=options)  # Selenium Manager elige el driver automáticamente
 
@@ -61,9 +70,24 @@ def renovar_sesion():
         tiempo_esperado = 0
         intervalo = 1
         urls_vistas = []
+        tildado = False  # ya se marcó "Seguir conectado"?
 
         while tiempo_esperado < TIMEOUT_SEGUNDOS:
             url_actual = driver.current_url
+
+            # Tilda "Seguir conectado" (el "Recordarme" de Keycloak) en la página de login.
+            # Solo marca la casilla: usuario, clave y código 2FA los ponés vos.
+            # Sirve para que la sesión dure más de las 6 h normales.
+            if not tildado and "ol-sso" in url_actual:
+                try:
+                    tildado = bool(driver.execute_script(
+                        "var c=document.querySelector('input[name=rememberMe],#rememberMe')"
+                        "||document.querySelector('input[type=checkbox]');"
+                        "if(!c)return false; if(!c.checked)c.click(); return c.checked;"))
+                    if tildado:
+                        print("  ✓ Casilla 'Seguir conectado' marcada")
+                except Exception:
+                    pass
 
             # Mostrar cada URL nueva que aparezca (para seguimiento)
             if url_actual not in urls_vistas:
@@ -93,6 +117,14 @@ def renovar_sesion():
                 print(f"  Cookies capturadas: {len(todas_las_cookies)}")
                 for c in todas_las_cookies:
                     print(f"    - {c['name']:35s} dominio={c.get('domain', '')}")
+
+                # Cuánto va a durar la sesión según Keycloak (solo fechas, nunca valores)
+                import datetime as dt
+                for c in todas_las_cookies:
+                    if c['name'] in ('KEYCLOAK_SESSION', 'KEYCLOAK_IDENTITY'):
+                        v = c.get('expires', -1)
+                        print(f"  {c['name']}: " + (f"vence {dt.datetime.fromtimestamp(v):%Y-%m-%d %H:%M}"
+                              if v and v > 0 else "de sesión (se borra al cerrar Chrome)"))
 
                 ARCHIVO_SESION.parent.mkdir(parents=True, exist_ok=True)
                 with open(ARCHIVO_SESION, 'wb') as f:
@@ -135,7 +167,15 @@ def renovar_sesion():
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Renueva la sesión de Mesa Virtual (login manual en Chrome).")
+    ap.add_argument("--auto", action="store_true",
+                    help="modo tarea programada: espera 30 min y no pide Enter al final")
+    args = ap.parse_args()
+    if args.auto:
+        TIMEOUT_SEGUNDOS = 1800
     exito = renovar_sesion()
     if not exito:
         print("La sesión NO se renovó. Intentá de nuevo.")
-    input("\nPresioná Enter para cerrar...")
+    if not args.auto:
+        input("\nPresioná Enter para cerrar...")
+    sys.exit(0 if exito else 1)

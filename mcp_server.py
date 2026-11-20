@@ -112,6 +112,39 @@ class ObtenerMovimientosInput(BaseModel):
         return v.strip()
 
 
+class ListarNotificacionesInput(BaseModel):
+    """Parámetros para listar las notificaciones de Mesa Virtual."""
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    solo_no_leidas: bool = Field(
+        default=True,
+        description="Si es True (default), trae solo las notificaciones sin leer."
+    )
+    max_notificaciones: int = Field(
+        default=50,
+        description="Cantidad máxima de notificaciones a traer (default 50, máximo 300).",
+        ge=1,
+        le=300
+    )
+    fecha_desde: Optional[str] = Field(
+        default=None,
+        description="Filtrar desde esta fecha, formato AAAA-MM-DD (opcional).",
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
+    fecha_hasta: Optional[str] = Field(
+        default=None,
+        description="Filtrar hasta esta fecha, formato AAAA-MM-DD (opcional).",
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
+    incluir_texto: bool = Field(
+        default=False,
+        description=(
+            "Si es True, además del listado trae el texto de cada notificación "
+            "(una consulta extra por notificación, es más lento)."
+        )
+    )
+
+
 class DescargarExpedienteInput(BaseModel):
     """Parámetros para descargar el PDF consolidado de un expediente."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -121,6 +154,14 @@ class DescargarExpedienteInput(BaseModel):
         description="Número de expediente a descargar (ej: '21/24', '5289/23').",
         min_length=1,
         max_length=50
+    )
+    desde: Optional[str] = Field(
+        default=None,
+        description=(
+            "Fecha AAAA-MM-DD. Si se indica, se descargan SOLO los movimientos con fecha igual o posterior "
+            "(descarga parcial: mucho más rápida; ideal para leer una providencia reciente)."
+        ),
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
     )
 
     @field_validator("numero")
@@ -216,7 +257,7 @@ async def mesa_virtual_verificar_sesion() -> str:
 
         # Intentar cargar sesión en modo headless para verificar validez
         try:
-            cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+            cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
             if cliente:
                 cliente.cerrar()
                 return {
@@ -392,7 +433,7 @@ async def mesa_virtual_buscar_expediente(params: BuscarExpedienteInput) -> str:
         from modulos.login import crear_cliente_sesion
         from modulos.navegacion import BuscadorExpedientes
 
-        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
         if not cliente:
             raise RuntimeError(
                 "Sesión no disponible o expirada. "
@@ -496,7 +537,7 @@ async def mesa_virtual_obtener_movimientos(params: ObtenerMovimientosInput) -> s
         from modulos.descarga import DescargadorArchivos
         import config
 
-        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True)
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
         if not cliente:
             raise RuntimeError(
                 "Sesión no disponible o expirada. "
@@ -551,6 +592,189 @@ async def mesa_virtual_obtener_movimientos(params: ObtenerMovimientosInput) -> s
         return json.dumps({
             "error": True,
             "mensaje": _manejar_error(e, f"obtener movimientos de '{params.numero}'")
+        }, ensure_ascii=False, indent=2)
+
+
+# ─────────────────────────────────────────────
+# Herramienta: Listar notificaciones (solo lectura)
+# ─────────────────────────────────────────────
+
+# Consultas GraphQL copiadas del propio sitio de Mesa Virtual (su código JS público).
+# Son consultas de LECTURA: no marcan nada como leído. Lo que marca como leída una
+# notificación es otra operación distinta (una "mutation"), que esta herramienta
+# nunca llama.
+_QUERY_LISTAR_NOTIF = """
+query notificacionesListarBusquedaAvanzada($buscar: String, $organismos: [String!], $take: Int!, $skip: Int!, $fecha_desde: String, $fecha_hasta: String, $no_leidas: Boolean) {
+  notificacionesConnectionBusquedaAvanzada(
+    take: $take
+    skip: $skip
+    filtro: {buscar: $buscar, organismos: $organismos, fecha_desde: $fecha_desde, fecha_hasta: $fecha_hasta, no_leidas: $no_leidas}
+  ) {
+    aggregate { count }
+    edges {
+      node {
+        id
+        caratula
+        descripcion
+        enviada
+        leida
+        tipo_documento
+        expediente {
+          id
+          organismo
+          circunscripcion
+          localidad
+          caratula
+          tipo_proceso { tipo }
+          nro { exp0 exp1 exp2 exp3 }
+        }
+        movimiento
+      }
+    }
+  }
+}
+"""
+
+_QUERY_DETALLE_NOTIF = """
+query notificacionDetalle($id: String!) {
+  notificacion(id: $id) {
+    id
+    texto
+    actora
+    demandada
+    datos_organismo { nombre_organismo }
+    movimiento
+  }
+}
+"""
+
+
+@mcp.tool(
+    name="mesa_virtual_listar_notificaciones",
+    annotations={
+        "title": "Listar Notificaciones de Mesa Virtual",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True
+    }
+)
+async def mesa_virtual_listar_notificaciones(params: ListarNotificacionesInput) -> str:
+    """
+    Lista las notificaciones de la bandeja "Notificaciones" de Mesa Virtual.
+
+    Es de SOLO LECTURA: no marca las notificaciones como leídas (a diferencia de
+    abrirlas en la página web, que sí las marca).
+
+    Args:
+        params (ListarNotificacionesInput): Parámetros:
+            - solo_no_leidas (bool): solo las sin leer (default True)
+            - max_notificaciones (int): tope de resultados (default 50, máx 300)
+            - fecha_desde / fecha_hasta (str): filtro AAAA-MM-DD (opcional)
+            - incluir_texto (bool): trae también el texto de cada una (más lento)
+
+    Returns:
+        str: JSON con
+        {
+            "total_en_mesa_virtual": int,   # total que cumple el filtro
+            "devueltas": int,
+            "notificaciones": [ {id, caratula, descripcion, enviada, leida,
+                                 tipo_documento, organismo, expediente_nro, movimiento,
+                                 texto (si incluir_texto)} ]
+        }
+        o {"error": true, "mensaje": str}
+    """
+    def _listar(p: ListarNotificacionesInput) -> dict:
+        from modulos.login import crear_cliente_sesion
+
+        cliente = crear_cliente_sesion(usar_sesion_guardada=True, headless=True, login_manual=False)
+        if not cliente:
+            raise RuntimeError(
+                "Sesión no disponible o expirada. "
+                "Usá mesa_virtual_iniciar_sesion para renovar el login."
+            )
+
+        # La API exige el token que usa la propia página; sin él responde "Acceso no permitido"
+        if not cliente.capturar_token_api():
+            cliente.cerrar()
+            raise RuntimeError(
+                "Sesión no válida o expirada: no se pudo obtener el token de Mesa Virtual. "
+                "Usá mesa_virtual_iniciar_sesion para renovar el login."
+            )
+
+        def _gql(operacion: str, query: str, variables: dict) -> dict:
+            # La API devuelve {"data": ...} o {"errors": [...]} (o {"error": ...} si falla el fetch)
+            r = cliente.hacer_request_graphql(
+                {"operationName": operacion, "query": query}, variables
+            )
+            if not isinstance(r, dict) or r.get("error") or r.get("errors"):
+                raise RuntimeError(f"Mesa Virtual rechazó la consulta {operacion}: {str(r)[:300]}")
+            return r.get("data") or {}
+
+        try:
+            notificaciones = []
+            total = 0
+            pagina = 50  # cuántas pedimos por vez
+            skip = 0
+            while len(notificaciones) < p.max_notificaciones:
+                take = min(pagina, p.max_notificaciones - len(notificaciones))
+                data = _gql("notificacionesListarBusquedaAvanzada", _QUERY_LISTAR_NOTIF, {
+                    "take": take,
+                    "skip": skip,
+                    "no_leidas": p.solo_no_leidas,
+                    "fecha_desde": p.fecha_desde,
+                    "fecha_hasta": p.fecha_hasta,
+                })
+                con = data.get("notificacionesConnectionBusquedaAvanzada") or {}
+                total = (con.get("aggregate") or {}).get("count", 0)
+                nodos = [e.get("node") for e in (con.get("edges") or []) if e.get("node")]
+                if not nodos:
+                    break
+                for n in nodos:
+                    exp = n.get("expediente") or {}
+                    nro = exp.get("nro") or {}
+                    notificaciones.append({
+                        "id": n.get("id"),
+                        "caratula": n.get("caratula"),
+                        "descripcion": n.get("descripcion"),
+                        "enviada": n.get("enviada"),
+                        "leida": n.get("leida"),
+                        "tipo_documento": n.get("tipo_documento"),
+                        "organismo": exp.get("organismo"),
+                        "localidad": exp.get("localidad"),
+                        # La carátula de la notificación viene vacía; la real está en el expediente
+                        "expediente_caratula": exp.get("caratula"),
+                        "tipo_proceso": (exp.get("tipo_proceso") or {}).get("tipo"),
+                        "expediente_nro": nro,  # partes del número tal como las da la API
+                        "movimiento": n.get("movimiento"),
+                    })
+                skip += len(nodos)
+                if skip >= total:
+                    break
+
+            if p.incluir_texto:
+                for n in notificaciones:
+                    d = _gql("notificacionDetalle", _QUERY_DETALLE_NOTIF, {"id": n["id"]})
+                    det = d.get("notificacion") or {}
+                    n["texto"] = det.get("texto")
+                    n["actora"] = det.get("actora")
+                    n["demandada"] = det.get("demandada")
+
+            return {
+                "total_en_mesa_virtual": total,
+                "devueltas": len(notificaciones),
+                "notificaciones": notificaciones,
+            }
+        finally:
+            cliente.cerrar()
+
+    try:
+        resultado = await asyncio.to_thread(_listar, params)
+        return json.dumps(resultado, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return json.dumps({
+            "error": True,
+            "mensaje": _manejar_error(e, "listar notificaciones")
         }, ensure_ascii=False, indent=2)
 
 
@@ -622,11 +846,13 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
         - no_files: Expediente sin archivos adjuntos
         - download_failed: Fallo en descarga → reintentar
     """
-    def _descargar(numero: str) -> dict:
+    def _descargar(numero: str, desde: Optional[str] = None) -> dict:
+        from datetime import date
         from modulos.pipeline import PipelineDescargador
 
         pipeline = PipelineDescargador()
-        resultado = pipeline.ejecutar(numero)
+        # Descarga parcial: solo los movimientos con fecha >= desde (ver EstrategiaDesdeFecha en modulos/descarga.py)
+        resultado = pipeline.ejecutar(numero, desde_fecha=date.fromisoformat(desde) if desde else None)
 
         if resultado.exito:
             return {
@@ -655,6 +881,7 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
                     "Verificá que LibreOffice esté instalado."
                 ),
                 "unification_failed": "Se convirtieron los archivos pero falló la unificación en PDF.",
+                "sin_actuaciones_desde_fecha": f"No hay actuaciones desde el {desde} en el expediente '{numero}'.",
             }
 
             tipo = resultado.tipo_error or "exception"
@@ -667,7 +894,7 @@ async def mesa_virtual_descargar_expediente(params: DescargarExpedienteInput) ->
             }
 
     try:
-        resultado = await asyncio.to_thread(_descargar, params.numero)
+        resultado = await asyncio.to_thread(_descargar, params.numero, params.desde)
         return json.dumps(resultado, ensure_ascii=False, indent=2)
     except Exception as e:
         return json.dumps({
