@@ -208,9 +208,9 @@
             <div class="plan-descripcion">Para una descarga puntual</div>
 
             <div class="plan-precio">
-                <span class="num">${{ "{:,.0f}".format(planes.individual.precio_ars) }}</span>
+                <span class="num">${{ "{:,.0f}".format(planes.individual.precio_ars).replace(",", ".") }}</span>
                 <span class="moneda">ARS</span>
-                <div class="plan-unidad">$3.000 c/descarga</div>
+                <div class="plan-unidad">${{ "{:,.0f}".format(planes.individual.precio_ars).replace(",", ".") }} c/descarga</div>
             </div>
 
             <ul class="plan-features">
@@ -233,14 +233,14 @@
             <div class="plan-descripcion">El plan más elegido por estudios</div>
 
             <div class="plan-precio">
-                <span class="num gold">${{ "{:,.0f}".format(planes.estudio.precio_ars) }}</span>
+                <span class="num gold">${{ "{:,.0f}".format(planes.estudio.precio_ars).replace(",", ".") }}</span>
                 <span class="moneda">ARS</span>
-                <div class="plan-unidad">$2.400 c/descarga · Ahorrás $6.000</div>
+                <div class="plan-unidad">${{ "{:,.0f}".format(planes.estudio.precio_ars / planes.estudio.creditos).replace(",", ".") }} c/descarga · Ahorrás ${{ "{:,.0f}".format(planes.individual.precio_ars * planes.estudio.creditos - planes.estudio.precio_ars).replace(",", ".") }}</div>
             </div>
 
             <ul class="plan-features">
                 <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.estudio.creditos }}</strong> descargas completas</span></li>
-                <li><i class="bi bi-check-circle-fill"></i> Ahorrás $6.000</li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorrás ${{ "{:,.0f}".format(planes.individual.precio_ars * planes.estudio.creditos - planes.estudio.precio_ars).replace(",", ".") }}</li>
                 <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
                 <li><i class="bi bi-check-circle-fill"></i> Factura por cada compra</li>
                 <li><i class="bi bi-check-circle-fill"></i> Actualización incremental de expedientes</li>
@@ -257,14 +257,14 @@
             <div class="plan-descripcion">Para estudios con alto volumen</div>
 
             <div class="plan-precio">
-                <span class="num">${{ "{:,.0f}".format(planes.matricula.precio_ars) }}</span>
+                <span class="num">${{ "{:,.0f}".format(planes.matricula.precio_ars).replace(",", ".") }}</span>
                 <span class="moneda">ARS</span>
-                <div class="plan-unidad">$2.100 c/descarga · Ahorrás $27.000</div>
+                <div class="plan-unidad">${{ "{:,.0f}".format(planes.matricula.precio_ars / planes.matricula.creditos).replace(",", ".") }} c/descarga · Ahorrás ${{ "{:,.0f}".format(planes.individual.precio_ars * planes.matricula.creditos - planes.matricula.precio_ars).replace(",", ".") }}</div>
             </div>
 
             <ul class="plan-features">
                 <li><i class="bi bi-check-circle-fill"></i> <span><strong>{{ planes.matricula.creditos }}</strong> descargas completas</span></li>
-                <li><i class="bi bi-check-circle-fill"></i> Ahorrás $27.000</li>
+                <li><i class="bi bi-check-circle-fill"></i> Ahorrás ${{ "{:,.0f}".format(planes.individual.precio_ars * planes.matricula.creditos - planes.matricula.precio_ars).replace(",", ".") }}</li>
                 <li><i class="bi bi-check-circle-fill"></i> Sin vencimiento</li>
                 <li><i class="bi bi-check-circle-fill"></i> Prioridad en cola de descarga</li>
                 <li><i class="bi bi-check-circle-fill"></i> Soporte dedicado</li>

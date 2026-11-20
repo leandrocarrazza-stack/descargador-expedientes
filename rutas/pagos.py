@@ -3,7 +3,7 @@
 Rutas para gestión de pagos con Mercado Pago.
 Incluye compra de créditos, creación de órdenes, webhooks y confirmaciones.
 
-Modelo: Usuario compra créditos en ARS, cada descarga cuesta $3000 ARS
+Modelo: Usuario compra créditos en ARS, el precio de cada plan viene de config.planes_vigentes()
 """
 
 import os
@@ -31,9 +31,7 @@ logger = logging.getLogger(__name__)
 # Crear blueprint
 pagos_bp = Blueprint('pagos', __name__, url_prefix='/pagos')
 
-# Usar planes de config.py (en ARS)
-PLANES = config.PLANES
-PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
+# Los planes se leen con config.planes_vigentes() en cada request (cambian por fecha)
 
 
 @pagos_bp.route('/planes', methods=['GET'])
@@ -43,7 +41,7 @@ def mostrar_planes():
     Accesible para usuarios autenticados.
     """
     try:
-        return render_template('planes.html', planes=PLANES)
+        return render_template('planes.html', planes=config.planes_vigentes())
     except Exception as e:
         logger.error(f"Error al mostrar planes: {str(e)}")
         return render_template('error.html', mensaje='Error al cargar los planes'), 500
@@ -73,6 +71,8 @@ def crear_orden():
     try:
         data = request.get_json()
         plan = data.get('plan', '').lower()
+
+        PLANES = config.planes_vigentes()
 
         # Validar que el plan existe
         if plan not in PLANES:

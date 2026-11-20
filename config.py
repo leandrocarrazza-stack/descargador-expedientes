@@ -14,7 +14,8 @@ IMPORTANTE:
 import os
 import logging
 from pathlib import Path
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde .env
@@ -166,11 +167,13 @@ CONVERSION_TIMEOUT = 60
 #  CONFIGURACIÓN DE PLANES Y CRÉDITOS
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Precio por descarga en ARS
-PRECIO_DESCARGA_ARS = 3000
+# Fecha desde la cual rigen los precios nuevos (00:00 hora de Argentina).
+# Se fija la zona horaria porque Render corre en UTC: sin ella el cambio
+# ocurriría a las 21:00 del 30/11.
+FECHA_AUMENTO_PRECIOS = datetime(2026, 12, 1, tzinfo=ZoneInfo('America/Argentina/Buenos_Aires'))
 
-# Planes de compra de créditos (cada crédito = 1 descarga)
-PLANES = {
+# Planes de compra de créditos (cada crédito = 1 descarga) — precios hasta el 30/11/2026
+PLANES_ANTERIORES = {
     'individual': {
         'nombre': 'Individual',
         'creditos': 1,
@@ -190,6 +193,35 @@ PLANES = {
         'descripcion': '30 descargas · $2.100 c/u'
     }
 }
+
+# Planes desde el 1/12/2026
+PLANES_NUEVOS = {
+    'individual': {
+        'nombre': 'Individual',
+        'creditos': 1,
+        'precio_ars': 5000,
+        'descripcion': '1 descarga · $5.000 c/u'
+    },
+    'estudio': {
+        'nombre': 'Estudio',
+        'creditos': 10,
+        'precio_ars': 40000,  # $4.000 c/u, ahorra $10.000
+        'descripcion': '10 descargas · $4.000 c/u'
+    },
+    'matricula': {
+        'nombre': 'Estudio Plus',  # la clave interna sigue siendo 'matricula'
+        'creditos': 30,
+        'precio_ars': 90000,  # $3.000 c/u, ahorra $60.000
+        'descripcion': '30 descargas · $3.000 c/u'
+    }
+}
+
+
+def planes_vigentes(ahora=None):
+    """Devuelve los planes que rigen en este momento (se evalúa en cada request)."""
+    ahora = ahora or datetime.now(ZoneInfo('America/Argentina/Buenos_Aires'))
+    return PLANES_NUEVOS if ahora >= FECHA_AUMENTO_PRECIOS else PLANES_ANTERIORES
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  CONFIGURACIÓN DE STRIPE (pagos)

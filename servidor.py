@@ -253,7 +253,7 @@ def crear_app(config_obj=None):
     @app.context_processor
     def inyectar_planes():
         """Inyecta planes en todos los templates."""
-        return dict(planes=config.PLANES)
+        return dict(planes=config.planes_vigentes())
 
     @app.context_processor
     def inyectar_contacto():

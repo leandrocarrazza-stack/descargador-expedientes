@@ -4,7 +4,7 @@ Genera el mail de presentación de Foja para difundir entre los colegas (lo reen
 
 Escribe un HTML listo para pegar en el editor de HTML personalizado de MailerLite
 (el link de baja queda como {$unsubscribe}, que MailerLite reemplaza al enviar).
-No toca la base de datos. Los precios se leen de config.PLANES, así nunca quedan desactualizados.
+No toca la base de datos. Los precios se leen de config.planes_vigentes(), así nunca quedan desactualizados.
 
 Uso:
     python scripts/generar_mail_presentacion.py --salida mail_presentacion.html
