@@ -1,8 +1,8 @@
 {% if nombre %}Hola {{ nombre }},{% else %}Hola,{% endif %}
 
-HOY ES EL ÚLTIMO DÍA HÁBIL CON EL PRECIO ACTUAL
+HOY ES EL ÚLTIMO DÍA CON EL PRECIO ACTUAL
 
-El lunes 1 de diciembre el crédito pasa a {{ precio_credito_nuevo }}. Hasta el domingo 30 de noviembre cargás a los precios de hoy:
+Mañana, martes 1 de diciembre, el crédito pasa a {{ precio_credito_nuevo }}. Hasta hoy (lunes 30 de noviembre) cargás a los precios actuales:
 {% for f in filas_precios %}
 - {{ f.nombre }} ({{ f.creditos }}): {{ f.viejo }}{% endfor %}
 

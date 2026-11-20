@@ -28,7 +28,7 @@ ASUNTOS = {
     'contador_plazos': 'Nuevo en Foja: calculá tus plazos judiciales en segundos',
     'recomenda': 'Recomendá Foja y ganá 2 descargas por cada colega',
     'aumento_precios': 'Desde el 1 de diciembre cambia el precio de Foja',
-    'aumento_recordatorio': 'Último día hábil con el precio actual de Foja',
+    'aumento_recordatorio': 'Último día con el precio actual de Foja',
 }
 
 
