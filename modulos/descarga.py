@@ -23,6 +23,7 @@ from modulos.modelos import Archivo, Movimiento
 from modulos.conversion import memoria_disponible_mb
 from modulos.concurrencia import UMBRAL_RAM_NAVEGADOR_MB
 from modulos.progreso import PROGRESO_CADA_N_ARCHIVOS
+from modulos.url_login import url_es_login
 
 logger = crear_logger(__name__)
 
@@ -1289,7 +1290,7 @@ class DescargadorArchivos:
                             url_actual = driver.current_url
                         except Exception:
                             pass
-                        if "ol-sso" in url_actual or "/login" in url_actual:
+                        if url_es_login(url_actual):
                             print(f"         [AUTH] Redirigido a login tras el click (sesión expirada), abortando")
                             self._ultimo_fallo_fue_auth = True
                             return False
@@ -1583,10 +1584,10 @@ class DescargadorArchivos:
                 # de abortar, para no confundir un rebote transitorio del SSO
                 # con una sesión realmente vencida.
                 url_actual = driver.current_url
-                if "ol-sso" in url_actual or "/login" in url_actual:
+                if url_es_login(url_actual):
                     time.sleep(2)
                     url_actual = driver.current_url
-                    if "ol-sso" in url_actual or "/login" in url_actual:
+                    if url_es_login(url_actual):
                         raise Exception(f"SESION_MV_EXPIRADA: sesión expirada durante descarga (pág {pagina_actual}, URL: {url_actual[:80]})")
 
                 # IMPORTANTE: Esperar a que cargue la tabla completamente
