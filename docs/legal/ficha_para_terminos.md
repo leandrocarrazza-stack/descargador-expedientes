@@ -58,7 +58,7 @@ Lo que no pude verificar en el código está marcado **[A CONFIRMAR]**.
 
 ## 5. Créditos, precios y pagos (hechos del código)
 
-- **Precios (ARS):** Individual: 1 descarga, $3.000. Estudio: 10 descargas, $24.000. Estudio Plus: 30 descargas, $63.000 (clave interna `matricula`).
+- **Precios (ARS):** Hasta el 30/11/2026: Individual 1 descarga $3.000, Estudio 10 descargas $24.000, Estudio Plus 30 descargas $63.000. Desde el 1/12/2026 (00:00 hora Argentina): Individual $5.000, Estudio $40.000, Estudio Plus $90.000 (clave interna `matricula`).
 - **Prueba gratuita:** al registrarse, la cuenta recibe **2 créditos** de prueba. El alta es gratuita.
 - **Cuándo se descuenta un crédito:** **solo cuando la descarga termina con éxito y el PDF queda guardado** (`rutas/descargas.py`, `registrar_uso_credito`). Una descarga que falla **no consume crédito**; no hay un "reintegro" porque nunca se cobró. Una descarga **parcial** (con `desde_fecha`) **sí consume un crédito**. Una actualización incremental también consume uno.
 - Los administradores no consumen créditos.

@@ -491,8 +491,6 @@ logger = logging.getLogger(__name__)
 # Crear blueprint
 descargas_bp = Blueprint('descargas', __name__, url_prefix='/descargas')
 
-PRECIO_DESCARGA = config.PRECIO_DESCARGA_ARS
-
 # Horas máximas que un PDF permanece en disco antes de ser borrado
 PDF_TTL_HOURS = int(os.environ.get('PDF_TTL_HOURS', '24'))
 

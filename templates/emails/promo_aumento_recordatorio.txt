@@ -1,0 +1,14 @@
+{% if nombre %}Hola {{ nombre }},{% else %}Hola,{% endif %}
+
+HOY ES EL ÚLTIMO DÍA HÁBIL CON EL PRECIO ACTUAL
+
+El lunes 1 de diciembre el crédito pasa a {{ precio_credito_nuevo }}. Hasta el domingo 30 de noviembre cargás a los precios de hoy:
+{% for f in filas_precios %}
+- {{ f.nombre }} ({{ f.creditos }}): {{ f.viejo }}{% endfor %}
+
+Cargar créditos: {{ url_planes }}
+
+—
+Foja · foja.com.ar
+Dudas: {{ remitente }}
+Darme de baja de las promociones: {{ url_baja }}

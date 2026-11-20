@@ -27,7 +27,30 @@ REMITENTE = 'asistenciafoja@gmail.com'
 ASUNTOS = {
     'contador_plazos': 'Nuevo en Foja: calculá tus plazos judiciales en segundos',
     'recomenda': 'Recomendá Foja y ganá 2 descargas por cada colega',
+    'aumento_precios': 'Desde el 1 de diciembre cambia el precio de Foja',
+    'aumento_recordatorio': 'Último día hábil con el precio actual de Foja',
 }
+
+
+def _pesos(n):
+    """5000 → '$5.000' (punto de miles, como se escribe en Argentina)."""
+    return '$' + f'{int(n):,}'.replace(',', '.')
+
+
+def _filas_precios():
+    """Una fila por plan con precio actual, precio nuevo y precio por descarga (leídos de config)."""
+    filas = []
+    for clave, nuevo in config.PLANES_NUEVOS.items():
+        viejo = config.PLANES_ANTERIORES[clave]
+        filas.append({
+            'nombre': nuevo['nombre'],
+            'creditos': nuevo['creditos'],
+            'viejo': _pesos(viejo['precio_ars']),
+            'nuevo': _pesos(nuevo['precio_ars']),
+            'viejo_cu': _pesos(viejo['precio_ars'] / viejo['creditos']),
+            'nuevo_cu': _pesos(nuevo['precio_ars'] / nuevo['creditos']),
+        })
+    return filas
 
 
 def _serializador():
@@ -82,6 +105,10 @@ def _contexto_comun(campana, anio=None):
         'remitente': REMITENTE,
         'anio': anio or date.today().year,
         'asunto': ASUNTOS[campana],
+        'url_planes': f'{_base_url()}/pagos/planes',
+        'filas_precios': _filas_precios(),
+        'precio_credito_nuevo': _pesos(config.PLANES_NUEVOS['individual']['precio_ars']),
+        'cu_plus_nuevo': _pesos(config.PLANES_NUEVOS['matricula']['precio_ars'] / config.PLANES_NUEVOS['matricula']['creditos']),
     }
 
 
