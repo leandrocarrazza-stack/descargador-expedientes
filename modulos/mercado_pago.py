@@ -106,6 +106,8 @@ def crear_orden_pago(
             "failure": failure_url or MP_FAILURE_URL,
             "pending": pending_url or MP_PENDING_URL,
         },
+        # Máximo 1 cuota: evita que MP ofrezca cuotas sin interés (su costo lo absorbe el vendedor)
+        "payment_methods": {"installments": 1},
         "auto_return": "approved",  # Redirige automáticamente solo si el pago fue aprobado
         "external_reference": f"user_{user_id}_plan_{plan}_{uuid.uuid4().hex[:8]}",
         "statement_descriptor": "Descargador Expedientes",
