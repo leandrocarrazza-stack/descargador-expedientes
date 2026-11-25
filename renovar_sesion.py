@@ -157,6 +157,16 @@ def login_automatico(cred):
                 return False
             # Si hay varios autenticadores cargados, Keycloak muestra para elegir: tomar el de la PC.
             if cred.get("dispositivo"):
+                # Si hay un selector de autenticadores y el nuestro no está, NO mandar el código:
+                # se validaría contra otro autenticador y sumaría un intento fallido (riesgo de bloqueo).
+                nombres = driver.execute_script(
+                    "return Array.from(document.querySelectorAll('input[name=selectedCredentialId]')).map(function(r){"
+                    " var l=(r.closest('label')||document.querySelector('label[for=\"'+r.id+'\"]')||r.parentElement);"
+                    " return l?l.textContent.trim().replace(/\\s+/g,' '):''});")
+                if nombres and not any(cred["dispositivo"].lower() in n.lower() for n in nombres):
+                    print(f"✗ El autenticador '{cred['dispositivo']}' no figura en la pantalla del código. "
+                          f"Mesa Virtual ofrece: {nombres}. No se envió ningún código.")
+                    return False
                 driver.execute_script(
                     "var n=arguments[0].toLowerCase();"
                     "document.querySelectorAll('input[name=selectedCredentialId]').forEach(function(r){"
