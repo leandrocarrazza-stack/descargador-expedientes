@@ -322,11 +322,27 @@ if __name__ == "__main__":
                          "si no, espera 30 min el login manual. No pide Enter al final")
     ap.add_argument("--guardar-credenciales", action="store_true",
                     help="guarda usuario, clave y secreto 2FA en el Administrador de credenciales de Windows")
+    ap.add_argument("--ver-codigo", action="store_true",
+                    help="muestra en vivo el código de 6 dígitos que calcula la PC (para activar el autenticador)")
     ap.add_argument("--manual", action="store_true",
                     help="con --auto: ignora las credenciales guardadas y abre Chrome para el login a mano")
     args = ap.parse_args()
     if args.guardar_credenciales:
         sys.exit(0 if guardar_credenciales() else 1)
+    if args.ver_codigo:
+        import keyring, pyotp
+        secreto = keyring.get_password(SERVICIO_CREDENCIALES, "totp")
+        if not secreto:
+            sys.exit("No hay secreto guardado: corré primero --guardar-credenciales")
+        totp = pyotp.TOTP(secreto)
+        print("Código de la PC (se actualiza solo; Ctrl+C para salir):\n")
+        try:
+            while True:
+                resto = int(totp.interval - time.time() % totp.interval)
+                print(f"\r   {totp.now()}   (cambia en {resto:2d} s) ", end="", flush=True)
+                time.sleep(1)
+        except KeyboardInterrupt:
+            sys.exit(0)
     if args.auto:
         TIMEOUT_SEGUNDOS = 1800
         cred = None if args.manual else leer_credenciales()
