@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block titulo %}Estadísticas de uso · Foja{% endblock %}
+
+{% block estilos_extra %}
+<style>
+    .est-hero { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-800) 100%); color: var(--cream); padding: 3rem 0 4.5rem; margin-bottom: -3rem; }
+    .est-hero h1 { color: var(--cream); font-size: clamp(1.8rem, 4vw, 2.5rem); }
+    .est-hero a { color: var(--gold); }
+    .est-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); margin-bottom: 1.5rem; overflow: hidden; }
+    .est-card-header { padding: 1rem 1.5rem; font-weight: 600; font-size: .95rem; color: var(--cream); background: var(--navy); }
+    .est-card-body { padding: 1.25rem 1.5rem; }
+    .est-nota { font-size: .8rem; color: #6b6b6b; margin-top: .5rem; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 1rem 1.25rem; }
+    .kpi .num { font-size: 1.9rem; font-weight: 700; color: var(--navy); line-height: 1.1; }
+    .kpi .lbl { font-size: .82rem; color: #555; margin-top: .2rem; }
+    .kpi .sub { font-size: .75rem; color: #888; }
+    table.est { width: 100%; font-size: .88rem; border-collapse: collapse; }
+    table.est th, table.est td { padding: .45rem .6rem; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    table.est th:first-child, table.est td:first-child { text-align: left; }
+    .tabla-scroll { overflow-x: auto; }
+</style>
+{% endblock %}
+
+{% block contenido %}
+{% set t = est.totales %}
+<div class="est-hero">
+    <div class="container">
+        <span class="eyebrow" style="color: var(--gold);">Administración</span>
+        <h1 class="mt-2">Estadísticas de uso</h1>
+        <p class="mb-0"><a href="{{ url_for('admin.panel') }}">← Volver al panel</a></p>
+    </div>
+</div>
+
+<div class="container foja-page">
+
+    <div class="kpis">
+        <div class="kpi"><div class="num">{{ t.usuarios }}</div><div class="lbl">Usuarios registrados</div>
+            <div class="sub">{{ t.usuarios_con_descarga }} descargaron al menos 1 · {{ t.usuarios_sin_descarga }} nunca</div></div>
+        <div class="kpi"><div class="num">{{ t.descargas }}</div><div class="lbl">Descargas completas</div>
+            <div class="sub">{{ t.actualizaciones }} fueron actualizaciones</div></div>
+        <div class="kpi"><div class="num">{{ t.fallidas }}</div><div class="lbl">Descargas fallidas</div>
+            <div class="sub">{% if t.tasa_exito is not none %}{{ t.tasa_exito }}% de éxito{% else %}sin datos{% endif %}</div></div>
+        <div class="kpi"><div class="num">{{ t.plazos }}</div><div class="lbl">Cálculos de plazos</div>
+            <div class="sub">desde que se empezó a registrar</div></div>
+        <div class="kpi"><div class="num">{{ t.visitas }}</div><div class="lbl">Visitas registradas</div>
+            <div class="sub">inicio, descargar, plazos, planes</div></div>
+        <div class="kpi"><div class="num">{{ t.compras }}</div><div class="lbl">Compras completadas</div>
+            <div class="sub">$ {{ '{:,}'.format(t.ingresos).replace(',', '.') }} en total</div></div>
+        <div class="kpi"><div class="num">{{ t.referidos }}</div><div class="lbl">Registros por referido</div>
+            <div class="sub">{{ t.referidos_premiados }} premiados</div></div>
+    </div>
+
+    {% if est.primer_evento %}
+    <p class="est-nota">Visitas y cálculos de plazos se registran desde el {{ est.primer_evento.strftime('%d/%m/%Y') }}; antes de esa fecha no hay datos. Usuarios, descargas y compras vienen de la base completa.</p>
+    {% else %}
+    <p class="est-nota">Todavía no hay visitas ni cálculos de plazos registrados: empiezan a contarse desde este deploy.</p>
+    {% endif %}
+
+    <div class="est-card">
+        <div class="est-card-header">Evolución mensual (últimos 12 meses)</div>
+        <div class="est-card-body">
+            <canvas id="graf-mes" height="110"></canvas>
+        </div>
+    </div>
+
+    <div class="est-card">
+        <div class="est-card-header">Detalle por mes</div>
+        <div class="est-card-body tabla-scroll">
+            <table class="est">
+                <thead><tr>
+                    <th>Mes</th><th>Usuarios nuevos</th><th>Usuarios activos</th><th>Descargas</th><th>Fallidas</th>
+                    <th>Cálculos de plazos</th><th>Visitas</th><th>Compras</th><th>Ingresos $</th>
+                </tr></thead>
+                <tbody>
+                {% for m in est.por_mes|reverse %}
+                <tr><td>{{ m.etiqueta }}</td><td>{{ m.usuarios_nuevos }}</td><td>{{ m.usuarios_activos }}</td><td>{{ m.descargas }}</td>
+                    <td>{{ m.fallidas }}</td><td>{{ m.plazos }}</td><td>{{ m.visitas }}</td><td>{{ m.compras }}</td><td>{{ m.ingresos }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <p class="est-nota">Usuarios activos = usuarios distintos con al menos una descarga completa ese mes. Meses en hora de Argentina.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="est-card"><div class="est-card-header">Usuarios con más descargas</div>
+                <div class="est-card-body tabla-scroll"><table class="est"><tbody>
+                    {% for u in est.top_usuarios %}<tr><td>{{ u.email }}</td><td>{{ u.descargas }}</td></tr>
+                    {% else %}<tr><td>Sin datos</td></tr>{% endfor %}
+                </tbody></table></div></div>
+        </div>
+        <div class="col-lg-6">
+            <div class="est-card"><div class="est-card-header">Tribunales más descargados</div>
+                <div class="est-card-body tabla-scroll"><table class="est"><tbody>
+                    {% for x in est.tribunales %}<tr><td>{{ x.tribunal }}</td><td>{{ x.descargas }}</td></tr>
+                    {% else %}<tr><td>Sin datos</td></tr>{% endfor %}
+                </tbody></table></div></div>
+        </div>
+        <div class="col-lg-6">
+            <div class="est-card"><div class="est-card-header">Usuarios por plan</div>
+                <div class="est-card-body"><table class="est"><tbody>
+                    {% for p in est.planes %}<tr><td>{{ p.plan }}</td><td>{{ p.usuarios }}</td></tr>
+                    {% else %}<tr><td>Sin datos</td></tr>{% endfor %}
+                </tbody></table></div></div>
+        </div>
+        <div class="col-lg-6">
+            <div class="est-card"><div class="est-card-header">Visitas por sección</div>
+                <div class="est-card-body"><table class="est"><tbody>
+                    {% for v in est.visitas_ruta %}<tr><td>{{ v.ruta }}</td><td>{{ v.visitas }}</td></tr>
+                    {% else %}<tr><td>Sin datos todavía</td></tr>{% endfor %}
+                </tbody></table></div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    var datos = {{ est.por_mes|tojson }};
+    if (!window.Chart) return;
+    new Chart(document.getElementById('graf-mes'), {
+        type: 'bar',
+        data: {
+            labels: datos.map(function (d) { return d.etiqueta; }),
+            datasets: [
+                { label: 'Descargas', data: datos.map(function (d) { return d.descargas; }), backgroundColor: '#1f3a5f' },
+                { label: 'Cálculos de plazos', data: datos.map(function (d) { return d.plazos; }), backgroundColor: '#b8893b' },
+                { label: 'Usuarios nuevos', data: datos.map(function (d) { return d.usuarios_nuevos; }), backgroundColor: '#5b8a72' },
+                { label: 'Visitas', data: datos.map(function (d) { return d.visitas; }), backgroundColor: '#c9c3b3' }
+            ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+})();
+</script>
+{% endblock %}

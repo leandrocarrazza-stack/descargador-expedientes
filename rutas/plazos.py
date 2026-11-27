@@ -18,6 +18,7 @@ from flask_login import login_required, current_user
 
 import config
 from modulos.extensions import limiter
+from modulos.models import registrar_evento
 from modulos.plazos.calculo import calcular, ErrorPlazo, TIPOS_NOTIFICACION, MODOS
 from modulos.plazos.calendario import cargar_calendario, FUEROS
 from modulos.plazos.evento import datos_calendario
@@ -50,6 +51,7 @@ def calculadora():
     """Pantalla de la calculadora. Sin plan, muestra la invitación a comprar uno."""
     from datetime import timedelta
     from modulos.models import CalendarioSyncLog
+    registrar_evento('visita', 'plazos')   # estadísticas de uso
     sync_fecha, sync_ok = None, True
     if tiene_acceso(current_user):
         # Estado de la fuente principal (la página de feriados e inhábiles): si no se pudo leer,
@@ -148,6 +150,8 @@ def api_calcular():
         )
     except ErrorPlazo as e:
         return jsonify({'exito': False, 'mensaje': str(e)}), 400
+
+    registrar_evento('plazo_calculado', 'plazos')   # estadísticas de uso
 
     # Evento para el calendario personal (Google Calendar / archivo .ics)
     datos = datos_calendario(

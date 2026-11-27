@@ -43,6 +43,15 @@ def panel():
     return render_template('admin_panel.html', usuarios=usuarios, mensajes=mensajes, no_leidos=no_leidos)
 
 
+@admin_bp.route('/estadisticas', methods=['GET'])
+@login_required
+@requiere_admin
+def estadisticas():
+    """Estadísticas de uso: totales, evolución mensual, rankings (modulos/estadisticas.py)."""
+    from modulos.estadisticas import calcular_estadisticas
+    return render_template('admin_estadisticas.html', est=calcular_estadisticas())
+
+
 @admin_bp.route('/promo/recomenda.csv', methods=['GET'])
 @login_required
 @requiere_admin

@@ -385,6 +385,48 @@ class CompraCreditos(db.Model):
         }
 
 
+class EventoUso(db.Model):
+    """
+    Evento de uso para las estadísticas del panel admin (/admin/estadisticas).
+
+    Guarda solo lo mínimo: qué pasó ('visita' o 'plazo_calculado'), en qué
+    sección, cuándo y, si había sesión, el usuario. No guarda IP ni el
+    contenido de lo que el usuario calculó.
+    """
+
+    __tablename__ = 'eventos_uso'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(30), nullable=False, index=True)
+    ruta = db.Column(db.String(60), nullable=True)
+    # Sin FK a propósito (como referido_por_id): borrar un usuario no debe fallar por esto
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    creado_en = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    def __repr__(self):
+        return f'<EventoUso {self.tipo} {self.ruta}>'
+
+
+def registrar_evento(tipo, ruta=None):
+    """
+    Anota un evento de uso. Nunca levanta excepciones: si falla el guardado,
+    se deja un aviso en el log y la página sigue funcionando normalmente.
+
+    Usa una conexión propia (db.engine), NO db.session: así no hace commit ni
+    rollback de la sesión del pedido en curso ni recarga los objetos que la
+    vista ya leyó, y no se cruza con las descargas que corren en otros hilos.
+    """
+    import logging
+    try:
+        from flask_login import current_user
+        user_id = current_user.id if current_user and current_user.is_authenticated else None
+        with db.engine.begin() as conn:
+            conn.execute(EventoUso.__table__.insert().values(
+                tipo=tipo, ruta=ruta, user_id=user_id, creado_en=datetime.utcnow()))
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"No se pudo registrar el evento {tipo}/{ruta}: {e}")
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  MODELOS DE JURISPRUDENCIA (STJER)
 # ════════════════════════════════════════════════════════════════════════════

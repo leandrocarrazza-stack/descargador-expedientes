@@ -46,7 +46,7 @@ from flask_login import login_required, current_user
 
 from modulos.pipeline import PipelineDescargador
 from modulos.database import db
-from modulos.models import ExpedienteDescargado, SesionUsuarioMV
+from modulos.models import ExpedienteDescargado, SesionUsuarioMV, registrar_evento
 from modulos.auth_mv import obtener_cookies_usuario, invalidar_sesion_usuario
 from modulos.extensions import csrf
 from modulos.concurrencia import gestor, ErrorColaLlena, ErrorColaTimeout, ErrorCancelado
@@ -607,6 +607,7 @@ def descargar_expediente_sync():
             user_id=current_user.id
         ).order_by(ExpedienteDescargado.creado_en.desc()).limit(5).all()
 
+        registrar_evento('visita', 'descargar')   # estadísticas de uso
         return render_template(
             'descargar_expediente.html',
             creditos=current_user.creditos_disponibles,
