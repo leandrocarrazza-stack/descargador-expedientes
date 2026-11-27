@@ -198,6 +198,8 @@ def crear_app(config_obj=None):
         if current_user.is_authenticated:
             return redirect(url_for('descargas.descargar_expediente_sync'))
         else:
+            from modulos.models import registrar_evento
+            registrar_evento('visita', 'inicio')   # estadísticas de uso
             return render_template('inicio.html')
 
     @app.route('/dashboard')

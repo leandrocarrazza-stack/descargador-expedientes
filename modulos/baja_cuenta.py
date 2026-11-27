@@ -36,7 +36,7 @@ from werkzeug.security import generate_password_hash
 import config
 from modulos.database import db
 from modulos.models import (
-    CompraCreditos, ExpedienteDescargado, MensajeContacto,
+    CompraCreditos, EventoUso, ExpedienteDescargado, MensajeContacto,
     SesionUsuarioMV, TokenResetPassword, User,
 )
 from modulos.storage import StorageLocal, StorageR2, storage_pdf
@@ -144,6 +144,7 @@ def dar_de_baja(user, borrar_compras=False, storage=None, output_dir=None):
     SesionUsuarioMV.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     TokenResetPassword.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     _mensajes(user).delete(synchronize_session=False)
+    EventoUso.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     db.session.expire_all()
 
     if resumen['compras'] and not borrar_compras:

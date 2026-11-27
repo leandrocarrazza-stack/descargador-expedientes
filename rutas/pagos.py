@@ -17,7 +17,7 @@ from modulos.mercado_pago import (
     validar_firma_webhook, MercadoPagoError,
 )
 from modulos.database import db
-from modulos.models import CompraCreditos, User
+from modulos.models import CompraCreditos, User, registrar_evento
 from modulos.referidos import premiar_referidor_si_corresponde
 from modulos.emails import enviar_email_premio_referido
 from modulos.extensions import limiter, csrf
@@ -40,6 +40,7 @@ def mostrar_planes():
     Muestra los planes disponibles para compra.
     Accesible para usuarios autenticados.
     """
+    registrar_evento('visita', 'planes')   # estadísticas de uso
     try:
         return render_template('planes.html', planes=config.planes_vigentes())
     except Exception as e:
